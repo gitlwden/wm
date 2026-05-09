@@ -75,7 +75,7 @@ export function saveWidget(spec: CustomWidgetSpec): void {
   } else {
     const trimmed: CustomWidgetSpec = {
       ...spec,
-      tier: 'basic',
+      tier: 'pro',
       html: sanitizeWidgetHtml(spec.html.slice(0, MAX_HTML_CHARS)),
       conversationHistory: spec.conversationHistory.slice(-MAX_HISTORY),
     };

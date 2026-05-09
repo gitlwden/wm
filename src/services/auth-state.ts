@@ -16,9 +16,29 @@ export interface AuthSession {
   isPending: boolean;
 }
 
-let _currentSession: AuthSession = { user: null, isPending: true };
+// Default pro user for local/development mode
+const DEV_PRO_USER: AuthUser = {
+  id: 'dev-pro-user-001',
+  name: 'Local Dev Pro',
+  email: 'dev@localhost.local',
+  role: 'pro',
+};
+
+// Check if we should use fake pro user in local/development environment
+const USE_FAKE_PRO_USER =
+  import.meta.env.VITE_DEV_PRO_USER === 'true' ||
+  (typeof import.meta !== 'undefined' && !import.meta.env?.VITE_CLERK_PUBLISHABLE_KEY);
+
+let _currentSession: AuthSession = USE_FAKE_PRO_USER
+  ? { user: DEV_PRO_USER, isPending: false }
+  : { user: null, isPending: true };
 
 function snapshotSession(): AuthSession {
+  // In fake pro user mode, skip Clerk and return the dev user
+  if (USE_FAKE_PRO_USER) {
+    return { user: DEV_PRO_USER, isPending: false };
+  }
+
   const cu = getCurrentClerkUser();
   if (!cu) {
     Sentry.setUser(null);
@@ -41,7 +61,10 @@ function snapshotSession(): AuthSession {
  * Initialize auth state. Call once at app startup before UI subscribes.
  */
 export async function initAuthState(): Promise<void> {
-  await initClerk();
+  // Skip Clerk initialization in fake pro user mode
+  if (!USE_FAKE_PRO_USER) {
+    await initClerk();
+  }
   _currentSession = snapshotSession();
 }
 
@@ -52,6 +75,11 @@ export async function initAuthState(): Promise<void> {
 export function subscribeAuthState(callback: (state: AuthSession) => void): () => void {
   // Emit current state immediately
   callback(_currentSession);
+
+  // Skip Clerk subscription in fake pro user mode (state is static)
+  if (USE_FAKE_PRO_USER) {
+    return () => {};
+  }
 
   return subscribeClerk(() => {
     _currentSession = snapshotSession();
