@@ -135,17 +135,31 @@ export function getEntitlementState(): EntitlementState | null {
 }
 
 /**
+ * Check whether we should use dev-mode pro entitlements (no Clerk key configured).
+ */
+function isDevModeProEntitlement(): boolean {
+  return !import.meta.env?.VITE_CLERK_PUBLISHABLE_KEY ||
+         import.meta.env.VITE_DEV_PRO_USER === 'true';
+}
+
+/**
  * Check whether a specific feature flag is truthy in the current entitlement state.
+ * In dev mode (fake pro user), always returns true for all features.
  */
 export function hasFeature(flag: keyof EntitlementState['features']): boolean {
+  // In dev mode, fake pro user has all features
+  if (currentState === null && isDevModeProEntitlement()) return true;
   if (currentState === null) return false;
   return Boolean(currentState.features[flag]);
 }
 
 /**
  * Check whether the user's tier meets or exceeds the given minimum.
+ * In dev mode (fake pro user), always returns true.
  */
 export function hasTier(minTier: number): boolean {
+  // In dev mode, fake pro user has tier 1
+  if (currentState === null && isDevModeProEntitlement()) return minTier <= 1;
   if (currentState === null) return false;
   return currentState.features.tier >= minTier;
 }
@@ -153,8 +167,11 @@ export function hasTier(minTier: number): boolean {
 /**
  * Simple "is this a paying user" check.
  * Returns true if entitlement data exists, plan is not free, and hasn't expired.
+ * In dev mode (fake pro user), always returns true.
  */
 export function isEntitled(): boolean {
+  // In dev mode, fake pro user is always entitled
+  if (currentState === null && isDevModeProEntitlement()) return true;
   return (
     currentState !== null &&
     currentState.planKey !== 'free' &&
