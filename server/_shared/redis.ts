@@ -1,8 +1,8 @@
 import { unwrapEnvelope } from './seed-envelope';
 import { buildUpstreamEvent, getUsageScope, sendToAxiom } from './usage';
 
-const REDIS_OP_TIMEOUT_MS = 1_500;
-const REDIS_PIPELINE_TIMEOUT_MS = 5_000;
+const REDIS_OP_TIMEOUT_MS = 180_000;
+const REDIS_PIPELINE_TIMEOUT_MS = 180_000;
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

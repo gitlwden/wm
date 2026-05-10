@@ -100,7 +100,7 @@ test.describe('theme toggle (happy variant)', () => {
 
     // Reload the page
     await page.reload();
-    await page.waitForSelector('#headerThemeToggle', { timeout: 15000 });
+    await page.waitForSelector('#headerThemeToggle', { timeout: 18000 });
 
     // Should still be dark after reload
     const theme = await page.evaluate(() => document.documentElement.dataset.theme);

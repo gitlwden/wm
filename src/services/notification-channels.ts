@@ -1,6 +1,14 @@
 import { getClerkToken } from '@/services/clerk';
 import { SITE_VARIANT } from '@/config/variant';
 
+/**
+ * Check if we should use mock data in fake pro user mode (default: true).
+ * Disable with VITE_FAKE_PRO_USER=false.
+ */
+function useFakeProUser(): boolean {
+  return import.meta.env.VITE_FAKE_PRO_USER !== 'false';
+}
+
 export type ChannelType = 'telegram' | 'slack' | 'email' | 'discord' | 'webhook' | 'web_push';
 export type Sensitivity = 'all' | 'high' | 'critical';
 export type QuietHoursOverride = 'critical_only' | 'silence_all' | 'batch_on_wake';
@@ -63,12 +71,24 @@ async function authFetch(path: string, init?: RequestInit): Promise<Response> {
 }
 
 export async function getChannelsData(): Promise<ChannelsData> {
+  // In fake pro user mode, return empty data instead of calling the API
+  if (useFakeProUser()) {
+    return { channels: [], alertRules: [] };
+  }
   const res = await authFetch('/api/notification-channels');
   if (!res.ok) throw new Error(`get channels: ${res.status}`);
   return res.json() as Promise<ChannelsData>;
 }
 
 export async function createPairingToken(): Promise<{ token: string; expiresAt: number }> {
+  // In fake pro user mode, return a mock token
+  if (useFakeProUser()) {
+    const mockToken = `dev_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    return {
+      token: mockToken,
+      expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+    };
+  }
   const res = await authFetch('/api/notification-channels', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

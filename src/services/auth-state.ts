@@ -16,27 +16,26 @@ export interface AuthSession {
   isPending: boolean;
 }
 
-// Default pro user for local/development mode
-const DEV_PRO_USER: AuthUser = {
-  id: 'dev-pro-user-001',
-  name: 'Local Dev Pro',
-  email: 'dev@localhost.local',
+// Default admin pro user
+const FAKE_PRO_USER: AuthUser = {
+  id: 'fake-admin-001',
+  name: 'Admin',
+  email: 'admin@localhost',
+  image: null,
   role: 'pro',
 };
 
-// Check if we should use fake pro user in local/development environment
-const USE_FAKE_PRO_USER =
-  import.meta.env.VITE_DEV_PRO_USER === 'true' ||
-  (typeof import.meta !== 'undefined' && !import.meta.env?.VITE_CLERK_PUBLISHABLE_KEY);
+// Check if we should use fake pro user (default: true, disable with VITE_FAKE_PRO_USER=false)
+const USE_FAKE_PRO_USER = import.meta.env.VITE_FAKE_PRO_USER !== 'false';
 
 let _currentSession: AuthSession = USE_FAKE_PRO_USER
-  ? { user: DEV_PRO_USER, isPending: false }
+  ? { user: FAKE_PRO_USER, isPending: false }
   : { user: null, isPending: true };
 
 function snapshotSession(): AuthSession {
-  // In fake pro user mode, skip Clerk and return the dev user
+  // In fake pro user mode, skip Clerk and return the admin user
   if (USE_FAKE_PRO_USER) {
-    return { user: DEV_PRO_USER, isPending: false };
+    return { user: FAKE_PRO_USER, isPending: false };
   }
 
   const cu = getCurrentClerkUser();

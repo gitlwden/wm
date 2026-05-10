@@ -29,7 +29,7 @@ export default async function handler(req, ctx) {
 
   const cacheKey = `geocode:${latN.toFixed(1)},${lonN.toFixed(1)}`;
 
-  const cached = await readJsonFromUpstash(cacheKey, 1500);
+  const cached = await readJsonFromUpstash(cacheKey, 180000);
   if (cached) {
     return new Response(JSON.stringify(cached), {
       status: 200,

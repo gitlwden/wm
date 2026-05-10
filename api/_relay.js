@@ -23,7 +23,7 @@ export function getRelayHeaders(baseHeaders = {}) {
   return headers;
 }
 
-export async function fetchWithTimeout(url, options, timeoutMs = 15000) {
+export async function fetchWithTimeout(url, options, timeoutMs = 18000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
