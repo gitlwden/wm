@@ -6,7 +6,8 @@
     "enterprise": "Enterprise",
     "reserveAccess": "Κρατήστε την πρώιμη πρόσβασή σας",
     "signIn": "Σύνδεση",
-    "upgradeToPro": "Αναβάθμιση σε Pro"
+    "upgradeToPro": "Αναβάθμιση σε Pro",
+    "goToDashboard": "Μεταβείτε στο Dashboard"
   },
   "hero": {
     "noiseWord": "Θόρυβος",
@@ -18,7 +19,8 @@
     "emailPlaceholder": "Εισάγετε το email σας",
     "emailAriaLabel": "Διεύθυνση email για τη λίστα αναμονής",
     "choosePlan": "Επιλέξτε πλάνο",
-    "signIn": "Σύνδεση"
+    "signIn": "Σύνδεση",
+    "goToDashboard": "Μεταβείτε στο Dashboard"
   },
   "wired": {
     "asFeaturedIn": "Εμφανίστηκε στο"
@@ -354,5 +356,76 @@
     "youreIn": "Είστε μέσα!",
     "invitedBanner": "Προσκληθήκατε — εγγραφείτε στη λίστα αναμονής"
   },
-  "soonBadge": "Σύντομα"
+  "soonBadge": "Σύντομα",
+  "meta": {
+    "title": "World Monitor Pro — AI Analyst, Personal Intelligence Desk, MCP για Claude & GPT",
+    "description": "Το γεωπολιτικό στρώμα AI. Ρωτήστε το, εγγραφείτε σε αυτό, δημιουργήστε πάνω του. WM Analyst chat σε 30+ live services, ένα AI digest που παραδίδεται καθημερινά, δύο φορές την ημέρα ή εβδομαδιαία σε Slack, Discord, Telegram, Email ή webhook, ένα custom widget builder (HTML/CSS/JS + AI), και MCP connectors για Claude, GPT και custom LLMs.",
+    "ogTitle": "World Monitor Pro — Το Γεωπολιτικό Στρώμα AI",
+    "ogDescription": "Ρωτήστε το, εγγραφείτε σε αυτό, δημιουργήστε πάνω του. WM Analyst chat, ένα AI digest σύμφωνα με το πρόγραμμά σας (καθημερινά, δύο φορές την ημέρα ή εβδομαδιαία), custom widget builder και MCP για Claude/GPT — σε 30+ live services με ένα κλειδί."
+  },
+  "pricing": {
+    "suffixForever": "για πάντα",
+    "suffixTailored": "προσαρμοσμένη για εσάς",
+    "suffixPerMonth": "/μήνα",
+    "suffixPerYear": "/έτος",
+    "amountCustom": "Προσαρμοσμένη",
+    "opening": "Άνοιγμα…",
+    "headerTitle": "Επιλέξτε το Σχέδιό σας",
+    "headerSubtitle": "Από την παρακολούθηση σε πραγματικό χρόνο έως την πλήρη υποδομή πληροφοριών. Επιλέξτε το επίπεδο που ταιριάζει στην αποστολή σας.",
+    "billingMonthly": "Μηνιαία",
+    "billingAnnual": "Ετήσια",
+    "saveAnnual": "Εξοικονόμηση 17%",
+    "mostPopular": "Πιο Δημοφιλές",
+    "promoCodeNote": "Έχετε κωδικό προσφοράς; Εισάγετέ τον κατά την ολοκλήρωση της αγοράς.",
+    "tiers": {
+      "free": {
+        "description": "Ξεκινήστε με τα απαραίτητα",
+        "features": [
+          "Πίνακες ελέγχου inti",
+          "Ταινία ειδήσεων σε όλο τον κόσμο",
+          "Ειδοποιήσεις σεισμών και καιρού",
+          "Βασική προβολή χάρτη"
+        ],
+        "cta": "Ξεκινήστε"
+      },
+      "pro": {
+        "description": "Πλήρης πίνακας ελέγχου πληροφοριών",
+        "features": [
+          "Όλα από το Free",
+          "Ανάλυση μετοχών και δοκιμές AI",
+          "Ημερήσιες περιλήψεις αγοράς",
+          "Παρακολούθηση στρατιωτικών και γεωπολιτικών ζητημάτων",
+          "Κατασκευαστής προσαρμοσμένου widget",
+          "Σύνδεσμοι δεδομένων MCP",
+          "Προτεραιότητα ανανέωσης δεδομένων"
+        ]
+      },
+      "api": {
+        "description": "Προγραμματική πρόσβαση σε δεδομένα πληροφοριών",
+        "features": [
+          "Πρόσβαση REST API",
+          "Ροές δεδομένων σε πραγματικό χρόνο",
+          "1.000 αιτήματα/ημέρα",
+          "Ειδοποιήσεις Webhook",
+          "Προσαρμοσμένες εξαγωγές δεδομένων"
+        ]
+      },
+      "enterprise": {
+        "description": "Προσαρμοσμένες λύσεις για οργανισμούς",
+        "features": [
+          "Όλα από Pro + API",
+          "Απεριόριστα αιτήματα API",
+          "Αποκλειστική υποστήριξη",
+          "Προσαρμοσμένες ολοκληρώσεις",
+          "Εγγύηση SLA",
+          "Επιλογή on-premise"
+        ],
+        "cta": "Επικοινωνήστε με το τμήμα Πωλήσεων"
+      }
+    },
+    "cta": {
+      "checkoutDefault": "Ξεκινήστε",
+      "learnMore": "Μάθετε περισσότερα"
+    }
+  }
 }
