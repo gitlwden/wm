@@ -21,7 +21,7 @@ jobs:
           script: |
             echo "1. 进入项目目录..."
             # 这里的路径一定要改成你在服务器上 clone 代码的绝对路径！
-            /opt/dockers/worldmonitor/source/worldmonitor
+            cd /opt/dockers/worldmonitor/source/worldmonitor
             
             echo "2. 拉取最新代码..."
             # 第一步配置的 Deploy Key 在这里发挥作用
