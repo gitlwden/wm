@@ -3,7 +3,7 @@ name: Deploy WorldMonitor to Ubuntu
 on:
   push:
     branches:
-      - main # 只有推送 main 分支才会触发
+      - main # 只有推送 main 分支才会触
 
 jobs:
   deploy:
