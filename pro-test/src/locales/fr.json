@@ -52,7 +52,8 @@
     "entF9": "App Android TV pour salles SOC et salles de marché",
     "entF10": "Déploiement cloud, on-premises ou air-gapped",
     "entF11": "Onboarding et support dédiés",
-    "entCta": "Contacter les ventes"
+    "entCta": "Contacter les ventes",
+    "freeF2": "500+ flux, 65+ sources, 50+ couches cartographiques"
   },
   "whyUpgrade": {
     "title": "Pourquoi passer Pro",
@@ -85,7 +86,7 @@
     "openFullScreen": "Ouvrir en plein écran",
     "tryLiveDashboard": "Essayez le tableau de bord en direct",
     "iframeTitle": "World Monitor — Tableau de bord de renseignement en direct",
-    "description": "Globe WebGL 3D · 45+ couches de carte interactives · Données marchés, macro, géopolitiques, énergie et infrastructures en temps réel"
+    "description": "Globe WebGL 3D · 50+ couches cartographiques interactives · Données de marché, macroéconomiques, géopolitiques, énergétiques et infrastructurelles en temps réel"
   },
   "socialProof": {
     "uniqueVisitors": "Visiteurs uniques",
@@ -141,31 +142,8 @@
   },
   "tiers": {
     "free": "Gratuit",
-    "freeTagline": "Voyez tout",
-    "freeDesc": "Le tableau de bord open-source",
-    "freeF1": "Rafraîchissement 5-15 min",
-    "freeF2": "500+ flux, 45 couches de carte",
-    "freeF3": "BYOK pour l'IA",
-    "freeF4": "Gratuit pour toujours",
-    "openDashboard": "Ouvrir le tableau de bord",
     "pro": "Pro",
-    "proTagline": "Marchés, macro et géopolitique",
-    "proDesc": "Votre analyste IA",
-    "proF1": "Recherche actions et analyse boursière",
-    "proF2": "+ digests quotidiens, analytique économique",
-    "proF3": "IA incluse, 1 clé",
-    "proF4": "Rafraîchissement de données prioritaire (Bientôt)",
-    "priceMonthly": "$39,99 / mois",
-    "priceAnnual": "$399,99 / an",
-    "annualSavingsNote": "2 mois offerts",
-    "enterprise": "Enterprise",
-    "enterpriseTagline": "Agissez avant les autres",
-    "enterpriseDesc": "La plateforme de renseignement",
-    "entF1": "Imagerie satellite en direct",
-    "entF2": "+ agents IA, 50K+ infra, SAR",
-    "entF3": "IA personnalisée, personas d'investisseur",
-    "entF4": "Contactez-nous",
-    "contactSales": "Contacter les ventes"
+    "enterprise": "Enterprise"
   },
   "proShowcase": {
     "proTier": "NIVEAU PRO",
@@ -283,7 +261,6 @@
     "fSiemMcp": "+ SIEM/MCP",
     "fRestWebhook": "REST + webhook",
     "fMcpBulk": "+ MCP + en masse",
-    "f45": "45",
     "fTensOfThousands": "+ des dizaines de milliers",
     "fLiveTracking": "Suivi en direct",
     "fPassAlerts": "Alertes de passage + analyse",
@@ -294,7 +271,8 @@
     "fStandard": "Standard",
     "fKeyAuth": "Auth par clé",
     "fSsoMfa": "SSO/MFA/RBAC/audit",
-    "noteBelow": "La plateforme de base reste gratuite. Les offres payantes débloquent recherche actions, analytique macro, briefings IA et usage organisationnel."
+    "noteBelow": "La plateforme de base reste gratuite. Les offres payantes débloquent recherche actions, analytique macro, briefings IA et usage organisationnel.",
+    "f50plus": "50+"
   },
   "faq": {
     "title": "Questions fréquentes",

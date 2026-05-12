@@ -52,7 +52,8 @@
     "entF9": "Ứng dụng Android TV cho tường SOC và sàn giao dịch",
     "entF10": "Triển khai đám mây, on-premises hoặc air-gapped",
     "entF11": "Onboarding và hỗ trợ chuyên trách",
-    "entCta": "Liên hệ kinh doanh"
+    "entCta": "Liên hệ kinh doanh",
+    "freeF2": "500+ nguồn cấp dữ liệu, 65+ nguồn, 50+ lớp bản đồ"
   },
   "whyUpgrade": {
     "title": "Tại sao nâng cấp",
@@ -85,7 +86,7 @@
     "openFullScreen": "Mở toàn màn hình",
     "tryLiveDashboard": "Dùng thử bảng điều khiển trực tiếp",
     "iframeTitle": "World Monitor — Bảng điều khiển tình báo trực tiếp",
-    "description": "Quả cầu 3D WebGL · 45+ lớp bản đồ tương tác · Dữ liệu thị trường, vĩ mô, địa chính trị, năng lượng và cơ sở hạ tầng theo thời gian thực"
+    "description": "Quả cầu WebGL 3D · 50+ lớp bản đồ tương tác · Dữ liệu thị trường, vĩ mô, địa chính trị, năng lượng và cơ sở hạ tầng theo thời gian thực"
   },
   "socialProof": {
     "uniqueVisitors": "Khách truy cập duy nhất",
@@ -141,31 +142,8 @@
   },
   "tiers": {
     "free": "Miễn phí",
-    "freeTagline": "Xem tất cả",
-    "freeDesc": "Bảng điều khiển mã nguồn mở",
-    "freeF1": "Làm mới 5-15 phút",
-    "freeF2": "500+ nguồn cấp, 45 lớp bản đồ",
-    "freeF3": "BYOK cho AI",
-    "freeF4": "Miễn phí vĩnh viễn",
-    "openDashboard": "Mở bảng điều khiển",
     "pro": "Pro",
-    "proTagline": "Thị trường, vĩ mô và địa chính trị",
-    "proDesc": "Nhà phân tích AI của bạn",
-    "proF1": "Equity research và phân tích cổ phiếu",
-    "proF2": "+ digest hàng ngày, phân tích kinh tế",
-    "proF3": "AI bao gồm, 1 khóa",
-    "proF4": "Làm mới dữ liệu ưu tiên (Sắp ra mắt)",
-    "priceMonthly": "$39,99 / tháng",
-    "priceAnnual": "$399,99 / năm",
-    "annualSavingsNote": "2 tháng miễn phí",
-    "enterprise": "Enterprise",
-    "enterpriseTagline": "Hành động trước mọi người",
-    "enterpriseDesc": "Nền tảng tình báo",
-    "entF1": "Hình ảnh vệ tinh trực tiếp",
-    "entF2": "+ AI agents, 50K+ cơ sở hạ tầng, SAR",
-    "entF3": "AI tùy chỉnh, persona nhà đầu tư",
-    "entF4": "Liên hệ với chúng tôi",
-    "contactSales": "Liên hệ kinh doanh"
+    "enterprise": "Enterprise"
   },
   "proShowcase": {
     "proTier": "CẤP ĐỘ PRO",
@@ -283,7 +261,6 @@
     "fSiemMcp": "+ SIEM/MCP",
     "fRestWebhook": "REST + webhook",
     "fMcpBulk": "+ MCP + hàng loạt",
-    "f45": "45",
     "fTensOfThousands": "+ hàng chục nghìn",
     "fLiveTracking": "Theo dõi trực tiếp",
     "fPassAlerts": "Cảnh báo đi qua + phân tích",
@@ -294,7 +271,8 @@
     "fStandard": "Tiêu chuẩn",
     "fKeyAuth": "Xác thực khóa",
     "fSsoMfa": "SSO/MFA/RBAC/kiểm toán",
-    "noteBelow": "Nền tảng cốt lõi vẫn miễn phí. Các gói trả phí mở khóa Equity research, phân tích vĩ mô, bản tóm tắt AI và sử dụng tổ chức."
+    "noteBelow": "Nền tảng cốt lõi vẫn miễn phí. Các gói trả phí mở khóa Equity research, phân tích vĩ mô, bản tóm tắt AI và sử dụng tổ chức.",
+    "f50plus": "50+"
   },
   "faq": {
     "title": "Câu hỏi thường gặp",

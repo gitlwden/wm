@@ -52,7 +52,8 @@
     "entF9": "Aplicație Android TV pentru pereți SOC și trading floor-uri",
     "entF10": "Deployment cloud, on-premises sau air-gapped",
     "entF11": "Onboarding și suport dedicate",
-    "entCta": "Vorbește cu vânzările"
+    "entCta": "Vorbește cu vânzările",
+    "freeF2": "500+ feeds, 65+ surse, 50+ straturi de hartă"
   },
   "whyUpgrade": {
     "title": "De ce să faci upgrade",
@@ -85,7 +86,7 @@
     "openFullScreen": "Deschide pe ecran complet",
     "tryLiveDashboard": "Încearcă panoul live",
     "iframeTitle": "World Monitor — Panou live de intelligence",
-    "description": "Glob WebGL 3D · 45+ straturi de hartă interactive · Date piețe, macro, geopolitice, energie și infrastructură în timp real"
+    "description": "Glob WebGL 3D · 50+ straturi de hartă interactive · Date în timp real despre piață, macroeconomie, geopolitică, energie și infrastructură"
   },
   "socialProof": {
     "uniqueVisitors": "Vizitatori unici",
@@ -141,31 +142,8 @@
   },
   "tiers": {
     "free": "Gratuit",
-    "freeTagline": "Vezi tot",
-    "freeDesc": "Panoul open-source",
-    "freeF1": "Refresh 5-15 min",
-    "freeF2": "500+ feed-uri, 45 straturi de hartă",
-    "freeF3": "BYOK pentru IA",
-    "freeF4": "Gratuit pentru totdeauna",
-    "openDashboard": "Deschide panoul",
     "pro": "Pro",
-    "proTagline": "Piețe, macro și geopolitică",
-    "proDesc": "Analistul tău IA",
-    "proF1": "Equity research și analiză de acțiuni",
-    "proF2": "+ digesturi zilnice, analitică economică",
-    "proF3": "IA inclus, 1 cheie",
-    "proF4": "Refresh prioritar de date (În curând)",
-    "priceMonthly": "$39,99 / lună",
-    "priceAnnual": "$399,99 / an",
-    "annualSavingsNote": "2 luni gratis",
-    "enterprise": "Enterprise",
-    "enterpriseTagline": "Acționează înaintea tuturor",
-    "enterpriseDesc": "Platforma de intelligence",
-    "entF1": "Imagini satelitare live",
-    "entF2": "+ agenți IA, 50K+ infra, SAR",
-    "entF3": "IA personalizat, personalități de investitor",
-    "entF4": "Contactează-ne",
-    "contactSales": "Contactează vânzările"
+    "enterprise": "Enterprise"
   },
   "proShowcase": {
     "proTier": "NIVEL PRO",
@@ -283,7 +261,6 @@
     "fSiemMcp": "+ SIEM/MCP",
     "fRestWebhook": "REST + webhook",
     "fMcpBulk": "+ MCP + în masă",
-    "f45": "45",
     "fTensOfThousands": "+ zeci de mii",
     "fLiveTracking": "Urmărire live",
     "fPassAlerts": "Alerte trecere + analiză",
@@ -294,7 +271,8 @@
     "fStandard": "Standard",
     "fKeyAuth": "Auth cu cheie",
     "fSsoMfa": "SSO/MFA/RBAC/audit",
-    "noteBelow": "Platforma de bază rămâne gratuită. Planurile plătite deblochează equity research, analitică macro, briefinguri IA și utilizare organizațională."
+    "noteBelow": "Platforma de bază rămâne gratuită. Planurile plătite deblochează equity research, analitică macro, briefinguri IA și utilizare organizațională.",
+    "f50plus": "50+"
   },
   "faq": {
     "title": "Întrebări frecvente",

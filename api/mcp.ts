@@ -32,7 +32,19 @@ export const config = { runtime: 'edge' };
 
 const MCP_PROTOCOL_VERSION = '2025-03-26';
 const SERVER_NAME = 'worldmonitor';
-const SERVER_VERSION = '1.0';
+// Bumped 1.0 → 1.1.0 (2026-05-11) reflecting:
+//   - PR #3658 Tier-1+2 expansion (6 new tools added: displacement, health,
+//     energy, consumer-prices, tariffs, chokepoint)
+//   - PR #3662 Tier-4 parity (_apiPaths metadata + CI-enforced parity test)
+// Keep aligned with public/.well-known/mcp/server-card.json::serverInfo.version
+// — discovery scanners cross-check both values.
+const SERVER_VERSION = '1.1.0';
+
+// Country-code whitelist for get_consumer_prices. The consumer-prices seeder
+// currently only produces data for AE (UAE); future markets will be added
+// here as they're seeded. Kept near COUNTRY_BBOXES (the other ISO-3166 alpha-2
+// lookup table used by tools) so adding a market is a single-file change.
+const SUPPORTED_CONSUMER_PRICES_COUNTRIES = new Set(['ae']);
 
 // ---------------------------------------------------------------------------
 // Rate limiters
@@ -145,15 +157,46 @@ interface CacheToolDef extends BaseToolDef {
   _maxStaleMin: number;
   _freshnessChecks?: FreshnessCheck[];
   _execute?: never;
+  // U3 (Tier-4 parity): REQUIRED. Every OpenAPI operation served by this
+  // tool's cache keys ("METHOD path") so the U5 MCP↔API parity test can
+  // verify every op in docs/api/*.openapi.json is covered by some tool's
+  // `_apiPaths` or explicitly excluded. Empty `[]` is valid for tools
+  // whose cache keys aren't served by any OpenAPI op (bootstrap aggregates).
+  _apiPaths: string[];
 }
 
 // AI inference tool: calls an internal RPC endpoint and returns the raw response.
+// Hybrid variant: when an _execute tool also reads cache keys directly
+// (e.g. parameterised by country_code), it MAY declare `_coverageKeys` so the
+// U7 Tier 3 parity test can verify that every BOOTSTRAP_KEYS/STANDALONE_KEYS
+// entry it owns is covered by some tool — cache-tool's `_cacheKeys` and
+// hybrid _execute's `_coverageKeys` are equivalent for that audit.
 interface RpcToolDef extends BaseToolDef {
   _cacheKeys?: never;
   _seedMetaKey?: never;
   _maxStaleMin?: never;
   _freshnessChecks?: never;
   _execute: (params: Record<string, unknown>, base: string, context: McpAuthContext) => Promise<unknown>;
+  _coverageKeys?: string[];
+  // U3 (Tier-4 parity): REQUIRED. Every OpenAPI operation this `_execute`
+  // body proxies via fetch (extracted from `${base}/api/...` callsites),
+  // using the OPENAPI-declared method (not the runtime fetch method) so the
+  // parity test's source-of-truth is the public spec.
+  //
+  // Empty `[]` is valid ONLY when:
+  //   (a) The tool hits no HTTP endpoint at all (e.g. AI tools reading a
+  //       static JSON registry — see get_commodity_geo), OR
+  //   (b) The tool's _execute fetches an endpoint whose runtime method
+  //       drifts from the OpenAPI spec AND no covering op exists in the
+  //       spec (e.g. generate_forecasts POSTs /api/forecast/v1/get-forecasts
+  //       but the spec declares only GET — that GET is owned by
+  //       get_forecast_predictions). Document the drift inline; an EXCLUDED
+  //       entry is the wrong fix (the op IS covered, just via a sibling
+  //       tool with matching method).
+  //
+  // A new tool whose POST endpoint IS in the spec MUST list it here —
+  // don't default to `[]` when the spec actually exposes the path.
+  _apiPaths: string[];
 }
 
 type ToolDef = CacheToolDef | RpcToolDef;
@@ -174,6 +217,21 @@ const TOOL_REGISTRY: ToolDef[] = [
     ],
     _seedMetaKey: 'seed-meta:market:stocks',
     _maxStaleMin: 30,
+    // NOTE: `GET /api/market/v1/get-gold-intelligence` is NOT covered here.
+    // The audit-time cross-reference matched on the single `market:commodities-bootstrap:v1`
+    // key shared between this tool and the gold-intel handler, but the handler also reads 4
+    // gold-specific keys (COT, gold-extended, gold-ETF-flows, gold-CB-reserves) that this
+    // tool's `_cacheKeys` does NOT expose. Excluded as `deferred-to-future-tool` in
+    // tests/mcp-api-parity.test.mjs until a future commodities-expansion tool bundles those.
+    _apiPaths: [
+      "GET /api/market/v1/get-fear-greed-index",
+      "GET /api/market/v1/get-sector-summary",
+      "GET /api/market/v1/list-commodity-quotes",
+      "GET /api/market/v1/list-crypto-quotes",
+      "GET /api/market/v1/list-etf-flows",
+      "GET /api/market/v1/list-gulf-quotes",
+      "GET /api/market/v1/list-market-quotes",
+    ],
   },
   {
     name: 'get_conflict_events',
@@ -187,6 +245,19 @@ const TOOL_REGISTRY: ToolDef[] = [
     ],
     _seedMetaKey: 'seed-meta:conflict:ucdp-events',
     _maxStaleMin: 30,
+    // NOTE: `GET /api/intelligence/v1/get-risk-scores` is NOT covered here.
+    // The audit-time hint matched on 3 keys (conflict:ucdp-events:v1,
+    // conflict:iran-events:v1, risk:scores:sebuf:stale:v1) but the handler at
+    // server/worldmonitor/intelligence/v1/get-risk-scores.ts:242-256 reads 12
+    // cross-domain keys (infra outages, climate anomalies, cyber threats,
+    // wildfires, GPS jamming, OREF history, security advisories, displacement,
+    // news insights, news threats). Excluded as `deferred-to-future-tool` —
+    // belongs in a future expanded_risk_scores composite tool, not here.
+    _apiPaths: [
+      "GET /api/conflict/v1/list-iran-events",
+      "GET /api/conflict/v1/list-ucdp-events",
+      "GET /api/unrest/v1/list-unrest-events",
+    ],
   },
   {
     name: 'get_aviation_status',
@@ -195,6 +266,7 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['aviation:delays-bootstrap:v1'],
     _seedMetaKey: 'seed-meta:aviation:faa',
     _maxStaleMin: 90,
+    _apiPaths: [],
   },
   {
     name: 'get_news_intelligence',
@@ -208,6 +280,10 @@ const TOOL_REGISTRY: ToolDef[] = [
     ],
     _seedMetaKey: 'seed-meta:news:insights',
     _maxStaleMin: 30,
+    _apiPaths: [
+      "GET /api/intelligence/v1/list-cross-source-signals",
+      "GET /api/intelligence/v1/search-gdelt-documents",
+    ],
   },
   {
     name: 'get_natural_disasters',
@@ -220,6 +296,11 @@ const TOOL_REGISTRY: ToolDef[] = [
     ],
     _seedMetaKey: 'seed-meta:seismology:earthquakes',
     _maxStaleMin: 30,
+    _apiPaths: [
+      "GET /api/natural/v1/list-natural-events",
+      "GET /api/seismology/v1/list-earthquakes",
+      "GET /api/wildfire/v1/list-fire-detections",
+    ],
   },
   {
     name: 'get_military_posture',
@@ -228,6 +309,19 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['theater_posture:sebuf:stale:v1'],
     _seedMetaKey: 'seed-meta:intelligence:risk-scores',
     _maxStaleMin: 120,
+    // CASCADE-MIRROR EQUIVALENCE: the API handler at
+    // server/worldmonitor/military/v1/get-theater-posture.ts:23 reads 3 cascade
+    // variants (live + stale + backup) and returns the freshest available.
+    // This MCP tool reads only the stale variant; PR #3658's U7 already
+    // documents `theater-posture:sebuf:v1` and `theater-posture:sebuf:backup:v1`
+    // as `cascade-mirror: covered by get_military_posture` exclusions in the
+    // bootstrap-parity test — they share the same payload shape, only freshness
+    // differs. Coverage is intentional. The audit script's partial-overlap
+    // warning for this op is suppressed via CASCADE_MIRROR_EXEMPT in
+    // scripts/audit-mcp-api-coverage.mjs.
+    _apiPaths: [
+      "GET /api/military/v1/get-theater-posture",
+    ],
   },
   {
     name: 'get_cyber_threats',
@@ -236,6 +330,7 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['cyber:threats-bootstrap:v2'],
     _seedMetaKey: 'seed-meta:cyber:threats',
     _maxStaleMin: 240,
+    _apiPaths: [],
   },
   {
     name: 'get_economic_data',
@@ -266,6 +361,14 @@ const TOOL_REGISTRY: ToolDef[] = [
       { key: 'seed-meta:economic:bis-property-residential', maxStaleMin: 1440 },
       { key: 'seed-meta:economic:bis-property-commercial', maxStaleMin: 1440 },
     ],
+    _apiPaths: [
+      "GET /api/economic/v1/get-ecb-fx-rates",
+      "GET /api/economic/v1/get-economic-calendar",
+      "GET /api/economic/v1/get-eu-yield-curve",
+      "GET /api/economic/v1/list-fuel-prices",
+      "GET /api/market/v1/get-cot-positioning",
+      "GET /api/market/v1/list-earnings-calendar",
+    ],
   },
   {
     name: 'get_country_macro',
@@ -285,6 +388,7 @@ const TOOL_REGISTRY: ToolDef[] = [
       { key: 'seed-meta:economic:imf-labor', maxStaleMin: 100800 },
       { key: 'seed-meta:economic:imf-external', maxStaleMin: 100800 },
     ],
+    _apiPaths: [],
   },
   {
     name: 'get_eu_housing_cycle',
@@ -293,6 +397,7 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['economic:eurostat:house-prices:v1'],
     _seedMetaKey: 'seed-meta:economic:eurostat-house-prices',
     _maxStaleMin: 60 * 24 * 50, // weekly cron, annual data
+    _apiPaths: [],
   },
   {
     name: 'get_eu_quarterly_gov_debt',
@@ -301,6 +406,7 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['economic:eurostat:gov-debt-q:v1'],
     _seedMetaKey: 'seed-meta:economic:eurostat-gov-debt-q',
     _maxStaleMin: 60 * 24 * 14, // quarterly data, 2-day cron
+    _apiPaths: [],
   },
   {
     name: 'get_eu_industrial_production',
@@ -309,6 +415,7 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['economic:eurostat:industrial-production:v1'],
     _seedMetaKey: 'seed-meta:economic:eurostat-industrial-production',
     _maxStaleMin: 60 * 24 * 5, // monthly data, daily cron
+    _apiPaths: [],
   },
   {
     name: 'get_prediction_markets',
@@ -317,6 +424,9 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['prediction:markets-bootstrap:v1'],
     _seedMetaKey: 'seed-meta:prediction:markets',
     _maxStaleMin: 90,
+    _apiPaths: [
+      "GET /api/prediction/v1/list-prediction-markets",
+    ],
   },
   {
     name: 'get_sanctions_data',
@@ -325,6 +435,91 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['sanctions:entities:v1', 'sanctions:pressure:v1'],
     _seedMetaKey: 'seed-meta:sanctions:entities',
     _maxStaleMin: 1440,
+    _apiPaths: [
+      "GET /api/sanctions/v1/list-sanctions-pressure",
+      "GET /api/sanctions/v1/lookup-sanction-entity",
+    ],
+  },
+  {
+    name: 'get_displacement_data',
+    description: 'Refugee and IDP counts by country (UNHCR annual data).',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+    // Dynamic-year key resolved once at module evaluation — mirrors the
+    // STANDALONE_KEYS pattern in api/health.js:147. The UNHCR seeder publishes
+    // a single current-year key; the prior year exists at the same prefix but
+    // is intentionally excluded — the executeTool label-walk would strip the
+    // year segment from both keys and collide on the same `summary` label,
+    // causing the second result to overwrite the first.
+    _cacheKeys: [`displacement:summary:v1:${new Date().getUTCFullYear()}`],
+    _seedMetaKey: 'seed-meta:displacement:summary',
+    _maxStaleMin: 3600,
+    // Audit miss: handler uses cachedFetchJson with a year-suffixed key the
+    // audit's regex couldn't statically resolve. The op IS covered by this
+    // tool — same underlying displacement:summary:v1:<year> cache.
+    _apiPaths: [
+      'GET /api/displacement/v1/get-displacement-summary',
+    ],
+  },
+  {
+    name: 'get_health_signals',
+    description: 'Active disease outbreaks (WHO/ECDC etc.) and global air-quality station readings (OpenAQ/WAQI PM2.5). For health-risk screening.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+    // Uses the health-domain canonical key health:air-quality:v1 (NOT the
+    // climate-domain mirror climate:air-quality:v1, which stays exclusively
+    // in get_climate_data). Both are written by the same seeder
+    // (scripts/seed-health-air-quality.mjs exports HEALTH_AIR_QUALITY_KEY +
+    // CLIMATE_AIR_QUALITY_KEY) so no duplicate seed work.
+    _cacheKeys: ['health:disease-outbreaks:v1', 'health:air-quality:v1'],
+    _seedMetaKey: 'seed-meta:health:disease-outbreaks',
+    _maxStaleMin: 2880,
+    _freshnessChecks: [
+      { key: 'seed-meta:health:disease-outbreaks', maxStaleMin: 2880 }, // daily cron; 48h budget
+      { key: 'seed-meta:health:air-quality', maxStaleMin: 180 },        // hourly cron; 3h budget
+    ],
+    _apiPaths: [
+      "GET /api/health/v1/list-air-quality-alerts",
+      "GET /api/health/v1/list-disease-outbreaks",
+    ],
+  },
+  {
+    name: 'get_energy_intelligence',
+    description: 'Energy supply, prices, storage, disruptions, and policy: EIA petroleum stocks, electricity prices (Ember), gas storage (GIE), fuel shortages, fossil & renewable shares, active energy disruptions, government crisis policies.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+    // Broad 9-key energy bundle mirroring get_economic_data. Cadences span
+    // hourly (electricity prices) to annual (World Bank renewable share); use
+    // _freshnessChecks with per-key maxStaleMin pulled from
+    // api/health.js::SEED_META so a slow-cadence key doesn't drag the
+    // aggregate stale flag unnecessarily.
+    _cacheKeys: [
+      'energy:eia-petroleum:v1',                  // STANDALONE_KEYS::eiaPetroleum
+      'energy:electricity:v1:index',              // BOOTSTRAP_KEYS::electricityPrices
+      'energy:ember:v1:_all',                     // STANDALONE_KEYS::emberElectricity
+      'energy:gas-storage:v1:_countries',         // BOOTSTRAP_KEYS::gasStorageCountries
+      'energy:fuel-shortages:v1',                 // STANDALONE_KEYS::fuelShortages
+      'energy:disruptions:v1',                    // STANDALONE_KEYS::energyDisruptions
+      'energy:crisis-policies:v1',                // STANDALONE_KEYS::energyCrisisPolicies
+      'resilience:fossil-electricity-share:v1',   // STANDALONE_KEYS::fossilElectricityShare
+      'economic:worldbank-renewable:v1',          // BOOTSTRAP_KEYS::renewableEnergy
+    ],
+    _seedMetaKey: 'seed-meta:energy:eia-petroleum',
+    _maxStaleMin: 4320, // EIA petroleum daily-bundle baseline; per-key budgets via _freshnessChecks below
+    _freshnessChecks: [
+      { key: 'seed-meta:energy:eia-petroleum',                  maxStaleMin: 4320 },   // daily bundle; 72h = 3× interval
+      { key: 'seed-meta:energy:electricity-prices',             maxStaleMin: 2880 },   // daily cron (14:00 UTC); 48h = 2× interval
+      { key: 'seed-meta:energy:ember',                          maxStaleMin: 2880 },   // daily cron (08:00 UTC); 48h = 2× interval
+      { key: 'seed-meta:energy:gas-storage-countries',          maxStaleMin: 2880 },   // daily cron at 10:30 UTC; 48h = 2× interval
+      { key: 'seed-meta:energy:fuel-shortages',                 maxStaleMin: 2880 },   // 2d — daily cron × 2 headroom
+      { key: 'seed-meta:energy:disruptions',                    maxStaleMin: 20160 },  // 14d — weekly cron × 2 headroom
+      { key: 'seed-meta:energy:crisis-policies',                maxStaleMin: 60 * 24 * 400 }, // ~400d static registry
+      { key: 'seed-meta:resilience:fossil-electricity-share',   maxStaleMin: 11520 },  // ~8d (annual WB-style cadence)
+      { key: 'seed-meta:economic:worldbank-renewable:v1',       maxStaleMin: 10080 },  // 7d WB weekly-cron annual data
+    ],
+    _apiPaths: [
+      "GET /api/economic/v1/get-energy-crisis-policies",
+      "GET /api/supply-chain/v1/get-fuel-shortage-detail",
+      "GET /api/supply-chain/v1/list-energy-disruptions",
+      "GET /api/supply-chain/v1/list-fuel-shortages",
+    ],
   },
   {
     name: 'get_climate_data',
@@ -342,6 +537,14 @@ const TOOL_REGISTRY: ToolDef[] = [
       { key: 'seed-meta:climate:news-intelligence', maxStaleMin: 90 },
       { key: 'seed-meta:weather:alerts', maxStaleMin: 45 },
     ],
+    _apiPaths: [
+      "GET /api/climate/v1/get-co2-monitoring",
+      "GET /api/climate/v1/get-ocean-ice-data",
+      "GET /api/climate/v1/list-air-quality-data",
+      "GET /api/climate/v1/list-climate-anomalies",
+      "GET /api/climate/v1/list-climate-disasters",
+      "GET /api/climate/v1/list-climate-news",
+    ],
   },
   {
     name: 'get_infrastructure_status',
@@ -350,6 +553,9 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['infra:outages:v1'],
     _seedMetaKey: 'seed-meta:infra:outages',
     _maxStaleMin: 30,
+    _apiPaths: [
+      "GET /api/infrastructure/v1/list-internet-outages",
+    ],
   },
   {
     name: 'get_supply_chain_data',
@@ -362,6 +568,89 @@ const TOOL_REGISTRY: ToolDef[] = [
     ],
     _seedMetaKey: 'seed-meta:trade:customs-revenue',
     _maxStaleMin: 2880,
+    _apiPaths: [
+      "GET /api/supply-chain/v1/get-shipping-stress",
+      "GET /api/trade/v1/get-customs-revenue",
+    ],
+  },
+  {
+    name: 'get_tariff_trends',
+    description: 'Global trade and pricing indicators: US tariff trends (HTS-coded), BigMac index, FAO Food Price Index, and per-country national debt levels.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+    // 4-key bundle spanning trade + economic domains. Cadences span hourly-ish
+    // (tariffs co-pinned to 8h TARIFF_TTL) to monthly (FAO / national debt).
+    // Per-key _freshnessChecks pulled from api/health.js::SEED_META so a slow
+    // monthly key doesn't drag the aggregate stale flag and a fast tariff
+    // outage isn't masked by a long FAO budget.
+    _cacheKeys: [
+      'trade:tariffs:v1:840:all:10',   // STANDALONE_KEYS::tariffTrendsUs
+      'economic:bigmac:v1',            // BOOTSTRAP_KEYS::bigmac
+      'economic:fao-ffpi:v1',          // BOOTSTRAP_KEYS::faoFoodPriceIndex
+      'economic:national-debt:v1',     // BOOTSTRAP_KEYS::nationalDebt
+    ],
+    _seedMetaKey: 'seed-meta:trade:tariffs:v1:840:all:10',
+    _maxStaleMin: 540, // tariff cron baseline; per-key budgets via _freshnessChecks below
+    _freshnessChecks: [
+      { key: 'seed-meta:trade:tariffs:v1:840:all:10', maxStaleMin: 540 },   // TARIFF_TTL 8h + 60min grace
+      { key: 'seed-meta:economic:bigmac',             maxStaleMin: 10080 }, // weekly seed; 7d
+      { key: 'seed-meta:economic:fao-ffpi',           maxStaleMin: 86400 }, // monthly seed; 60d (2× interval)
+      { key: 'seed-meta:economic:national-debt',      maxStaleMin: 86400 }, // monthly seed; 60d (2× interval)
+    ],
+    _apiPaths: [
+      "GET /api/economic/v1/get-fao-food-price-index",
+      "GET /api/economic/v1/get-national-debt",
+      "GET /api/economic/v1/list-bigmac-prices",
+    ],
+  },
+  {
+    name: 'get_chokepoint_status',
+    description: 'Live maritime chokepoint status: per-chokepoint vessel transit counts (10-min cadence), rolling transit summaries, per-port activity, plus static reference data (chokepoint geometry, canonical 13-chokepoint registry) and flow aggregates. Covers Suez, Hormuz, Malacca, Bab-el-Mandeb, Panama, etc.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+    // Maritime chokepoint bundle distinct from get_supply_chain_data (which keeps
+    // shipping-stress + customs + comtrade). Cadences span 10-minute relay
+    // (transit-summaries, chokepoint_transits) to ~400-day static registries
+    // (chokepoint-baselines), so per-key _freshnessChecks pulled from
+    // api/health.js::SEED_META — a fast transit outage isn't masked by the
+    // slow chokepoint-baselines budget, and the long-cadence portwatch keys
+    // don't drag aggregate stale flagging.
+    //
+    // Payload measurement (PR pre-merge, fun-toad-55127.upstash.io 2026-05-11):
+    //   transit-summaries:v1                        — 6.8 KB
+    //   chokepoint_transits:v1                      — 1.1 KB
+    //   portwatch-ports:v1:_countries               — 0.9 KB
+    //   energy:chokepoint-baselines:v1              — 0.6 KB
+    //   portwatch:chokepoints:ref:v1                — 7.9 KB
+    //   energy:chokepoint-flows:v1                  — 1.2 KB
+    //   ────────────────────────────────────────────────────
+    //   Total: 18.5 KB (well under the 200KB/single-key and 500KB/aggregate
+    //   thresholds that historically tripped handler timeouts —
+    //   see tests/transit-summaries.test.mjs:539-545).
+    //
+    // EXCLUDED on purpose: supply_chain:corridorrisk:v1 is an intermediate
+    // key whose data flows through supply_chain:transit-summaries:v1
+    // (api/health.js:461). U7 will add corridorrisk to EXCLUDED_FROM_MCP.
+    _cacheKeys: [
+      'supply_chain:transit-summaries:v1',          // STANDALONE_KEYS::transitSummaries
+      'supply_chain:chokepoint_transits:v1',        // STANDALONE_KEYS::chokepointTransits
+      'supply_chain:portwatch-ports:v1:_countries', // STANDALONE_KEYS::portwatchPortActivity
+      'energy:chokepoint-baselines:v1',             // STANDALONE_KEYS::chokepointBaselines
+      'portwatch:chokepoints:ref:v1',               // STANDALONE_KEYS::portwatchChokepointsRef
+      'energy:chokepoint-flows:v1',                 // STANDALONE_KEYS::chokepointFlows
+    ],
+    _seedMetaKey: 'seed-meta:supply_chain:transit-summaries',
+    _maxStaleMin: 30, // transit-summaries 10-min relay baseline; per-key budgets via _freshnessChecks below
+    _freshnessChecks: [
+      { key: 'seed-meta:supply_chain:transit-summaries',   maxStaleMin: 30 },             // 10-min relay; 30min = 3× interval
+      { key: 'seed-meta:supply_chain:chokepoint_transits', maxStaleMin: 30 },             // 10-min relay; 30min = 3× interval
+      { key: 'seed-meta:supply_chain:portwatch-ports',     maxStaleMin: 2160 },           // 12h cron; 36h = 3× interval
+      { key: 'seed-meta:energy:chokepoint-baselines',      maxStaleMin: 60 * 24 * 400 },  // ~400d static registry
+      { key: 'seed-meta:portwatch:chokepoints-ref',        maxStaleMin: 60 * 24 * 14 },   // weekly cron; 14d = 2× interval
+      { key: 'seed-meta:energy:chokepoint-flows',          maxStaleMin: 720 },            // 6h cron; 12h = 2× interval
+    ],
+    _apiPaths: [
+      "GET /api/intelligence/v1/get-country-port-activity",
+      "GET /api/supply-chain/v1/get-chokepoint-status",
+    ],
   },
   {
     name: 'get_positive_events',
@@ -370,6 +659,9 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['positive_events:geo-bootstrap:v1'],
     _seedMetaKey: 'seed-meta:positive-events:geo',
     _maxStaleMin: 60,
+    _apiPaths: [
+      'GET /api/positive-events/v1/list-positive-geo-events',
+    ],
   },
   {
     name: 'get_radiation_data',
@@ -378,6 +670,9 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['radiation:observations:v1'],
     _seedMetaKey: 'seed-meta:radiation:observations',
     _maxStaleMin: 30,
+    _apiPaths: [
+      "GET /api/radiation/v1/list-radiation-observations",
+    ],
   },
   {
     name: 'get_research_signals',
@@ -386,6 +681,9 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['research:tech-events-bootstrap:v1'],
     _seedMetaKey: 'seed-meta:research:tech-events',
     _maxStaleMin: 480,
+    _apiPaths: [
+      'GET /api/research/v1/list-tech-events',
+    ],
   },
   {
     name: 'get_forecast_predictions',
@@ -394,6 +692,9 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['forecast:predictions:v2'],
     _seedMetaKey: 'seed-meta:forecast:predictions',
     _maxStaleMin: 90,
+    _apiPaths: [
+      "GET /api/forecast/v1/get-forecasts",
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -406,6 +707,9 @@ const TOOL_REGISTRY: ToolDef[] = [
     _cacheKeys: ['intelligence:social:reddit:v1'],
     _seedMetaKey: 'seed-meta:intelligence:social-reddit',
     _maxStaleMin: 30,
+    _apiPaths: [
+      "GET /api/intelligence/v1/get-social-velocity",
+    ],
   },
 
   // -------------------------------------------------------------------------
@@ -463,6 +767,10 @@ const TOOL_REGISTRY: ToolDef[] = [
       if (!briefRes.ok) throw new Error(`summarize-article HTTP ${briefRes.status}`);
       return briefRes.json();
     },
+    _apiPaths: [
+      "GET /api/news/v1/list-feed-digest",
+      "POST /api/news/v1/summarize-article",
+    ],
   },
   {
     name: 'get_country_brief',
@@ -518,6 +826,14 @@ const TOOL_REGISTRY: ToolDef[] = [
       if (!res.ok) throw new Error(`get-country-intel-brief HTTP ${res.status}`);
       return res.json();
     },
+    // METHOD DRIFT: _execute POSTs above but OpenAPI declares only GET on this
+    // path (verified against docs/api/IntelligenceService.openapi.json). The
+    // gateway routes by path, not method, so POST works at runtime. We declare
+    // GET here because OpenAPI is the parity test's source-of-truth — fixing
+    // the spec to add POST (or migrating the handler to GET) is out of scope.
+    _apiPaths: [
+      "GET /api/intelligence/v1/get-country-intel-brief",
+    ],
   },
   {
     name: 'get_country_risk',
@@ -540,6 +856,124 @@ const TOOL_REGISTRY: ToolDef[] = [
       if (!res.ok) throw new Error(`get-country-risk HTTP ${res.status}`);
       return res.json();
     },
+    _apiPaths: [
+      "GET /api/intelligence/v1/get-country-risk",
+    ],
+  },
+  {
+    name: 'get_consumer_prices',
+    description: "Per-country consumer-prices intelligence: 30-day overview, category-level inflation, retailer spread (essentials basket), top movers, and source freshness. Requires country_code (currently only 'ae' is seeded).",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        country_code: {
+          type: 'string',
+          description: 'ISO 3166-1 alpha-2 country code. Currently supported: AE (case-insensitive).',
+        },
+      },
+      required: ['country_code'],
+    },
+    // Hybrid _execute (not a pure cache tool) because the cache keys are
+    // parameterised by country. Mirrors api/health.js::BOOTSTRAP_KEYS:55-59
+    // exactly so the U7 Tier-3 parity test treats every key as covered.
+    _coverageKeys: [
+      'consumer-prices:overview:ae',
+      'consumer-prices:categories:ae:30d',
+      'consumer-prices:movers:ae:30d',
+      'consumer-prices:retailer-spread:ae:essentials-ae',
+      'consumer-prices:freshness:ae',
+    ],
+    _execute: async (params) => {
+      // Result-level errors (NOT throws) for user-input issues — the dispatcher
+      // maps thrown errors to JSON-RPC -32603 "Internal error", which is
+      // misleading for a clearly-user-side fault like a missing/unknown
+      // country_code. Returning {error: ...} surfaces a usable message via
+      // the normal tools/call result envelope.
+      if (!params.country_code || typeof params.country_code !== 'string') {
+        return { error: 'country_code is required' };
+      }
+      const code = params.country_code.toLowerCase();
+      // Strict ISO 3166-1 alpha-2 shape: exactly two lowercase letters.
+      // Without this, .slice(0,2) would silently truncate inputs like
+      // "aexxx" or "AE-DXB" to "ae" and serve AE data — masking client bugs.
+      if (!/^[a-z]{2}$/.test(code)) {
+        return { error: 'country_code must be a two-letter ISO code (e.g. "ae")' };
+      }
+      if (!SUPPORTED_CONSUMER_PRICES_COUNTRIES.has(code)) {
+        return { error: 'Country not yet supported. Available: ae' };
+      }
+
+      const dataKeys = [
+        `consumer-prices:overview:${code}`,
+        `consumer-prices:categories:${code}:30d`,
+        `consumer-prices:movers:${code}:30d`,
+        `consumer-prices:retailer-spread:${code}:essentials-${code}`,
+        `consumer-prices:freshness:${code}`,
+      ];
+
+      // Freshness checks use the producer's actual meta keys. Note the spread
+      // entry: scripts/seed-consumer-prices.mjs:151 writes
+      // `seed-meta:consumer-prices:spread:<code>` (NO `retailer-` prefix,
+      // NO `:essentials-<code>` suffix). api/health.js:337 has the documented
+      // drift bug (expects `retailer-spread:<code>:essentials-<code>` which
+      // never exists) and so would always report stale; we deliberately
+      // diverge from health.js here to match the actual producer.
+      const freshnessChecks: FreshnessCheck[] = [
+        { key: `seed-meta:consumer-prices:overview:${code}`,      maxStaleMin: 1500 }, // 25h = 24h cron + 1h grace
+        { key: `seed-meta:consumer-prices:categories:${code}:30d`, maxStaleMin: 1500 },
+        { key: `seed-meta:consumer-prices:movers:${code}:30d`,     maxStaleMin: 1500 },
+        { key: `seed-meta:consumer-prices:spread:${code}`,         maxStaleMin: 1500 }, // producer's actual key shape
+        { key: `seed-meta:consumer-prices:freshness:${code}`,      maxStaleMin: 1500 },
+      ];
+
+      const [dataResults, metaResults] = await Promise.all([
+        Promise.all(dataKeys.map((k) => readJsonFromUpstash(k))),
+        Promise.all(freshnessChecks.map((c) => readJsonFromUpstash(c.key))),
+      ]);
+
+      // F6 contract parity with the cache-tool path (executeTool, ~line 1139):
+      // if every data read is null/undefined, this is a degenerate-empty
+      // response (Redis transient / stampede / pre-seed). Throw so
+      // dispatchToolsCall's catch fires proRollback — without this, the Pro
+      // user's daily MCP counter increments by 1 for a useless result while
+      // every other cache-tool refunds via the same code path.
+      if (dataResults.every((v: unknown) => v === null || v === undefined)) {
+        throw new Error('cache_all_null');
+      }
+
+      const { cached_at, stale } = evaluateFreshness(freshnessChecks, metaResults);
+
+      return {
+        cached_at,
+        stale,
+        country_code: code,
+        data: {
+          overview: dataResults[0],
+          categories: dataResults[1],
+          movers: dataResults[2],
+          retailerSpread: dataResults[3],
+          freshness: dataResults[4],
+        },
+      };
+    },
+    // Hybrid tool covers the consumer-prices domain via direct Redis reads
+    // of the same keys the per-method handlers expose via the API. The
+    // OpenAPI ops listed here read parameterized keys (the audit's
+    // manual-mapping case); this MCP tool wraps the 'ae'-instance equivalent.
+    //
+    // NOTE: `get-consumer-price-basket-series` is NOT covered here — that
+    // handler reads `consumer-prices:basket-series:${market}:${basket}:${range}`
+    // which is a separate parameterized time-series key, NOT in this tool's
+    // `_coverageKeys`. Excluded as `deferred-to-future-tool` in
+    // tests/mcp-api-parity.test.mjs until a future expanded_consumer_prices
+    // tool exposes the basket-series time series.
+    _apiPaths: [
+      'GET /api/consumer-prices/v1/get-consumer-price-freshness',
+      'GET /api/consumer-prices/v1/get-consumer-price-overview',
+      'GET /api/consumer-prices/v1/list-consumer-price-categories',
+      'GET /api/consumer-prices/v1/list-consumer-price-movers',
+      'GET /api/consumer-prices/v1/list-retailer-price-spreads',
+    ],
   },
   {
     name: 'get_airspace',
@@ -632,6 +1066,10 @@ const TOOL_REGISTRY: ToolDef[] = [
         updated_at: civ?.updated_at ? new Date(civ.updated_at).toISOString() : new Date().toISOString(),
       };
     },
+    _apiPaths: [
+      "GET /api/aviation/v1/track-aircraft",
+      "GET /api/military/v1/list-military-flights",
+    ],
   },
   {
     name: 'get_maritime_activity',
@@ -688,6 +1126,9 @@ const TOOL_REGISTRY: ToolDef[] = [
         })),
       };
     },
+    _apiPaths: [
+      "GET /api/maritime/v1/get-vessel-snapshot",
+    ],
   },
   {
     name: 'analyze_situation',
@@ -714,6 +1155,9 @@ const TOOL_REGISTRY: ToolDef[] = [
       if (!res.ok) throw new Error(`deduct-situation HTTP ${res.status}`);
       return res.json();
     },
+    _apiPaths: [
+      "POST /api/intelligence/v1/deduct-situation",
+    ],
   },
   {
     name: 'generate_forecasts',
@@ -740,6 +1184,7 @@ const TOOL_REGISTRY: ToolDef[] = [
       if (!res.ok) throw new Error(`get-forecasts HTTP ${res.status}`);
       return res.json();
     },
+    _apiPaths: [],
   },
   {
     name: 'search_flights',
@@ -778,6 +1223,9 @@ const TOOL_REGISTRY: ToolDef[] = [
       if (!res.ok) throw new Error(`search-google-flights HTTP ${res.status}`);
       return res.json();
     },
+    _apiPaths: [
+      "GET /api/aviation/v1/search-google-flights",
+    ],
   },
   {
     name: 'search_flight_prices_by_date',
@@ -818,6 +1266,9 @@ const TOOL_REGISTRY: ToolDef[] = [
       if (!res.ok) throw new Error(`search-google-dates HTTP ${res.status}`);
       return res.json();
     },
+    _apiPaths: [
+      "GET /api/aviation/v1/search-google-dates",
+    ],
   },
   {
     name: 'get_commodity_geo',
@@ -837,6 +1288,7 @@ const TOOL_REGISTRY: ToolDef[] = [
       if (params.country) sites = sites.filter((s) => s.country.toLowerCase().includes(String(params.country).toLowerCase()));
       return { sites, total: sites.length };
     },
+    _apiPaths: [],
   },
 ];
 
@@ -1277,8 +1729,23 @@ async function dispatchToolsCall(
     return rpcOk(id, { content: [{ type: 'text', text: JSON.stringify(result) }] }, corsHeaders);
   } catch (err: unknown) {
     if (proRollback) await proRollback();
-    console.error('[mcp] tool execution error:', err);
-    captureSilentError(err, { tags: { route: 'api/mcp', step: 'tool-execution', tool: tool.name }, ctx });
+    // HTTP 4xx from an internal sibling fetch (e.g. `feed-digest HTTP 401`)
+    // is expected-but-trackable: transient HMAC/auth/quota drift, replay-window
+    // skew, or a single user's expired context. Report at `warning` so single
+    // occurrences don't drown real 5xx bugs in alerts; the pattern still
+    // surfaces if it recurs. Non-HTTP errors and 5xx stay at default `error`.
+    // Log-drain consumers (Vercel, Datadog) read console severity, so route
+    // the `console.*` call to match the Sentry level — otherwise log alerts
+    // fire on 4xx while Sentry does not, defeating the downgrade.
+    const message = err instanceof Error ? err.message : String(err);
+    const isClient4xx = /HTTP 4\d\d\b/.test(message);
+    const log = isClient4xx ? console.warn : console.error;
+    log('[mcp] tool execution error:', err);
+    captureSilentError(err, {
+      tags: { route: 'api/mcp', step: 'tool-execution', tool: tool.name },
+      ctx,
+      ...(isClient4xx ? { level: 'warning' as const } : {}),
+    });
     return rpcError(id, -32603, 'Internal error: data fetch failed');
   }
 }
@@ -1372,3 +1839,15 @@ export default async function handler(
 ): Promise<Response> {
   return mcpHandler(req, PRODUCTION_DEPS, ctx);
 }
+
+// ---------------------------------------------------------------------------
+// Test-only escape hatch. Exposes the TOOL_REGISTRY for the U7 Tier 3 parity
+// test (tests/mcp-bootstrap-parity.test.mjs), which asserts that every
+// canonical seeded cache key from api/health.js (BOOTSTRAP_KEYS ∪
+// STANDALONE_KEYS) is either covered by some tool's `_cacheKeys` (cache-tool)
+// or `_coverageKeys` (RpcToolDef hybrid), or explicitly excluded via the
+// test's EXCLUDED_FROM_MCP map with a documented reason.
+// ---------------------------------------------------------------------------
+export const __testing__ = {
+  TOOL_REGISTRY,
+};

@@ -52,7 +52,8 @@
     "entF9": "用于 SOC 墙和交易大厅的 Android TV 应用",
     "entF10": "云、本地或气隙部署",
     "entF11": "专属上手与支持",
-    "entCta": "联系销售"
+    "entCta": "联系销售",
+    "freeF2": "500+ 个源、65+ 个来源、50+ 个地图图层"
   },
   "whyUpgrade": {
     "title": "为什么升级",
@@ -85,7 +86,7 @@
     "openFullScreen": "全屏打开",
     "tryLiveDashboard": "试用实时仪表板",
     "iframeTitle": "World Monitor — 实时情报仪表板",
-    "description": "3D WebGL 地球 · 45+ 交互式地图图层 · 实时的市场、宏观、地缘政治、能源与基础设施数据"
+    "description": "3D WebGL 地球仪 · 50+ 个交互式地图图层 · 实时市场、宏观、地缘政治、能源和基础设施数据"
   },
   "socialProof": {
     "uniqueVisitors": "独立访客",
@@ -141,31 +142,8 @@
   },
   "tiers": {
     "free": "免费",
-    "freeTagline": "纵览一切",
-    "freeDesc": "开源仪表板",
-    "freeF1": "刷新 5-15 分钟",
-    "freeF2": "500+ feed,45 个地图图层",
-    "freeF3": "AI 自带密钥",
-    "freeF4": "永久免费",
-    "openDashboard": "打开仪表板",
     "pro": "Pro",
-    "proTagline": "市场、宏观与地缘政治",
-    "proDesc": "您的 AI 分析师",
-    "proF1": "股票研究与股票分析",
-    "proF2": "+ 每日摘要、经济分析",
-    "proF3": "AI 内含、一把密钥",
-    "proF4": "优先数据刷新(即将推出)",
-    "priceMonthly": "$39.99 / 月",
-    "priceAnnual": "$399.99 / 年",
-    "annualSavingsNote": "2 个月免费",
-    "enterprise": "Enterprise",
-    "enterpriseTagline": "抢先于任何人行动",
-    "enterpriseDesc": "情报平台",
-    "entF1": "实时卫星图像",
-    "entF2": "+ AI 代理、50K+ 基础设施、SAR",
-    "entF3": "定制 AI、投资者人设",
-    "entF4": "联系我们",
-    "contactSales": "联系销售"
+    "enterprise": "Enterprise"
   },
   "proShowcase": {
     "proTier": "PRO 等级",
@@ -283,7 +261,6 @@
     "fSiemMcp": "+ SIEM/MCP",
     "fRestWebhook": "REST + webhook",
     "fMcpBulk": "+ MCP + 批量",
-    "f45": "45",
     "fTensOfThousands": "+ 数万",
     "fLiveTracking": "实时追踪",
     "fPassAlerts": "过顶告警 + 分析",
@@ -294,7 +271,8 @@
     "fStandard": "标准",
     "fKeyAuth": "密钥鉴权",
     "fSsoMfa": "SSO/MFA/RBAC/审计",
-    "noteBelow": "核心平台保持免费。付费方案解锁股票研究、宏观分析、AI 简报与组织级使用。"
+    "noteBelow": "核心平台保持免费。付费方案解锁股票研究、宏观分析、AI 简报与组织级使用。",
+    "f50plus": "50+"
   },
   "faq": {
     "title": "常见问题",
