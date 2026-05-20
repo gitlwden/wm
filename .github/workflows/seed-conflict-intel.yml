@@ -1,0 +1,52 @@
+name: Seed Conflict & Intel
+
+on:
+  schedule:
+    # Every 15 min — matches Railway cadence for conflict-intel
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Seed conflict intel
+        run: node scripts/seed-conflict-intel.mjs
+        continue-on-error: true
+        env:
+          ACLED_EMAIL: ${{ secrets.ACLED_EMAIL_ADDRESS }}
+          ACLED_PASSWORD: ${{ secrets.ACLED_PASSWORD }}
+          ACLED_ACCESS_TOKEN: ${{ secrets.ACLED_ACCESS_TOKEN }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed GDELT intel
+        run: node scripts/seed-gdelt-intel.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed Iran events
+        run: node scripts/seed-iran-events.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed unrest events
+        run: node scripts/seed-unrest-events.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

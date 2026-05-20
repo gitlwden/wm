@@ -1,0 +1,50 @@
+name: Seed Resilience Scores
+
+on:
+  schedule:
+    # Every 6h — matches Railway cadence
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Seed resilience bundle
+        run: node scripts/seed-bundle-resilience.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed resilience energy v2 bundle
+        run: node scripts/seed-bundle-resilience-energy-v2.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed resilience recovery bundle
+        run: node scripts/seed-bundle-resilience-recovery.mjs
+        continue-on-error: true
+        env:
+          COMTRADE_API_KEYS: ${{ secrets.COMTRADE_API_KEYS }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed resilience validation bundle
+        run: node scripts/seed-bundle-resilience-validation.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

@@ -1,0 +1,28 @@
+name: Seed Derived Signals
+
+on:
+  schedule:
+    # Every 5 min — matches Railway seed-bundle-derived-signals
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Seed derived signals bundle
+        run: node scripts/seed-bundle-derived-signals.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

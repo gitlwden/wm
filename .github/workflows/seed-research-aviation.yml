@@ -1,0 +1,65 @@
+name: Seed Research & Aviation
+
+on:
+  schedule:
+    # Hourly — matches Railway cadence for aviation; research is less frequent but grouped for efficiency
+    - cron: '37 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Seed aviation
+        run: node scripts/seed-aviation.mjs
+        continue-on-error: true
+        env:
+          AVIATIONSTACK_API: ${{ secrets.AVIATIONSTACK_API }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed research (arXiv + HN + GitHub)
+        run: node scripts/seed-research.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed security advisories
+        run: node scripts/seed-security-advisories.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed regulatory actions
+        run: node scripts/seed-regulatory-actions.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed earnings calendar
+        run: node scripts/seed-earnings-calendar.mjs
+        continue-on-error: true
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed prediction markets
+        run: node scripts/seed-prediction-markets.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

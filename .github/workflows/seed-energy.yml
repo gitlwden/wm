@@ -1,0 +1,53 @@
+name: Seed Energy Data
+
+on:
+  schedule:
+    # Every hour — covers seed-economy (EIA+FRED+crude+natgas), seed-hormuz, seed-energy-intelligence
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Seed economy (EIA prices + FRED + crude/natgas inventories + macro signals)
+        run: node scripts/seed-economy.mjs
+        continue-on-error: true
+        env:
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed EIA petroleum
+        run: node scripts/seed-eia-petroleum.mjs
+        continue-on-error: true
+        env:
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed Hormuz tracker
+        run: node scripts/seed-hormuz.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed energy intelligence
+        run: node scripts/seed-energy-intelligence.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

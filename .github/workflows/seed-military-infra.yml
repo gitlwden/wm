@@ -1,0 +1,72 @@
+name: Seed Military & Infrastructure
+
+on:
+  schedule:
+    # Every 15 min — matches Railway cadence for military-flights
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Seed military flights
+        run: node scripts/seed-military-flights.mjs
+        continue-on-error: true
+        env:
+          OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
+          OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
+          WINGBITS_API_KEY: ${{ secrets.WINGBITS_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed military maritime
+        run: node scripts/seed-military-maritime-news.mjs
+        continue-on-error: true
+        env:
+          WORLDMONITOR_RELAY_KEY: ${{ secrets.WORLDMONITOR_RELAY_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed internet outages
+        run: node scripts/seed-internet-outages.mjs
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed cyber threats
+        run: node scripts/seed-cyber-threats.mjs
+        continue-on-error: true
+        env:
+          ABUSEIPDB_API_KEY: ${{ secrets.ABUSEIPDB_API_KEY }}
+          OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
+          URLHAUS_AUTH_KEY: ${{ secrets.URLHAUS_AUTH_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed service statuses
+        run: node scripts/seed-service-statuses.mjs
+        continue-on-error: true
+        env:
+          WORLDMONITOR_RELAY_KEY: ${{ secrets.WORLDMONITOR_RELAY_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed radiation watch
+        run: node scripts/seed-radiation-watch.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

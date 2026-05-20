@@ -1,0 +1,29 @@
+name: Seed Relay Backup
+
+on:
+  schedule:
+    # Every 30 min — matches Railway seed-bundle-relay-backup
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Seed relay backup bundle
+        run: node scripts/seed-bundle-relay-backup.mjs
+        continue-on-error: true
+        env:
+          RELIEFWEB_APPNAME: ${{ secrets.RELIEFWEB_APPNAME }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

@@ -1,0 +1,30 @@
+name: Seed Health & Disease
+
+on:
+  schedule:
+    # Hourly — matches Railway seed-bundle-health
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Seed health bundle
+        run: node scripts/seed-bundle-health.mjs
+        continue-on-error: true
+        env:
+          OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
+          WAQI_API_KEY: ${{ secrets.WAQI_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}

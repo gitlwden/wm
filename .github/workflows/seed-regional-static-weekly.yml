@@ -1,0 +1,43 @@
+name: Seed Regional & Static Ref (Weekly)
+
+on:
+  schedule:
+    # Weekly Sunday 03:00 UTC — matches Railway seed-bundle-static-ref
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Seed static ref bundle
+        run: node scripts/seed-bundle-static-ref.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed regional bundle
+        run: node scripts/seed-bundle-regional.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed IMF extended bundle
+        run: node scripts/seed-bundle-imf-extended.mjs
+        continue-on-error: true
+        env:
+          IMF_API_KEY: ${{ secrets.IMF_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
