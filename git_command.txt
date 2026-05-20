@@ -1,0 +1,12 @@
+git fetch origin + git merge origin/main （把ubuntu的dai）
+
+git fetch upstream + git merge upstream/main（白嫖原作者更新）。
+
+
+
+git push origin main（推送到内网 Ubuntu 自动触发 Docker 部署）。
+
+
+---------------------------------------------
+
+git push origin main -f（同步到自己的云端备份）。
