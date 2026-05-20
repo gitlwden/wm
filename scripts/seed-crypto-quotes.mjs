@@ -77,17 +77,26 @@ async function fetchFromCoinPaprika() {
 }
 
 async function fetchCryptoQuotes() {
-  // CoinPaprika is the PRIMARY source — CoinGecko's free tier 429s frequently
-  // and its 5-step retry budget (10+20+30+40+50=150s) overruns the bundle's
-  // 120s timeout, killing the section before the fallback can fire (Railway
-  // bundle log 2026-04-14 07:17 UTC). CoinGecko is retained as fallback for
-  // its sparkline_in_7d data, which CoinPaprika does not provide.
+  // When CoinGecko Pro API key is available, use CoinGecko as PRIMARY —
+  // it provides sparkline_in_7d data and Pro tier avoids the free-tier
+  // 429s that originally forced CoinPaprika as primary. Without a key,
+  // CoinPaprika stays primary (free CoinGecko 429s too often).
+  const hasProKey = !!process.env.COINGECKO_API_KEY;
   let data;
-  try {
-    data = await fetchFromCoinPaprika();
-  } catch (err) {
-    console.warn(`  [CoinPaprika] Failed: ${err.message} — falling back to CoinGecko`);
-    data = await fetchFromCoinGecko();
+  if (hasProKey) {
+    try {
+      data = await fetchFromCoinGecko();
+    } catch (err) {
+      console.warn(` [CoinGecko Pro] Failed: ${err.message} — falling back to CoinPaprika`);
+      data = await fetchFromCoinPaprika();
+    }
+  } else {
+    try {
+      data = await fetchFromCoinPaprika();
+    } catch (err) {
+      console.warn(` [CoinPaprika] Failed: ${err.message} — falling back to CoinGecko`);
+      data = await fetchFromCoinGecko();
+    }
   }
 
   const byId = new Map(data.map((c) => [c.id, c]));
