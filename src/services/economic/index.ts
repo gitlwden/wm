@@ -214,8 +214,24 @@ export async function fetchFredData(): Promise<FredSeries[]> {
     }
   }, emptyFredBatchFallback, { shouldCache: (r) => r.fetched > 0 });
 
-  return buildFredSeries(resp.results);
-}
+  // Breaker returned empty fallback (cooldown or fresh failure) — probe once
+  // directly. If the backend has recovered this succeeds, clears the breaker
+ // state, and returns live data instead of locking the panel for minutes.
+ if (resp.fetched === 0) {
+ try {
+ const probed = await client.getFredSeriesBatch(
+ { seriesIds: FRED_SERIES.map((c) => c.id), limit: 120 },
+ { signal: AbortSignal.timeout(15_000) },
+ );
+ if (probed.fetched > 0) {
+ fredBatchBreaker.recordSuccess(probed);
+ return buildFredSeries(probed.results);
+ }
+ } catch { /* still down — breaker state stays */ }
+ }
+
+ return buildFredSeries(resp.results);
+ }
 
 function buildFredSeries(results: Record<string, NonNullable<GetFredSeriesBatchResponse['results'][string]>>): FredSeries[] {
   const out: FredSeries[] = [];

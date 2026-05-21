@@ -167,7 +167,7 @@ const NEG_SENTINEL = '__WM_NEG__';
  * Batch GET using Upstash pipeline API — single HTTP round-trip for N keys.
  * Returns a Map of key → parsed JSON value (missing/failed/sentinel keys omitted).
  */
-export async function getCachedJsonBatch(keys: string[]): Promise<Map<string, unknown>> {
+export async function getCachedJsonBatch(keys: string[], raw = false): Promise<Map<string, unknown>> {
   const result = new Map<string, unknown>();
   if (keys.length === 0) return result;
 
@@ -176,7 +176,7 @@ export async function getCachedJsonBatch(keys: string[]): Promise<Map<string, un
   if (!url || !token) return result;
 
   try {
-    const pipeline = keys.map((k) => ['GET', prefixKey(k)]);
+    const pipeline = keys.map((k) => ['GET', raw ? k : prefixKey(k)]);
     const resp = await fetch(`${url}/pipeline`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

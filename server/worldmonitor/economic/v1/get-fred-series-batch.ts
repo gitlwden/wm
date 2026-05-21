@@ -10,7 +10,7 @@ import type {
   FredSeries,
 } from '../../../../src/generated/server/worldmonitor/economic/v1/service_server';
 
-import { getCachedJson } from '../../../_shared/redis';
+import { getCachedJsonBatch } from '../../../_shared/redis';
 import { toUniqueSortedLimited } from '../../../_shared/normalize-list';
 import { applyFredObservationLimit, fredSeedKey, normalizeFredLimit } from './_fred-shared';
 
@@ -34,17 +34,15 @@ export async function getFredSeriesBatch(
       .filter((id) => ALLOWED_SERIES.has(id));
     const limitedList = toUniqueSortedLimited(normalized, 20);
     const limit = normalizeFredLimit(req.limit);
+    const redisKeys = limitedList.map((id) => fredSeedKey(id));
 
-    const settled = await Promise.allSettled(
-      limitedList.map((id) => getCachedJson(fredSeedKey(id), true)),
-    );
+    // Single pipeline request for all keys (raw = skip env prefix, matching seed writes).
+    const batch = await getCachedJsonBatch(redisKeys, true);
 
     const results: Record<string, FredSeries> = {};
     for (let i = 0; i < limitedList.length; i++) {
       const id = limitedList[i]!;
-      const entry = settled[i];
-      if (entry?.status !== 'fulfilled' || !entry.value) continue;
-      const cached = entry.value as { series?: FredSeries };
+      const cached = batch.get(redisKeys[i]!) as { series?: FredSeries } | undefined;
       if (cached?.series) results[id] = applyFredObservationLimit(cached.series, limit);
     }
 
