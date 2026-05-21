@@ -163,6 +163,34 @@ function roundValue(value: number, precision: number): number {
 export async function fetchFredData(): Promise<FredSeries[]> {
   if (!isFeatureAvailable('economicFred')) return [];
 
+  // Bootstrap hydration: read pre-seeded FRED series from bootstrap data,
+  // matching the pattern used by fetchBisData / loadEconomicStress.
+  // This avoids a live RPC call that could 401 if the wms_ token is stale.
+  const hydrated: Record<string, NonNullable<GetFredSeriesBatchResponse['results'][string]>> = {};
+  const hVix = getHydratedData('fredVix') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const hHySpread = getHydratedData('fredHySpread') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const hIcsa = getHydratedData('fredIcsa') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const hMortgage = getHydratedData('fredMortgage') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const hFedFunds = getHydratedData('fredFedFunds') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const h10y2y = getHydratedData('fred10y2y') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const hM2 = getHydratedData('fredM2') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const hUnrate = getHydratedData('fredUnrate') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const hCpi = getHydratedData('fredCpi') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const hDgs10 = getHydratedData('fredDgs10') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const hWalcl = getHydratedData('fredWalcl') as { series?: NonNullable<GetFredSeriesBatchResponse['results'][string]> } | undefined;
+  const fredHydrated = [
+    ['VIXCLS', hVix], ['BAMLH0A0HYM2', hHySpread], ['ICSA', hIcsa],
+    ['MORTGAGE30US', hMortgage], ['FEDFUNDS', hFedFunds], ['T10Y2Y', h10y2y],
+    ['M2SL', hM2], ['UNRATE', hUnrate], ['CPIAUCSL', hCpi],
+    ['DGS10', hDgs10], ['WALCL', hWalcl],
+  ] as const;
+  for (const [id, entry] of fredHydrated) {
+    if (entry?.series) hydrated[id] = entry.series;
+  }
+  if (Object.keys(hydrated).length === FRED_SERIES.length) {
+    return buildFredSeries(hydrated);
+  }
+
   const resp = await fredBatchBreaker.execute(async () => {
     try {
       return await client.getFredSeriesBatch(
@@ -186,9 +214,13 @@ export async function fetchFredData(): Promise<FredSeries[]> {
     }
   }, emptyFredBatchFallback, { shouldCache: (r) => r.fetched > 0 });
 
+  return buildFredSeries(resp.results);
+}
+
+function buildFredSeries(results: Record<string, NonNullable<GetFredSeriesBatchResponse['results'][string]>>): FredSeries[] {
   const out: FredSeries[] = [];
   for (const config of FRED_SERIES) {
-    const series = resp.results[config.id];
+    const series = results[config.id];
     if (!series) continue;
     const obs = series.observations;
     if (!obs || obs.length === 0) continue;
