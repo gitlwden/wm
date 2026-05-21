@@ -97,7 +97,9 @@ export function loadEnvFile(metaUrl) {
   const __dirname = metaUrl ? dirname(fileURLToPath(metaUrl)) : process.cwd();
   const candidates = [
     join(__dirname, '..', '.env.local'),
+    join(__dirname, '..', '.env'),
     join(__dirname, '..', '..', '.env.local'),
+    join(__dirname, '..', '..', '.env'),
   ];
   if (process.env.HOME) {
     candidates.push(join(process.env.HOME, 'Documents/GitHub/worldmonitor', '.env.local'));

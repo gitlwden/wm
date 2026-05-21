@@ -50,13 +50,6 @@ jobs:
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
 
-      - name: Seed chokepoint exposure
-        run: node scripts/seed-chokepoint-exposure.mjs
-        continue-on-error: true
-        env:
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-
       - name: Seed HS2 chokepoint exposure
         run: node scripts/seed-hs2-chokepoint-exposure.mjs
         continue-on-error: true
