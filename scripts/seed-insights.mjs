@@ -224,6 +224,15 @@ function hasUsableInsightsPayload(payload) {
   );
 }
 
+function refreshLkgInsightsPayload(payload, reason) {
+  return {
+    ...payload,
+    status: 'degraded',
+    generatedAt: new Date().toISOString(),
+    lkgReason: reason,
+  };
+}
+
 async function warmDigestCache() {
   const apiBase = process.env.API_BASE_URL || 'https://api.worldmonitor.app';
   const headers = {
@@ -258,9 +267,9 @@ async function fetchInsights() {
   if (!digest) {
     // LKG fallback: reuse existing insights if digest is unavailable
     const existing = await readExistingInsights();
-    if (existing?.topStories?.length) {
-      console.log('  Digest unavailable — reusing existing insights (LKG)');
-      return existing;
+    if (hasUsableInsightsPayload(existing)) {
+      console.log('  Digest unavailable — reusing existing insights (LKG, timestamp refreshed)');
+      return refreshLkgInsightsPayload(existing, 'digest_unavailable');
     }
     throw new Error('No news digest found in Redis');
   }
@@ -383,8 +392,8 @@ async function fetchInsights() {
   if (status === 'degraded') {
     const existing = await readExistingInsights();
     if (existing?.status === 'ok' && hasUsableInsightsPayload(existing)) {
-      console.log('  LKG preservation: existing payload is usable "ok", skipping degraded overwrite');
-      return existing;
+      console.log('  LKG preservation: existing payload is usable "ok", reusing with refreshed timestamp');
+      return refreshLkgInsightsPayload(existing, 'degraded_run_preserved_lkg');
     }
   }
 

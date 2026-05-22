@@ -30,7 +30,11 @@ let lastHydrationState: BootstrapHydrationState = {
 };
 
 export function getHydratedData(key: string): unknown | undefined {
-  return hydrationCache.get(key);
+  for (const candidateKey of getHydrationLookupKeys(key)) {
+    const value = hydrationCache.get(candidateKey);
+    if (value !== undefined) return value;
+  }
+  return undefined;
 }
 
 export function markBootstrapAsLive(): void {
@@ -63,14 +67,25 @@ export function getBootstrapHydrationState(): BootstrapHydrationState {
 function getHydrationAliases(key: string): string[] {
   switch (key) {
     case 'news:insights:v1':
-      return ['insights', 'newsInsights', 'worldBrief'];
+      return ['insights', 'newsInsights', 'worldBrief', 'dailyMarketBrief', 'daily-market-brief'];
     case 'intelligence:market-implications:v1':
-      return ['marketImplications', 'market-implications'];
+      return ['marketImplications', 'market-implications', 'dailyMarketImplications'];
     case 'forecast:predictions:v2':
       return ['forecasts', 'predictions'];
     default:
       return [];
   }
+}
+
+function getHydrationLookupKeys(key: string): string[] {
+  const keys = new Set<string>([key, ...getHydrationAliases(key)]);
+  for (const canonical of ['news:insights:v1', 'intelligence:market-implications:v1', 'forecast:predictions:v2']) {
+    if (getHydrationAliases(canonical).includes(key)) {
+      keys.add(canonical);
+      for (const alias of getHydrationAliases(canonical)) keys.add(alias);
+    }
+  }
+  return [...keys];
 }
 
 function populateCache(data: Record<string, unknown>): void {

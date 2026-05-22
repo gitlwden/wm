@@ -26,7 +26,7 @@ export interface ServerInsights {
 }
 
 let cached: ServerInsights | null = null;
-const HYDRATED_INSIGHTS_KEYS = ['insights', 'newsInsights', 'worldBrief', 'news:insights:v1'];
+const HYDRATED_INSIGHTS_KEYS = ['insights', 'newsInsights', 'worldBrief', 'dailyMarketBrief', 'daily-market-brief', 'news:insights:v1'];
 // Server cron interval: scripts/seed-insights.mjs runs every 30 min
 // (CACHE_TTL=10800s/3h). Keep the client freshness gate aligned to the
 // server-side cache TTL so a brief does not disappear between workflow runs
@@ -100,7 +100,12 @@ function normalizeServerInsights(raw: unknown): ServerInsights | null {
   const data = nested && typeof nested === 'object'
     ? nested as Record<string, unknown>
     : payload;
-  const generatedAt = data.generatedAt || data.fetchedAt || unwrapped.seedFetchedAt || Date.now();
+  const payloadGeneratedAt = data.generatedAt || data.fetchedAt;
+  const payloadGeneratedAtMs = normalizeGeneratedAtMs(payloadGeneratedAt);
+  const seedFetchedAtMs = normalizeGeneratedAtMs(unwrapped.seedFetchedAt);
+  const generatedAt = seedFetchedAtMs && (!payloadGeneratedAtMs || Date.now() - payloadGeneratedAtMs >= MAX_AGE_MS)
+    ? unwrapped.seedFetchedAt
+    : payloadGeneratedAt || unwrapped.seedFetchedAt || Date.now();
   const worldBrief = String(data.worldBrief || data.brief || data.summary || '').trim();
   const rawStories = Array.isArray(data.topStories)
     ? data.topStories
