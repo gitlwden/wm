@@ -14215,6 +14215,7 @@ function tryParseStructuredCandidate(candidate) {
     const parsed = JSON.parse(cleanJsonText(candidate));
     if (Array.isArray(parsed)) return { items: parsed, stage: 'direct_array' };
     if (Array.isArray(parsed?.items)) return { items: parsed.items, stage: 'object_items' };
+    if (Array.isArray(parsed?.cards)) return { items: parsed.cards, stage: 'object_cards' };
     if (Array.isArray(parsed?.scenarios)) return { items: parsed.scenarios, stage: 'object_scenarios' };
     if (Array.isArray(parsed?.predictions)) return { items: parsed.predictions, stage: 'object_predictions' };
   } catch {
@@ -15911,6 +15912,84 @@ const VALID_IMPACT_TYPES = new Set([
   'policy_shift', 'capital_flow', 'sentiment_shift', 'contagion',
 ]);
 
+function getPrimaryMarketStressLabel(inputs) {
+  const criticalSignals = Array.isArray(inputs?.criticalSignalBundle?.signals) ? inputs.criticalSignalBundle.signals : [];
+  const leadCritical = criticalSignals.find((signal) => signal?.label || signal?.type);
+  if (leadCritical) return sanitizeForPrompt(leadCritical.label || String(leadCritical.type || '').replace(/_/g, ' '));
+  const geopoliticalMarket = Array.isArray(inputs?.predictionMarkets?.geopolitical)
+    ? inputs.predictionMarkets.geopolitical.find((market) => market?.title)
+    : null;
+  if (geopoliticalMarket) return sanitizeForPrompt(geopoliticalMarket.title);
+  return 'global macro risk';
+}
+
+function buildFallbackTransmissionChain(driver, assetNode) {
+  return [
+    {
+      node: driver.slice(0, 80),
+      impact_type: 'sentiment_shift',
+      logic: 'Live intelligence is creating a higher risk premium.',
+    },
+    {
+      node: assetNode,
+      impact_type: 'capital_flow',
+      logic: 'Investors rotate exposure toward defensive or directly exposed assets.',
+    },
+  ];
+}
+
+function buildFallbackMarketImplications(inputs) {
+  const driver = getPrimaryMarketStressLabel(inputs);
+  const commodityQuotes = extractQuoteItems(inputs?.commodityQuotes);
+  const marketQuotes = extractQuoteItems(inputs?.marketQuotes);
+  const energyMove = commodityQuotes.find((quote) => /oil|crude|brent|wti|gas|energy/i.test(`${quote?.symbol || ''} ${quote?.name || ''} ${quote?.display || ''}`));
+  const broadRiskOff = marketQuotes.filter((quote) => Number(quote?.change || 0) <= -1).length >= 3;
+  const cards = [];
+
+  if (energyMove) {
+    cards.push({
+      ticker: 'USO',
+      name: 'United States Oil Fund',
+      direction: Number(energyMove.change || 0) >= 0 ? 'LONG' : 'HEDGE',
+      timeframe: '2W',
+      confidence: 'MEDIUM',
+      title: 'Energy risk premium remains active',
+      narrative: `${driver} is keeping energy exposure relevant while ${energyMove.display || energyMove.symbol || 'energy'} trades at ${energyMove.price ?? 'current market'} with a ${Number(energyMove.change || 0).toFixed(2)}% move. The setup favours keeping oil beta on the watchlist rather than ignoring commodity transmission.`,
+      risk_caveat: 'A rapid de-escalation or demand shock would weaken the oil-risk thesis.',
+      driver,
+      transmission_chain: buildFallbackTransmissionChain(driver, 'Oil beta'),
+    });
+  }
+
+  cards.push({
+    ticker: 'SPY',
+    name: 'S&P 500 ETF',
+    direction: broadRiskOff ? 'HEDGE' : 'HEDGE',
+    timeframe: '1W',
+    confidence: broadRiskOff ? 'MEDIUM' : 'LOW',
+    title: 'Hedge broad equity beta',
+    narrative: `${driver} leaves broad equity exposure vulnerable to headline-driven risk repricing. A hedge is preferred over a directional short because the live context is degraded or incomplete and needs confirmation from market breadth.`,
+    risk_caveat: 'Resilient earnings or a policy-support signal could keep equities bid.',
+    driver,
+    transmission_chain: buildFallbackTransmissionChain(driver, 'Equity beta'),
+  });
+
+  cards.push({
+    ticker: 'GLD',
+    name: 'Gold ETF',
+    direction: 'LONG',
+    timeframe: '1M',
+    confidence: 'LOW',
+    title: 'Keep safe-haven optionality',
+    narrative: `${driver} supports maintaining safe-haven optionality while the intelligence stack refreshes. Gold exposure is a liquid fallback when geopolitical, rates, or risk-off signals are active but not yet cleanly separable.`,
+    risk_caveat: 'Higher real yields or a stronger dollar would pressure gold exposure.',
+    driver,
+    transmission_chain: buildFallbackTransmissionChain(driver, 'Safe haven'),
+  });
+
+  return cards;
+}
+
 function validateMarketImplications(cards, allowedTickers = ALL_ALLOWED_TICKERS) {
   if (!Array.isArray(cards)) return [];
   const seen = new Set();
@@ -15964,29 +16043,6 @@ async function buildAndSeedMarketImplications(inputs) {
   const startMs = Date.now();
   console.log('  [MarketImplications] Building world-state context...');
   const context = buildMarketImplicationsContext(inputs);
-  const userPrompt = `World state as of ${new Date().toISOString()}:\n\n${context}\n\nAllowed tickers: ${[...ALL_ALLOWED_TICKERS].join(', ')}`;
-
-  const llmOptions = getForecastLlmCallOptions('market_implications');
-  const result = await callForecastLLM(MARKET_IMPLICATIONS_SYSTEM_PROMPT, userPrompt, {
-    ...llmOptions,
-    stage: 'market_implications',
-    maxTokens: 2500,
-    temperature: 0.25,
-  });
-
-  if (!result?.text) {
-    console.warn('  [MarketImplications] LLM returned no response — skipping write');
-    return;
-  }
-
-  const parsed = extractStructuredLlmPayload(result.text);
-  const rawCards = parsed.items;
-
-  if (!Array.isArray(rawCards) || rawCards.length === 0) {
-    console.warn(`  [MarketImplications] No parseable cards in LLM response (diagnostics: ${JSON.stringify(parsed.diagnostics)})`);
-    return;
-  }
-
   const { url, token } = getRedisCredentials();
 
   // Extend the curated static allowlist with tradeable equity symbols from Redis.
@@ -16008,16 +16064,45 @@ async function buildAndSeedMarketImplications(inputs) {
     console.warn('  [MarketImplications] Redis ticker set empty — using static allowlist only');
   }
 
-  const cards = validateMarketImplications(rawCards, effectiveTickers);
+  const allowedTickerPrompt = [...effectiveTickers].slice(0, 250).join(', ');
+  const userPrompt = `World state as of ${new Date().toISOString()}:\n\n${context}\n\nAllowed tickers: ${allowedTickerPrompt}`;
+
+  const llmOptions = getForecastLlmCallOptions('market_implications');
+  const result = await callForecastLLM(MARKET_IMPLICATIONS_SYSTEM_PROMPT, userPrompt, {
+    ...llmOptions,
+    stage: 'market_implications',
+    maxTokens: 2500,
+    temperature: 0.25,
+  });
+
+  let rawCards = [];
+  let model = result?.model || 'deterministic-fallback';
+
+  if (!result?.text) {
+    console.warn('  [MarketImplications] LLM returned no response — using deterministic fallback cards');
+  } else {
+    const parsed = extractStructuredLlmPayload(result.text);
+    rawCards = Array.isArray(parsed.items) ? parsed.items : [];
+    if (rawCards.length === 0) {
+      console.warn(`  [MarketImplications] No parseable cards in LLM response (diagnostics: ${JSON.stringify(parsed.diagnostics)}) — using deterministic fallback cards`);
+    }
+  }
+
+  let cards = validateMarketImplications(rawCards, effectiveTickers);
   if (cards.length === 0) {
-    console.warn('  [MarketImplications] All cards failed validation — skipping write');
+    const fallbackCards = buildFallbackMarketImplications(inputs);
+    cards = validateMarketImplications(fallbackCards, effectiveTickers);
+    model = `${model}+fallback`;
+  }
+  if (cards.length === 0) {
+    console.warn('  [MarketImplications] Fallback cards failed validation — skipping write');
     return;
   }
-  if (cards.length < rawCards.length) {
+  if (rawCards.length > 0 && cards.length < rawCards.length) {
     console.log(`  [MarketImplications] Validation: kept ${cards.length}/${rawCards.length} cards`);
   }
 
-  const payload = { cards, generatedAt: new Date().toISOString(), model: result.model || '' };
+  const payload = { cards, generatedAt: new Date().toISOString(), model };
   await redisSet(url, token, MARKET_IMPLICATIONS_KEY, payload, MARKET_IMPLICATIONS_TTL);
 
   const metaKey = 'seed-meta:intelligence:market-implications';
@@ -16025,7 +16110,7 @@ async function buildAndSeedMarketImplications(inputs) {
   await redisSet(url, token, metaKey, meta, 86400 * 7);
 
   const durationMs = Date.now() - startMs;
-  console.log(`  [MarketImplications] Published ${cards.length} cards to ${MARKET_IMPLICATIONS_KEY} (${Math.round(durationMs)}ms, model=${result.model || 'unknown'})`);
+  console.log(`  [MarketImplications] Published ${cards.length} cards to ${MARKET_IMPLICATIONS_KEY} (${Math.round(durationMs)}ms, model=${model || 'unknown'})`);
 }
 
 export function declareRecords(data) {
