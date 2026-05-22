@@ -49,6 +49,18 @@ function isFresh(data: ServerInsights): boolean {
   return Date.now() - generatedAtMs < MAX_AGE_MS;
 }
 
+function unwrapHydratedInsights(raw: unknown): { payload: unknown; seedFetchedAt: unknown } {
+  if (!raw || typeof raw !== 'object') return { payload: raw, seedFetchedAt: null };
+  const outer = raw as Record<string, unknown>;
+  const seed = outer._seed && typeof outer._seed === 'object'
+    ? outer._seed as Record<string, unknown>
+    : null;
+  if ('data' in outer && (seed || outer.data == null || typeof outer.data === 'object')) {
+    return { payload: outer.data, seedFetchedAt: seed?.fetchedAt ?? null };
+  }
+  return { payload: raw, seedFetchedAt: null };
+}
+
 function normalizeInsightStory(raw: unknown): ServerInsightStory | null {
   if (!raw || typeof raw !== 'object') return null;
   const item = raw as Record<string, unknown>;
@@ -72,9 +84,10 @@ function normalizeInsightStory(raw: unknown): ServerInsightStory | null {
 }
 
 function normalizeServerInsights(raw: unknown): ServerInsights | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const data = raw as Record<string, unknown>;
-  const generatedAt = data.generatedAt || data.fetchedAt || Date.now();
+  const unwrapped = unwrapHydratedInsights(raw);
+  if (!unwrapped.payload || typeof unwrapped.payload !== 'object') return null;
+  const data = unwrapped.payload as Record<string, unknown>;
+  const generatedAt = data.generatedAt || data.fetchedAt || unwrapped.seedFetchedAt || Date.now();
   const worldBrief = String(data.worldBrief || data.brief || data.summary || '').trim();
   const rawStories = Array.isArray(data.topStories)
     ? data.topStories

@@ -74,7 +74,7 @@ export function buildWorldBrief(data: unknown): string {
   const d = data as Record<string, unknown>;
   const lines: string[] = [];
 
-  const briefText = safeStr(d.brief || d.summary || d.content || d.text);
+  const briefText = safeStr(d.worldBrief || d.brief || d.summary || d.content || d.text);
   if (briefText) lines.push(briefText.slice(0, 600));
 
   const stories = Array.isArray(d.topStories) ? d.topStories : Array.isArray(d.stories) ? d.stories : [];
