@@ -81,7 +81,8 @@ export function buildWorldBrief(data: unknown): string {
   if (stories.length > 0) {
     lines.push('Top Events:');
     for (const s of stories.slice(0, 12)) {
-      const title = sanitizeHeadline(safeStr((s as Record<string, unknown>).headline || (s as Record<string, unknown>).title || s));
+      const story = s as Record<string, unknown>;
+      const title = sanitizeHeadline(safeStr(story.primaryTitle || story.headline || story.title || s));
       if (title) lines.push(`- ${title}`);
     }
   }

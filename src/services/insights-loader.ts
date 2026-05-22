@@ -19,7 +19,7 @@ export interface ServerInsights {
   briefProvider: string;
   status: 'ok' | 'degraded';
   topStories: ServerInsightStory[];
-  generatedAt: string;
+  generatedAt: string | number;
   clusterCount: number;
   multiSourceCount: number;
   fastMovingCount: number;
@@ -36,9 +36,64 @@ let cached: ServerInsights | null = null;
 // inlining a copy that drifts silently when this constant changes.
 export const MAX_AGE_MS = 60 * 60 * 1000;
 
+function normalizeGeneratedAtMs(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value !== 'string' || !value.trim()) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function isFresh(data: ServerInsights): boolean {
-  const age = Date.now() - new Date(data.generatedAt).getTime();
-  return age < MAX_AGE_MS;
+  const generatedAtMs = normalizeGeneratedAtMs(data.generatedAt);
+  if (!generatedAtMs) return false;
+  return Date.now() - generatedAtMs < MAX_AGE_MS;
+}
+
+function normalizeInsightStory(raw: unknown): ServerInsightStory | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const item = raw as Record<string, unknown>;
+  const primaryTitle = String(item.primaryTitle || item.title || item.headline || '').trim();
+  if (!primaryTitle) return null;
+  return {
+    primaryTitle,
+    primarySource: String(item.primarySource || item.source || '').trim(),
+    primaryLink: String(item.primaryLink || item.link || '').trim(),
+    pubDate: String(item.pubDate || item.publishedAt || item.date || '').trim(),
+    sourceCount: typeof item.sourceCount === 'number' ? item.sourceCount : 1,
+    importanceScore: typeof item.importanceScore === 'number' ? item.importanceScore : 0,
+    velocity: item.velocity && typeof item.velocity === 'object'
+      ? item.velocity as { level: string; sourcesPerHour: number }
+      : { level: 'normal', sourcesPerHour: 0 },
+    isAlert: Boolean(item.isAlert),
+    category: String(item.category || '').trim(),
+    threatLevel: String(item.threatLevel || '').trim(),
+    countryCode: typeof item.countryCode === 'string' ? item.countryCode : null,
+  };
+}
+
+function normalizeServerInsights(raw: unknown): ServerInsights | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const data = raw as Record<string, unknown>;
+  const generatedAt = data.generatedAt || data.fetchedAt || Date.now();
+  const worldBrief = String(data.worldBrief || data.brief || data.summary || '').trim();
+  const rawStories = Array.isArray(data.topStories)
+    ? data.topStories
+    : Array.isArray(data.stories)
+      ? data.stories
+      : [];
+  const topStories = rawStories.map(normalizeInsightStory).filter((story): story is ServerInsightStory => story !== null);
+  if (!worldBrief && topStories.length === 0) return null;
+
+  return {
+    worldBrief,
+    briefProvider: String(data.briefProvider || data.provider || '').trim(),
+    status: data.status === 'degraded' ? 'degraded' : 'ok',
+    topStories,
+    generatedAt,
+    clusterCount: typeof data.clusterCount === 'number' ? data.clusterCount : topStories.length,
+    multiSourceCount: typeof data.multiSourceCount === 'number' ? data.multiSourceCount : 0,
+    fastMovingCount: typeof data.fastMovingCount === 'number' ? data.fastMovingCount : topStories.filter(story => story.isAlert).length,
+  };
 }
 
 export function getServerInsights(): ServerInsights | null {
@@ -47,12 +102,8 @@ export function getServerInsights(): ServerInsights | null {
   }
   cached = null;
 
-  const raw = getHydratedData('insights');
-  if (!raw || typeof raw !== 'object') return null;
-  const data = raw as ServerInsights;
-  if (!Array.isArray(data.topStories) || data.topStories.length === 0) return null;
-  if (typeof data.generatedAt !== 'string') return null;
-  if (!isFresh(data)) return null;
+  const data = normalizeServerInsights(getHydratedData('insights'));
+  if (!data || !isFresh(data)) return null;
 
   cached = data;
   return data;
