@@ -10,7 +10,7 @@ const WEIGHTS: Record<string, number> = {
 
 const SANCTIONS_KEYWORDS = /\b(sanction|tariff|embargo|trade\s+war|ban|restrict|block|seize|freeze\s+assets|export\s+control|blacklist|decouple|decoupl|subsid|dumping|countervail|quota|levy|excise|retaliat|currency\s+manipulat|capital\s+controls|swift|cbdc|petrodollar|de-?dollar|opec|cartel|price\s+cap|oil|crude|commodity|shortage|stockpile|strategic\s+reserve|supply\s+chain|rare\s+earth|chip\s+ban|semiconductor|economic\s+warfare|financial\s+weapon)\b/i;
 const COMMODITY_SYMBOLS = new Set(['CL=F', 'GC=F', 'NG=F', 'SI=F', 'HG=F', 'ZW=F', 'BTC-USD', 'BZ=F', 'ETH-USD', 'KC=F', 'SB=F', 'CT=F', 'CC=F']);
-const SIGNIFICANT_CHANGE_PCT = 1.5;
+const SIGNIFICANT_CHANGE_PCT = 1.0;
 
 export const economicAdapter: DomainAdapter = {
   domain: 'economic',
@@ -18,13 +18,18 @@ export const economicAdapter: DomainAdapter = {
   clusterMode: 'entity',
   spatialRadius: 0,
   timeWindow: 24,
-  threshold: 20,
+  threshold: 15,
   weights: WEIGHTS,
 
   collectSignals(ctx: AppContext): SignalEvidence[] {
     const signals: SignalEvidence[] = [];
     const now = Date.now();
     const windowMs = 24 * 60 * 60 * 1000;
+
+    console.log('[EconomicAdapter] Data context:', {
+      marketsCount: ctx.latestMarkets?.length ?? 0,
+      clustersCount: ctx.latestClusters?.length ?? 0,
+    });
 
     // Market moves (commodities + crypto)
     const markets = ctx.latestMarkets ?? [];
@@ -36,6 +41,13 @@ export const economicAdapter: DomainAdapter = {
       const isCommodity = COMMODITY_SYMBOLS.has(m.symbol);
       const type = isCommodity ? 'commodity_spike' : 'market_move';
       const severity = Math.min(100, absPct * 10);
+
+      console.log('[EconomicAdapter] Market signal:', {
+        symbol: m.symbol,
+        type,
+        change: m.change,
+        severity,
+      });
 
       // Market data from latestMarkets is always current-session quotes
       // (no per-quote timestamp available on MarketDataCore), so use `now`.
@@ -51,14 +63,22 @@ export const economicAdapter: DomainAdapter = {
 
     // Sanctions/trade news clusters
     const clusters = ctx.latestClusters ?? [];
+    let sanctionsCount = 0;
     for (const c of clusters) {
       const age = now - (c.lastUpdated.getTime());
       if (age > windowMs) continue;
       if (!SANCTIONS_KEYWORDS.test(c.primaryTitle)) continue;
 
+      sanctionsCount++;
       const severity = c.threat?.level === 'critical' ? 85
         : c.threat?.level === 'high' ? 70
         : 50;
+
+      console.log('[EconomicAdapter] Sanctions news signal:', {
+        title: c.primaryTitle,
+        severity,
+        threat: c.threat?.level,
+      });
 
       signals.push({
         type: 'sanctions_news',
@@ -69,6 +89,12 @@ export const economicAdapter: DomainAdapter = {
         rawData: c,
       });
     }
+
+    console.log('[EconomicAdapter] Collected signals:', {
+      total: signals.length,
+      sanctionsCount,
+      marketCount: signals.filter(s => s.type === 'market_move' || s.type === 'commodity_spike').length,
+    });
 
     return signals;
   },
