@@ -16103,11 +16103,13 @@ async function buildAndSeedMarketImplications(inputs) {
   }
 
   const payload = { cards, generatedAt: new Date().toISOString(), model };
-  await redisSet(url, token, MARKET_IMPLICATIONS_KEY, payload, MARKET_IMPLICATIONS_TTL);
+  await redisCommand(url, token, ['SET', MARKET_IMPLICATIONS_KEY, JSON.stringify(payload), 'EX', MARKET_IMPLICATIONS_TTL]);
 
-  const metaKey = 'seed-meta:intelligence:market-implications';
   const meta = { fetchedAt: Date.now(), recordCount: cards.length };
-  await redisSet(url, token, metaKey, meta, 86400 * 7);
+  await Promise.all([
+    redisCommand(url, token, ['SET', `seed-meta:${MARKET_IMPLICATIONS_KEY}`, JSON.stringify(meta), 'EX', 86400 * 7]),
+    redisCommand(url, token, ['SET', 'seed-meta:intelligence:market-implications', JSON.stringify(meta), 'EX', 86400 * 7]),
+  ]);
 
   const durationMs = Date.now() - startMs;
   console.log(`  [MarketImplications] Published ${cards.length} cards to ${MARKET_IMPLICATIONS_KEY} (${Math.round(durationMs)}ms, model=${model || 'unknown'})`);

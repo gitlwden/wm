@@ -26,15 +26,15 @@ export interface ServerInsights {
 }
 
 let cached: ServerInsights | null = null;
+const HYDRATED_INSIGHTS_KEYS = ['insights', 'newsInsights', 'worldBrief'];
 // Server cron interval: scripts/seed-insights.mjs runs every 30 min
-// (CACHE_TTL=10800s/3h, maxStaleMin: 30). The previous 15-min freshness gate
-// was strictly less than the cron interval, so the panel spent ~50% of every
-// 30-min cycle showing UNAVAILABLE + "Waiting for data..." even when the
-// system was working perfectly. 60 min = 2× cron interval, gives one full
-// missed-tick of headroom before falling through to the client-side path.
+// (CACHE_TTL=10800s/3h). Keep the client freshness gate aligned to the
+// server-side cache TTL so a brief does not disappear between workflow runs
+// or during a single missed cron tick. The panel should degrade/stale later,
+// not render blank while Redis still has a valid hydrated snapshot.
 // Exported so the regression test asserts against the real value rather than
 // inlining a copy that drifts silently when this constant changes.
-export const MAX_AGE_MS = 60 * 60 * 1000;
+export const MAX_AGE_MS = 3 * 60 * 60 * 1000;
 
 function normalizeGeneratedAtMs(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -86,7 +86,13 @@ function normalizeInsightStory(raw: unknown): ServerInsightStory | null {
 function normalizeServerInsights(raw: unknown): ServerInsights | null {
   const unwrapped = unwrapHydratedInsights(raw);
   if (!unwrapped.payload || typeof unwrapped.payload !== 'object') return null;
-  const data = unwrapped.payload as Record<string, unknown>;
+  const payload = unwrapped.payload as Record<string, unknown>;
+  const nested = !payload.worldBrief && !payload.brief && !payload.summary && !payload.topStories && !payload.stories
+    ? (payload.insights || payload.newsInsights || payload.worldBriefData)
+    : null;
+  const data = nested && typeof nested === 'object'
+    ? nested as Record<string, unknown>
+    : payload;
   const generatedAt = data.generatedAt || data.fetchedAt || unwrapped.seedFetchedAt || Date.now();
   const worldBrief = String(data.worldBrief || data.brief || data.summary || '').trim();
   const rawStories = Array.isArray(data.topStories)
@@ -109,13 +115,21 @@ function normalizeServerInsights(raw: unknown): ServerInsights | null {
   };
 }
 
+function readHydratedInsights(): unknown {
+  for (const key of HYDRATED_INSIGHTS_KEYS) {
+    const value = getHydratedData(key);
+    if (value !== undefined) return value;
+  }
+  return undefined;
+}
+
 export function getServerInsights(): ServerInsights | null {
   if (cached && isFresh(cached)) {
     return cached;
   }
   cached = null;
 
-  const data = normalizeServerInsights(getHydratedData('insights'));
+  const data = normalizeServerInsights(readHydratedInsights());
   if (!data || !isFresh(data)) return null;
 
   cached = data;
@@ -123,5 +137,5 @@ export function getServerInsights(): ServerInsights | null {
 }
 
 export function setServerInsights(data: ServerInsights): void {
-  cached = data;
+  cached = normalizeServerInsights(data);
 }

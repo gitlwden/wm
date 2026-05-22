@@ -200,6 +200,19 @@ function categorizeStory(title) {
   return { category: 'general', threatLevel: 'moderate' };
 }
 
+function buildFallbackWorldBrief(topStories) {
+  const stories = Array.isArray(topStories) ? topStories : [];
+  const lead = stories.find(story => story?.primaryTitle)?.primaryTitle || '';
+  if (!lead) return '';
+  const secondary = stories
+    .slice(1, 4)
+    .map(story => story?.primaryTitle)
+    .filter(Boolean);
+  const leadSentence = `World Monitor is tracking ${lead}.`;
+  if (secondary.length === 0) return leadSentence;
+  return `${leadSentence} Other active stories include ${secondary.join('; ')}.`;
+}
+
 async function warmDigestCache() {
   const apiBase = process.env.API_BASE_URL || 'https://api.worldmonitor.app';
   const headers = {
@@ -295,7 +308,7 @@ async function fetchInsights() {
 
   if (!topHeadline) {
     status = 'degraded';
-    console.warn('  No multi-source cluster available — publishing degraded (stories without brief)');
+    console.warn('  No multi-source cluster available — publishing degraded with deterministic fallback brief');
   } else {
     const llmResult = await callLLM(topHeadline);
     if (llmResult) {
@@ -305,7 +318,7 @@ async function fetchInsights() {
       console.log(`  Brief generated via ${briefProvider} (${briefModel})`);
     } else {
       status = 'degraded';
-      console.warn('  No LLM available — publishing degraded (stories without brief)');
+      console.warn('  No LLM available — publishing degraded with deterministic fallback brief');
     }
   }
 
@@ -334,6 +347,12 @@ async function fetchInsights() {
       countryCode,
     };
   });
+
+  if (!worldBrief) {
+    worldBrief = buildFallbackWorldBrief(enrichedStories);
+    briefProvider = briefProvider || 'deterministic';
+    briefModel = briefModel || 'fallback';
+  }
 
   const payload = {
     worldBrief,

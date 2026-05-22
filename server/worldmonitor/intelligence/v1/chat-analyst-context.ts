@@ -61,6 +61,13 @@ function safeNum(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 }
 
+function unwrapDataEnvelope(data: unknown): unknown {
+  if (!data || typeof data !== 'object') return data;
+  const value = data as Record<string, unknown>;
+  if ('data' in value && value._seed && typeof value._seed === 'object') return value.data;
+  return data;
+}
+
 function formatPct(n: number): string {
   return `${Math.round(n)}%`;
 }
@@ -70,8 +77,9 @@ function formatChange(n: number): string {
 }
 
 export function buildWorldBrief(data: unknown): string {
-  if (!data || typeof data !== 'object') return '';
-  const d = data as Record<string, unknown>;
+  const unwrapped = unwrapDataEnvelope(data);
+  if (!unwrapped || typeof unwrapped !== 'object') return '';
+  const d = unwrapped as Record<string, unknown>;
   const lines: string[] = [];
 
   const briefText = safeStr(d.worldBrief || d.brief || d.summary || d.content || d.text);
@@ -116,8 +124,9 @@ export function buildRiskScores(data: unknown): string {
 }
 
 function buildMarketImplications(data: unknown): string {
-  if (!data || typeof data !== 'object') return '';
-  const d = data as Record<string, unknown>;
+  const unwrapped = unwrapDataEnvelope(data);
+  if (!unwrapped || typeof unwrapped !== 'object') return '';
+  const d = unwrapped as Record<string, unknown>;
   const cards = Array.isArray(d.cards) ? d.cards : [];
   if (!cards.length) return '';
 
