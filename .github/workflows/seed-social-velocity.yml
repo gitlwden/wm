@@ -20,9 +20,10 @@ jobs:
 
       - run: npm ci
 
-      - name: Seed Social Velocity (Reddit)
-        run: node scripts/seed-social-velocity.mjs
-        continue-on-error: true
-        env:
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+  - name: Seed Social Velocity (Reddit)
+    id: seed-social-velocity
+    run: node scripts/seed-social-velocity.mjs || echo "Warning: SocialVelocity seed failed (may be rate limited)"
+    continue-on-error: true
+    env:
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
