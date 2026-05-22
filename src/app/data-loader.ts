@@ -122,7 +122,7 @@ import { fetchOrefAlerts, startOrefPolling, stopOrefPolling, onOrefAlertsUpdate 
 import { getResilienceRanking } from '@/services/resilience';
 import { buildResilienceChoroplethMap } from '@/components/resilience-choropleth-utils';
 import { enrichEventsWithExposure } from '@/services/population-exposure';
-import { debounce, getCircuitBreakerCooldownInfo } from '@/utils';
+import { debounce } from '@/utils';
 import { isFeatureAvailable, isFeatureEnabled } from '@/services/runtime-config';
 import { hasPremiumAccess } from '@/services/panel-gating';
 import { isDesktopRuntime, toApiUrl } from '@/services/runtime';
@@ -2654,23 +2654,10 @@ export class DataLoaderManager implements AppModule {
 
   async loadFredData(): Promise<void> {
     const economicPanel = this.ctx.panels['economic'] as EconomicPanel;
-    const cbInfo = getCircuitBreakerCooldownInfo('FRED Batch');
-    if (cbInfo.onCooldown) {
-      economicPanel?.setFredRetrying(cbInfo.remainingSeconds);
-      this.ctx.statusPanel?.updateApi('FRED', { status: 'error' });
-      return;
-    }
 
     try {
       economicPanel?.setLoading(true);
       const data = await fetchFredData();
-
-      const postInfo = getCircuitBreakerCooldownInfo('FRED Batch');
-      if (postInfo.onCooldown) {
-        economicPanel?.setFredRetrying(postInfo.remainingSeconds);
-        this.ctx.statusPanel?.updateApi('FRED', { status: 'error' });
-        return;
-      }
 
       if (data.length === 0) {
         if (!isFeatureAvailable('economicFred')) {
