@@ -26,7 +26,7 @@ export interface ServerInsights {
 }
 
 let cached: ServerInsights | null = null;
-const HYDRATED_INSIGHTS_KEYS = ['insights', 'newsInsights', 'worldBrief'];
+const HYDRATED_INSIGHTS_KEYS = ['insights', 'newsInsights', 'worldBrief', 'news:insights:v1'];
 // Server cron interval: scripts/seed-insights.mjs runs every 30 min
 // (CACHE_TTL=10800s/3h). Keep the client freshness gate aligned to the
 // server-side cache TTL so a brief does not disappear between workflow runs
@@ -50,6 +50,13 @@ function isFresh(data: ServerInsights): boolean {
 }
 
 function unwrapHydratedInsights(raw: unknown): { payload: unknown; seedFetchedAt: unknown } {
+  if (typeof raw === 'string') {
+    try {
+      return unwrapHydratedInsights(JSON.parse(raw));
+    } catch {
+      return { payload: raw, seedFetchedAt: null };
+    }
+  }
   if (!raw || typeof raw !== 'object') return { payload: raw, seedFetchedAt: null };
   const outer = raw as Record<string, unknown>;
   const seed = outer._seed && typeof outer._seed === 'object'

@@ -213,6 +213,17 @@ function buildFallbackWorldBrief(topStories) {
   return `${leadSentence} Other active stories include ${secondary.join('; ')}.`;
 }
 
+function hasUsableInsightsPayload(payload) {
+  return Boolean(
+    payload
+    && typeof payload === 'object'
+    && typeof payload.worldBrief === 'string'
+    && payload.worldBrief.trim().length > 0
+    && Array.isArray(payload.topStories)
+    && payload.topStories.length > 0
+  );
+}
+
 async function warmDigestCache() {
   const apiBase = process.env.API_BASE_URL || 'https://api.worldmonitor.app';
   const headers = {
@@ -366,11 +377,13 @@ async function fetchInsights() {
     fastMovingCount,
   };
 
-  // LKG preservation: don't overwrite "ok" with "degraded"
+  // LKG preservation: don't overwrite a usable "ok" payload with degraded data.
+  // If the existing payload is structurally empty (for example, blank worldBrief),
+  // publish the deterministic fallback so the Daily Market Brief panel has data.
   if (status === 'degraded') {
     const existing = await readExistingInsights();
-    if (existing?.status === 'ok') {
-      console.log('  LKG preservation: existing payload is "ok", skipping degraded overwrite');
+    if (existing?.status === 'ok' && hasUsableInsightsPayload(existing)) {
+      console.log('  LKG preservation: existing payload is usable "ok", skipping degraded overwrite');
       return existing;
     }
   }

@@ -60,10 +60,26 @@ export function getBootstrapHydrationState(): BootstrapHydrationState {
   };
 }
 
+function getHydrationAliases(key: string): string[] {
+  switch (key) {
+    case 'news:insights:v1':
+      return ['insights', 'newsInsights', 'worldBrief'];
+    case 'intelligence:market-implications:v1':
+      return ['marketImplications', 'market-implications'];
+    case 'forecast:predictions:v2':
+      return ['forecasts', 'predictions'];
+    default:
+      return [];
+  }
+}
+
 function populateCache(data: Record<string, unknown>): void {
   for (const [k, v] of Object.entries(data)) {
     if (v !== null && v !== undefined) {
       hydrationCache.set(k, v);
+      for (const alias of getHydrationAliases(k)) {
+        hydrationCache.set(alias, v);
+      }
     }
   }
 }
