@@ -1,6 +1,5 @@
 import { Panel } from './Panel';
 import { getRpcBaseUrl } from '@/services/rpc-client';
-import { premiumFetch } from '@/services/premium-fetch';
 import { IntelligenceServiceClient } from '@/generated/client/worldmonitor/intelligence/v1/service_client';
 import { h, replaceChildren } from '@/utils/dom-utils';
 import { marked } from 'marked';
@@ -12,7 +11,7 @@ import { hasPremiumAccess } from '@/services/panel-gating';
 import { FrameworkSelector } from './FrameworkSelector';
 
 // deduct-situation + list-market-implications are premium-gated.
-const client = new IntelligenceServiceClient(getRpcBaseUrl(), { fetch: premiumFetch });
+const client = new IntelligenceServiceClient(getRpcBaseUrl());
 
 const COOLDOWN_MS = 5_000;
 
