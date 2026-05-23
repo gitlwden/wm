@@ -60,7 +60,6 @@ const ENDPOINT_ENTITLEMENTS: Record<string, number> = {
   '/api/market/v1/get-stock-analysis-history': 1,
   '/api/market/v1/backtest-stock': 1,
   '/api/market/v1/list-stored-stock-backtests': 1,
-  '/api/intelligence/v1/deduct-situation': 1,
 };
 
 const CONVEX_INTERNAL_ENTITLEMENTS_PATH = '/api/internal-entitlements';

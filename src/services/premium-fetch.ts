@@ -145,7 +145,7 @@ export async function premiumFetch(
     const testerHeaders = new Headers(existing);
     testerHeaders.set('X-WorldMonitor-Key', testerKey);
     const res = await globalThis.fetch(input, { ...init, headers: testerHeaders });
-    if (res.status !== 401) {
+    if (res.status !== 401 && res.status !== 403) {
       reportServerError(res, input);
       return res;
     }

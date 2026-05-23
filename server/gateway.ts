@@ -826,22 +826,34 @@ export function createDomainGateway(
               headers: { 'Content-Type': 'application/json', ...corsHeaders },
             });
           }
-          // Valid pro session (Clerk role OR Dodo entitlement) — fall through to route handling.
-        } else {
-          emitRequest(401, 'auth_401', null);
-          return new Response(JSON.stringify({ error: keyCheck.error, _debug: (keyCheck as any)._debug }), {
-            status: 401,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          });
-        }
-      } else {
-        emitRequest(401, 'auth_401', null);
-        return new Response(JSON.stringify({ error: keyCheck.error }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        });
-      }
-    }
+ // Valid pro session (Clerk role OR Dodo entitlement)
+ } else {
+ // No Bearer header on legacy premium path. Try resolving Clerk session
+ // from cookies before rejecting — the user may have a valid Pro session.
+ const cookieSession = await resolveClerkSession(request);
+ if (cookieSession?.userId) {
+ sessionUserId = cookieSession.userId;
+ usage.sessionUserId = cookieSession.userId;
+ const ent = await getEntitlements(cookieSession.userId);
+ if (ent) usage.tier = typeof ent.features.tier === 'number' ? ent.features.tier : 0;
+ if (ent && ent.features.tier >= 1 && ent.validUntil >= Date.now()) {
+ // Pro user via cookie — fall through to route handling.
+ } else {
+ emitRequest(403, 'tier_403', null);
+ return new Response(JSON.stringify({ error: 'Pro subscription required' }), {
+ status: 403,
+ headers: { 'Content-Type': 'application/json', ...corsHeaders },
+ });
+ }
+ } else {
+ emitRequest(401, 'auth_401', null);
+ return new Response(JSON.stringify({ error: keyCheck.error, _debug: (keyCheck as any)._debug }), {
+ status: 401,
+ headers: { 'Content-Type': 'application/json', ...corsHeaders },
+ });
+ }
+ }
+ }
 
     // Entitlement check — blocks tier-gated endpoints for users below required tier.
     // Admin API-key holders (WORLDMONITOR_VALID_KEYS, kind: 'enterprise') bypass.
