@@ -122,7 +122,10 @@ export async function deductSituation(
                 systemAppend: framework || undefined,
             });
 
-            if (!result) return null;
+            if (!result) {
+      console.warn('[deduct-situation] All LLM providers failed — check OPENROUTER_API_KEY / GROQ_API_KEY env vars and provider health');
+      return null;
+    }
             const analysis = postProcessDeductionOutput(result.content, mode);
             return { analysis, model: result.model, provider: result.provider };
         }

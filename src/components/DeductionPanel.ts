@@ -38,7 +38,7 @@ export class DeductionPanel extends Panel {
 
         this.inputEl = h('textarea', {
             className: 'deduction-input',
-            placeholder: 'E.g., What will possibly happen in the next 24 hours in Middle East?',
+            placeholder: 'Describe a situation to analyze (e.g., What will happen in the Middle East in the next 24 hours?)',
             required: true,
             rows: 3,
         }) as HTMLTextAreaElement;
@@ -46,7 +46,7 @@ export class DeductionPanel extends Panel {
         this.geoInputEl = h('input', {
             className: 'deduction-geo-input',
             type: 'text',
-            placeholder: 'Geographic or situation context (optional)...',
+            placeholder: 'Region or context (e.g., Middle East, South China Sea) — optional',
         }) as HTMLInputElement;
 
         this.submitBtn = h('button', {
@@ -254,14 +254,23 @@ export class DeductionPanel extends Panel {
                 this.reformatResult(this.resultContainer);
             } else {
                 this.resultContainer.textContent = resp.provider === 'error'
-                    ? 'AI analysis temporarily unavailable. Please try again in a moment.'
+                    ? 'AI analysis unavailable — the reasoning service may be misconfigured or rate-limited. Try again shortly.'
                     : 'No analysis available for this query.';
             }
         } catch (err) {
             if (!this.element?.isConnected) return;
             console.error('[DeductionPanel] Error:', err);
             this.resultContainer.className = 'deduction-result error';
-            this.resultContainer.textContent = 'An error occurred while analyzing the situation.';
+            const status = (err as any)?.status ?? (err as any)?.statusCode;
+      if (status === 401 || status === 403) {
+        this.resultContainer.textContent = 'Pro access required. Sign in or add an API key in Settings to use Deduct Situation.';
+      } else if (status === 429) {
+        this.resultContainer.textContent = 'Rate limited — please wait a moment and try again.';
+      } else if (status === 503 || status === 502) {
+        this.resultContainer.textContent = 'AI service temporarily unavailable. Please try again shortly.';
+      } else {
+        this.resultContainer.textContent = 'An error occurred while analyzing the situation. Check console for details.';
+      }
         } finally {
             this.isSubmitting = false;
             if (this.element?.isConnected) {
