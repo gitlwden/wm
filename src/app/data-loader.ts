@@ -283,6 +283,7 @@ export class DataLoaderManager implements AppModule {
   private boundMarketWatchlistHandler: (() => void) | null = null;
   private satellitePropagationCleanup: (() => void) | null = null;
   private dailyBriefGeneration = 0;
+  private dailyBriefRetryCount = 0;
   private _stockAnalysisGeneration = 0;
   private dailyBriefFrameworkUnsubscribe: (() => void) | null = null;
   private marketImplicationsFrameworkUnsubscribe: (() => void) | null = null;
@@ -454,9 +455,6 @@ export class DataLoaderManager implements AppModule {
       }
       if (hasPremiumAccess() && shouldLoad('stock-backtest')) {
         tasks.push({ name: 'stockBacktest', task: runGuarded('stockBacktest', () => this.loadStockBacktest()) });
-      }
-      if (hasPremiumAccess() && shouldLoad('daily-market-brief')) {
-        tasks.push({ name: 'dailyMarketBrief', task: runGuarded('dailyMarketBrief', () => this.loadDailyMarketBrief()) });
       }
       if (shouldLoad('polymarket')) {
         tasks.push({ name: 'predictions', task: runGuarded('predictions', () => this.loadPredictions()) });
@@ -1584,6 +1582,11 @@ export class DataLoaderManager implements AppModule {
         otherPanel?.showRetrying(t('common.failedCryptoData'));
       }
     }
+
+    // Trigger daily brief now that markets are available
+    if (hasPremiumAccess() && this.ctx.latestMarkets.length > 0) {
+      void this.loadDailyMarketBrief(true);
+    }
   }
 
   async loadDailyMarketBrief(force = false): Promise<void> {
@@ -1603,6 +1606,22 @@ export class DataLoaderManager implements AppModule {
 
       if (!force && cached && !shouldRefreshDailyBrief(cached, timezone)) {
         return;
+      }
+
+      // If markets data hasn't arrived yet, retry a few times then proceed with headlines-only brief
+      if (this.ctx.latestMarkets.length === 0) {
+        this.dailyBriefRetryCount = (this.dailyBriefRetryCount || 0) + 1;
+        if (this.dailyBriefRetryCount <= 3) {
+          if (!cached?.available) {
+            this.callPanel('daily-market-brief', 'showLoading', 'Waiting for market data...');
+          }
+          setTimeout(() => this.loadDailyMarketBrief(force), 10_000);
+          return;
+        }
+        // Retries exhausted — fall through to build brief with whatever data is available
+        this.dailyBriefRetryCount = 0;
+      } else {
+        this.dailyBriefRetryCount = 0;
       }
 
       if (!cached) {

@@ -395,7 +395,7 @@ export async function buildDailyMarketBrief(options: BuildDailyMarketBriefOption
     };
   });
 
-  if (items.length === 0) {
+  if (items.length === 0 && relevantHeadlines.length === 0) {
     return {
       available: false,
       title: `Daily Market Brief • ${formatTitleDate(now, timezone)}`,
@@ -410,6 +410,56 @@ export async function buildDailyMarketBrief(options: BuildDailyMarketBriefOption
       fallback: true,
       generatedAt: now.toISOString(),
       headlineCount: 0,
+    };
+  }
+
+  // Generate a headline-driven brief when market quotes are unavailable
+  if (items.length === 0 && relevantHeadlines.length > 0) {
+    const headlineTitles = relevantHeadlines.slice(0, 6).map((h) => h.title.trim()).filter(Boolean);
+    const headlineSummary = headlineTitles.length > 0
+      ? `Markets data is pending; key headlines shaping the session: ${headlineTitles.join('. ')}.`
+      : 'Markets data is pending; monitor price action once quotes resolve.';
+    const actionPlan = relevantHeadlines.length > 0
+      ? 'Wait for live market quotes to confirm direction. Monitor incoming headlines for early signals.'
+      : 'Wait for live market quotes before positioning.';
+    const riskWatch = headlineTitles.length > 0
+      ? `Headline watch: ${headlineTitles.slice(0, 2).join(' | ')}`
+      : 'Risk watch pending market data.';
+
+    let summary = headlineSummary;
+    let provider = 'rules';
+    let model = '';
+    let fallback = true;
+
+    if (headlineTitles.length >= 1) {
+      try {
+        const summaryProvider = options.summarize || await getDefaultSummarizer();
+        const generated = await summaryProvider(headlineTitles, undefined, `Headlines-only brief (quotes pending):\n${headlineSummary}`, 'en');
+        if (generated?.summary) {
+          summary = generated.summary.trim();
+          provider = generated.provider;
+          model = generated.model;
+          fallback = false;
+        }
+      } catch (err) {
+        console.warn('[DailyBrief] AI summarization failed, using rules-based fallback:', (err as Error).message);
+      }
+    }
+
+    return {
+      available: true,
+      title: `Daily Market Brief • ${formatTitleDate(now, timezone)}`,
+      dateKey: getDateKey(now, timezone),
+      timezone,
+      summary,
+      actionPlan,
+      riskWatch,
+      items: [],
+      provider,
+      model,
+      fallback,
+      generatedAt: now.toISOString(),
+      headlineCount: relevantHeadlines.length,
     };
   }
 
