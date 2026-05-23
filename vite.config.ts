@@ -254,6 +254,7 @@ function sebufApiPlugin(): Plugin {
   // Cache router across requests (H-13 fix). Invalidated by Vite's module graph on HMR.
   let cachedRouter: Awaited<ReturnType<typeof buildRouter>> | null = null;
   let cachedCorsMod: any = null;
+  let cachedBootstrapHandler: any = null;
 
   async function buildRouter() {
     const [
@@ -397,15 +398,42 @@ function sebufApiPlugin(): Plugin {
         '/api/supply-chain/v1/multi-sector-cost-shock': '/api/supply-chain/v1/get-multi-sector-cost-shock',
       };
 
-      server.middlewares.use(async (req, res, next) => {
-        // Intercept sebuf routes in two forms:
-        //  - standard /api/{domain}/v{N}/* (domain-first, e.g. /api/market/v1/...)
-        //  - partner-URL-preservation /api/v{N}/{domain}/* (version-first, e.g.
-        //    /api/v2/shipping/...). Only the second form applies when the
-        //    external contract already uses a reversed layout.
-        if (!req.url || !/^\/api\/(?:[a-z][a-z0-9-]*\/v\d+|v\d+\/[a-z][a-z0-9-]*)\//.test(req.url)) {
-          return next();
-        }
+server.middlewares.use(async (req, res, next) => {
+// Handle /api/bootstrap requests directly
+if (req.url?.startsWith('/api/bootstrap')) {
+  if (!cachedBootstrapHandler) {
+    cachedBootstrapHandler = await import('./api/bootstrap.js');
+  }
+  try {
+    const port = server.config.server.port || 3000;
+    const url = new URL(req.url, `http://localhost:${port}`);
+    const webRequest = new Request(url.toString(), {
+      method: req.method || 'GET',
+      headers: req.headers as Record<string, string>,
+    });
+    const response = await cachedBootstrapHandler.default(webRequest);
+    res.statusCode = response.status;
+    response.headers.forEach((value: string, key: string) => {
+      res.setHeader(key, value);
+    });
+    res.end(await response.text());
+    return;
+  } catch (err) {
+    console.error('[bootstrap] Error:', err);
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Internal server error' }));
+    return;
+  }
+}
+// Intercept sebuf routes in two forms:
+// - standard /api/{domain}/v{N}/* (domain-first, e.g. /api/market/v1/...)
+// - partner-URL-preservation /api/v{N}/{domain}/* (version-first, e.g.
+// /api/v2/shipping/...). Only the second form applies when the
+// external contract already uses a reversed layout.
+if (!req.url || !/^\/api\/(?:[a-z][a-z0-9-]*\/v\d+|v\d+\/[a-z][a-z0-9-]*)\//.test(req.url)) {
+return next();
+}
 
         // Rewrite documented v1 URL → new sebuf path if this is an alias.
         const [pathOnly, queryOnly] = req.url.split('?', 2);
@@ -457,61 +485,61 @@ function sebufApiPlugin(): Plugin {
           // OPTIONS preflight
           if (req.method === 'OPTIONS') {
             res.statusCode = 204;
-            for (const [key, value] of Object.entries(corsHeaders)) {
-              res.setHeader(key, value);
-            }
-            res.end();
-            return;
-          }
-
-          // Origin check
-          if (corsMod.isDisallowedOrigin(webRequest)) {
-            res.statusCode = 403;
-            res.setHeader('Content-Type', 'application/json');
-            for (const [key, value] of Object.entries(corsHeaders)) {
-              res.setHeader(key, value);
-            }
-            res.end(JSON.stringify({ error: 'Origin not allowed' }));
-            return;
-          }
-
-          // Route matching
-          const matchedHandler = router.match(webRequest);
-          if (!matchedHandler) {
-            const allowed = router.allowedMethods(new URL(webRequest.url).pathname);
-            if (allowed.length > 0) {
-              res.statusCode = 405;
-              res.setHeader('Content-Type', 'application/json');
-              res.setHeader('Allow', allowed.join(', '));
-            } else {
-              res.statusCode = 404;
-              res.setHeader('Content-Type', 'application/json');
-            }
-            for (const [key, value] of Object.entries(corsHeaders)) {
-              res.setHeader(key, value);
-            }
-            res.end(JSON.stringify({ error: res.statusCode === 405 ? 'Method not allowed' : 'Not found' }));
-            return;
-          }
-
-          // Execute handler
-          const response = await matchedHandler(webRequest);
-
-          // Write response
-          res.statusCode = response.status;
-          response.headers.forEach((value, key) => {
-            res.setHeader(key, value);
-          });
-          for (const [key, value] of Object.entries(corsHeaders)) {
-            res.setHeader(key, value);
-          }
-          res.end(await response.text());
-        } catch (err) {
-          console.error('[sebuf-api] Error:', err);
-          res.statusCode = 500;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Internal server error' }));
+        for (const [key, value] of Object.entries(corsHeaders)) {
+          res.setHeader(key, String(value));
         }
+        res.end();
+        return;
+      }
+
+      // Origin check
+      if (corsMod.isDisallowedOrigin(webRequest)) {
+        res.statusCode = 403;
+        res.setHeader('Content-Type', 'application/json');
+        for (const [key, value] of Object.entries(corsHeaders)) {
+          res.setHeader(key, String(value));
+        }
+        res.end(JSON.stringify({ error: 'Origin not allowed' }));
+        return;
+      }
+
+      // Route matching
+      const matchedHandler = router.match(webRequest);
+      if (!matchedHandler) {
+        const allowed = router.allowedMethods(new URL(webRequest.url).pathname);
+        if (allowed.length > 0) {
+          res.statusCode = 405;
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Allow', allowed.join(', '));
+        } else {
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'application/json');
+        }
+        for (const [key, value] of Object.entries(corsHeaders)) {
+          res.setHeader(key, String(value));
+        }
+        res.end(JSON.stringify({ error: res.statusCode === 405 ? 'Method not allowed' : 'Not found' }));
+        return;
+      }
+
+      // Execute handler
+      const response = await matchedHandler(webRequest);
+
+      // Write response
+      res.statusCode = response.status;
+      response.headers.forEach((value, key) => {
+        res.setHeader(key, value);
+      });
+      for (const [key, value] of Object.entries(corsHeaders)) {
+        res.setHeader(key, String(value));
+      }
+      res.end(await response.text());
+    } catch (err) {
+      console.error('[sebuf-api] Error:', err);
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Internal server error' }));
+    }
       });
     },
   };

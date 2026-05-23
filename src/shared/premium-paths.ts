@@ -26,7 +26,6 @@ export const PREMIUM_RPC_PATHS = new Set<string>([
   '/api/supply-chain/v1/get-multi-sector-cost-shock',
   '/api/supply-chain/v1/get-sector-dependency',
   '/api/economic/v1/get-national-debt',
-  '/api/sanctions/v1/list-sanctions-pressure',
   '/api/trade/v1/list-comtrade-flows',
   '/api/trade/v1/get-tariff-trends',
   '/api/scenario/v1/run-scenario',

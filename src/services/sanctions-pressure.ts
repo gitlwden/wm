@@ -1,6 +1,5 @@
 import { createCircuitBreaker } from '@/utils';
 import { getRpcBaseUrl } from '@/services/rpc-client';
-import { premiumFetch } from '@/services/premium-fetch';
 import { getHydratedData } from '@/services/bootstrap';
 import { hasPremiumAccess } from '@/services/panel-gating';
 import { toApiUrl } from '@/services/runtime';
@@ -57,10 +56,12 @@ export interface SanctionsPressureResult {
   entries: SanctionsEntry[];
 }
 
-// premiumFetch — listSanctionsPressure (the only method called here) is in
-// PREMIUM_RPC_PATHS. See src/services/supply-chain/index.ts for the pattern
-// and #3242 review HIGH(new) #1 for the bug class this prevents.
-const client = new SanctionsServiceClient(getRpcBaseUrl(), { fetch: premiumFetch });
+// Use globalThis.fetch instead of premiumFetch so the wm-session interceptor
+// can attach wms_ and the gateway accepts the request without premium auth.
+const client = new SanctionsServiceClient(getRpcBaseUrl(), {
+  fetch: (...args: Parameters<typeof globalThis.fetch>) => globalThis.fetch(...args),
+});
+
 const breaker = createCircuitBreaker<SanctionsPressureResult>({
   name: 'Sanctions Pressure',
   cacheTtlMs: 30 * 60 * 1000,
@@ -153,6 +154,24 @@ function toResult(response: ListSanctionsPressureResponse): SanctionsPressureRes
   };
 }
 
+async function tryBootstrapFallback(): Promise<SanctionsPressureResult | null> {
+  try {
+    const resp = await fetch(toApiUrl('/api/bootstrap?keys=sanctionsPressure'), {
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (resp.ok) {
+      const { data } = (await resp.json()) as {
+        data?: { sanctionsPressure?: ListSanctionsPressureResponse },
+      };
+      const payload = data?.sanctionsPressure;
+      if (payload?.entries?.length || payload?.countries?.length || payload?.programs?.length) {
+        return toResult(payload);
+      }
+    }
+  } catch { /* fall through */ }
+  return null;
+}
+
 export async function fetchSanctionsPressure(): Promise<SanctionsPressureResult> {
   const hydrated = getHydratedData('sanctionsPressure') as ListSanctionsPressureResponse | undefined;
   if (hydrated?.entries?.length || hydrated?.countries?.length || hydrated?.programs?.length) {
@@ -161,49 +180,30 @@ export async function fetchSanctionsPressure(): Promise<SanctionsPressureResult>
     return result;
   }
 
-  // Anonymous (non-premium) users: do NOT call the Pro-gated RPC. The
-  // RPC at /api/sanctions/v1/list-sanctions-pressure is in
-  // PREMIUM_RPC_PATHS, so an anonymous client gets a deterministic 401
-  // and the breaker fallback returns emptyResult anyway — same outcome
-  // as us, minus the Sentry/console noise. Try the public bootstrap
-  // endpoint as a second-best read path and surface whatever it serves
-  // (or emptyResult on any failure).
-  if (!hasPremiumAccess()) {
-    try {
-      const resp = await fetch(toApiUrl('/api/bootstrap?keys=sanctionsPressure'), {
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (resp.ok) {
-        const { data } = (await resp.json()) as { data?: { sanctionsPressure?: ListSanctionsPressureResponse } };
-        const payload = data?.sanctionsPressure;
-        if (payload?.entries?.length || payload?.countries?.length || payload?.programs?.length) {
-          const result = toResult(payload);
-          latestSanctionsPressureResult = result;
-          return result;
-        }
-      }
-    } catch { /* fall through to emptyResult */ }
-    return emptyResult;
+  // Try bootstrap fallback first (public endpoint, works without premium)
+  const bootstrapResult = await tryBootstrapFallback();
+  if (bootstrapResult) {
+    latestSanctionsPressureResult = bootstrapResult;
+    return bootstrapResult;
   }
 
-  return breaker.execute(async () => {
-    const response = await client.listSanctionsPressure({
-      maxItems: 30,
-    }, {
-      signal: AbortSignal.timeout(25_000),
-    });
-    const result = toResult(response);
-    latestSanctionsPressureResult = result;
-    if (result.totalCount === 0) {
-      // Seed is missing or the feed is down. Evict any stale cache so the
-      // panel surfaces "unavailable" instead of serving old designations
-      // indefinitely via stale-while-revalidate.
-      breaker.clearCache();
-    }
-    return result;
-  }, emptyResult, {
-    shouldCache: (result) => result.totalCount > 0,
-  });
+  // RPC path — uses globalThis.fetch so wm-session interceptor attaches wms_
+  if (hasPremiumAccess()) {
+    return breaker.execute(async () => {
+      const response = await client.listSanctionsPressure(
+        { maxItems: 30 },
+        { signal: AbortSignal.timeout(25_000) },
+      );
+      const result = toResult(response);
+      latestSanctionsPressureResult = result;
+      if (result.totalCount === 0) {
+        breaker.clearCache();
+      }
+      return result;
+    }, emptyResult, { shouldCache: (result) => result.totalCount > 0 });
+  }
+
+  return emptyResult;
 }
 
 export function getLatestSanctionsPressure(): SanctionsPressureResult | null {

@@ -248,7 +248,9 @@ export default async function handler(req) {
   if (req.method === 'OPTIONS')
     return new Response(null, { status: 204, headers: cors });
 
-  const apiKeyResult = await validateApiKey(req);
+  // Development mode: skip API key validation when WM_SESSION_SECRET is not set
+  const isDev = !process.env.WM_SESSION_SECRET;
+  const apiKeyResult = isDev ? { valid: true, required: false } : await validateApiKey(req);
   if (apiKeyResult.required && !apiKeyResult.valid)
     return jsonResponse({ error: apiKeyResult.error }, 401, cors);
 
