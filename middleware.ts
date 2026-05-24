@@ -22,12 +22,15 @@ const SOCIAL_PREVIEW_PATHS = new Set(['/api/story', '/api/og-story']);
 //   every cron call returned 403 and silently fell back to legacy Gemini).
 // - /api/intelligence/v1/deduct-situation: intentionally public; Groq/OpenRouter
 //   keys are server-side. Any caller may test deduct-situation without auth.
+// - /api/chat-analyst: same pattern as deduct-situation — server-side LLM keys,
+//   SSE streaming, own premium check in handler. Bypasses middleware bot gate.
 const PUBLIC_API_PATHS = new Set([
   '/api/version',
   '/api/health',
   '/api/seed-contract-probe',
   '/api/internal/brief-why-matters',
   '/api/intelligence/v1/deduct-situation',
+  '/api/chat-analyst',
 ]);
 
 const SOCIAL_IMAGE_UA =
