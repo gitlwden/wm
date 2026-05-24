@@ -20,11 +20,14 @@ const SOCIAL_PREVIEW_PATHS = new Set(['/api/story', '/api/og-story']);
 //   Node undici default UA, which is short enough to trip the "no UA or
 //   suspiciously short" 403 below (Railway log 2026-04-21 post-#3248 merge:
 //   every cron call returned 403 and silently fell back to legacy Gemini).
+// - /api/intelligence/v1/deduct-situation: intentionally public; Groq/OpenRouter
+//   keys are server-side. Any caller may test deduct-situation without auth.
 const PUBLIC_API_PATHS = new Set([
   '/api/version',
   '/api/health',
   '/api/seed-contract-probe',
   '/api/internal/brief-why-matters',
+  '/api/intelligence/v1/deduct-situation',
 ]);
 
 const SOCIAL_IMAGE_UA =
