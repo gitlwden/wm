@@ -85,10 +85,10 @@ export default async function handler(req: Request): Promise<Response> {
     return json({ error: 'Method not allowed' }, 405, corsHeaders);
   }
 
-  const isPremium = await isCallerPremium(req);
-  if (!isPremium) {
-    return json({ error: 'Pro subscription required' }, 403, corsHeaders);
-  }
+  // Premium check is informational only — not a hard gate.
+  // Server-side LLM keys (Groq/OpenRouter) are funded by the operator,
+  // same pattern as /api/intelligence/v1/deduct-situation.
+  const _isPremium = await isCallerPremium(req);
 
   const rateLimitResponse = await checkRateLimit(req, corsHeaders);
   if (rateLimitResponse) return rateLimitResponse;
