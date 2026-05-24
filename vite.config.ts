@@ -255,6 +255,7 @@ function sebufApiPlugin(): Plugin {
   let cachedRouter: Awaited<ReturnType<typeof buildRouter>> | null = null;
   let cachedCorsMod: any = null;
   let cachedBootstrapHandler: any = null;
+  let cachedChatAnalystHandler: any = null;
 
   async function buildRouter() {
     const [
@@ -420,6 +421,50 @@ if (req.url?.startsWith('/api/bootstrap')) {
     return;
   } catch (err) {
     console.error('[bootstrap] Error:', err);
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Internal server error' }));
+    return;
+  }
+}
+// Handle /api/chat-analyst — standalone SSE handler, not part of sebuf gateway.
+if (req.url?.startsWith('/api/chat-analyst')) {
+  if (!cachedChatAnalystHandler) {
+    cachedChatAnalystHandler = await import('./api/chat-analyst.ts');
+  }
+  try {
+    const port = server.config.server.port || 3000;
+    const url = new URL(req.url, `http://localhost:${port}`);
+    const bodyText = await new Promise<string>((resolve) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => resolve(Buffer.concat(chunks).toString()));
+    });
+    const webRequest = new Request(url.toString(), {
+      method: req.method || 'POST',
+      headers: req.headers as Record<string, string>,
+      body: bodyText || undefined,
+    });
+    const response = await cachedChatAnalystHandler.default(webRequest);
+    res.statusCode = response.status;
+    response.headers.forEach((value: string, key: string) => {
+      res.setHeader(key, value);
+    });
+    if (response.body) {
+      const reader = response.body.getReader();
+      const pump = async () => {
+        const { done, value } = await reader.read();
+        if (done) { res.end(); return; }
+        res.write(value);
+        await pump();
+      };
+      await pump();
+    } else {
+      res.end(await response.text());
+    }
+    return;
+  } catch (err) {
+    console.error('[chat-analyst] Error:', err);
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'Internal server error' }));
