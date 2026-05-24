@@ -676,7 +676,10 @@ export function createDomainGateway(
     // tier ≥ 1 + mcpAccess === true. Re-running the JWT path on a request
     // that has no Authorization header would just no-op anyway.
     const isTierGated = !internalMcpVerified && getRequiredTier(pathname) !== null;
-    const needsLegacyProBearerGate = !internalMcpVerified && PREMIUM_RPC_PATHS.has(pathname) && !isTierGated;
+    // Local dev bypass: skip premium auth gates when not on Vercel
+    // (npm run dev / tauri sidecar) so all endpoints are accessible without keys.
+    const isLocalDev = !process.env.VERCEL_ENV;
+    const needsLegacyProBearerGate = !internalMcpVerified && !isLocalDev && PREMIUM_RPC_PATHS.has(pathname) && !isTierGated;
 
     // Session resolution — extract userId from bearer token (Clerk JWT) if present.
     // Only runs for tier-gated endpoints to avoid JWKS lookup on every request.
@@ -869,7 +872,7 @@ export function createDomainGateway(
     // to 403 a Pro caller via the MCP path because Pro callers reach
     // the gateway only through the MCP edge's whitelisted tool set.
     const isEnterpriseAuth = keyCheck.valid && wmKey && !isUserApiKey && keyCheck.kind === 'enterprise';
-    if (!isEnterpriseAuth && !internalMcpVerified) {
+    if (!isEnterpriseAuth && !internalMcpVerified && !isLocalDev) {
       const entitlementResponse = await checkEntitlement(request, pathname, corsHeaders);
       if (entitlementResponse) {
         const entReason: RequestReason =
