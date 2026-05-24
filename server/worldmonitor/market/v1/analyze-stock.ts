@@ -10,6 +10,7 @@ import type {
 import { callLlm } from '../../../_shared/llm';
 import { cachedFetchJson } from '../../../_shared/redis';
 import { CHROME_UA, yahooGate } from '../../../_shared/constants';
+import { getRelayBaseUrl, getRelayHeaders } from '../../../_shared/relay';
 import { UPSTREAM_TIMEOUT_MS, sanitizeSymbol } from './_shared';
 import { storeStockAnalysisSnapshot } from './premium-stock-store';
 import { searchRecentStockHeadlines } from './stock-news-search';
@@ -476,15 +477,88 @@ function uniqueRounded(values: number[]): number[] {
 }
 
 export async function fetchYahooHistory(symbol: string): Promise<{ candles: Candle[]; currency: string } | null> {
-  await yahooGate();
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=6mo&interval=1d&includePrePost=false&events=div,splits`;
-  const response = await fetch(url, {
-    headers: { 'User-Agent': CHROME_UA },
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-  });
-  if (!response.ok) return null;
+  // Try direct Yahoo first
+  let data: YahooChartResponse | null = null;
+  try {
+    await yahooGate();
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=6mo&interval=1d&includePrePost=false&events=div,splits`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': CHROME_UA },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+    if (response.ok) {
+      data = await response.json() as YahooChartResponse;
+    } else {
+      console.warn(`[Yahoo] ${symbol} chart direct HTTP ${response.status}`);
+    }
+  } catch (err) {
+    console.warn(`[Yahoo] ${symbol} chart direct error:`, (err as Error).message);
+  }
 
-  const data = await response.json() as YahooChartResponse;
+  // Fallback: Railway relay (different IP, not rate-limited by Yahoo)
+  if (!data) {
+    const relayBase = getRelayBaseUrl();
+    if (relayBase) {
+      try {
+        const relayUrl = `${relayBase}/yahoo-chart?symbol=${encodeURIComponent(symbol)}&range=6mo&interval=1d&includePrePost=false&events=div,splits`;
+        const resp = await fetch(relayUrl, {
+          headers: getRelayHeaders(),
+          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        });
+        if (resp.ok) {
+          data = await resp.json() as YahooChartResponse;
+        } else {
+          console.warn(`[Yahoo] ${symbol} chart relay HTTP ${resp.status}`);
+        }
+      } catch (err) {
+        console.warn(`[Yahoo] ${symbol} chart relay error:`, (err as Error).message);
+      }
+    }
+  }
+
+  // Fallback: Alpha Vantage (when Yahoo is rate-limited and no relay configured)
+  if (!data) {
+    const avKey = process.env.ALPHAVANTAGE_API_KEY;
+    if (avKey) {
+      try {
+        const avUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${encodeURIComponent(symbol)}&outputsize=compact&apikey=${encodeURIComponent(avKey)}`;
+        const resp = await fetch(avUrl, {
+          headers: { 'User-Agent': CHROME_UA },
+          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        });
+        if (resp.ok) {
+          const avData = await resp.json() as {
+            'Time Series (Daily)'?: Record<string, { '1. open': string; '2. high': string; '3. low': string; '4. close': string; '5. volume': string }>;
+            Information?: string;
+          };
+          if (avData['Time Series (Daily)']) {
+            const ts = avData['Time Series (Daily)'];
+            const avCandles: Candle[] = [];
+            for (const [dateStr, bar] of Object.entries(ts)) {
+              const open = parseFloat(bar['1. open']);
+              const high = parseFloat(bar['2. high']);
+              const low = parseFloat(bar['3. low']);
+              const close = parseFloat(bar['4. close']);
+              const volume = parseInt(bar['5. volume'], 10);
+              if ([close, open, high, low].every((v) => typeof v === 'number' && Number.isFinite(v))) {
+                avCandles.push({ timestamp: new Date(dateStr).getTime(), open, high, low, close, volume: Number.isFinite(volume) ? volume : 0 });
+              }
+            }
+            avCandles.sort((a, b) => a.timestamp - b.timestamp);
+            if (avCandles.length >= 30) {
+              return { candles: avCandles, currency: 'USD' };
+            }
+          } else if (avData.Information) {
+            console.warn(`[AV] ${symbol} daily: ${avData.Information.slice(0, 80)}`);
+          }
+        }
+      } catch (err) {
+        console.warn(`[AV] ${symbol} daily error:`, (err as Error).message);
+      }
+    }
+  }
+
+  if (!data) return null;
   const result = data.chart?.result?.[0];
   const quote = result?.indicators?.quote?.[0];
   const timestamps = result?.timestamp ?? [];
