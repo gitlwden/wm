@@ -33,6 +33,7 @@ jobs:
         run: node scripts/seed-bigmac.mjs
         continue-on-error: true
         env:
+          EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
 

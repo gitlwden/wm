@@ -47,14 +47,19 @@
 
 ## 4. Grocery Index / Big Mac Index 面板
 
-**状态**: 需要 Railway seed 脚本
+**状态**: ✅ Big Mac Index 已修复
 
-**问题**: Redis 键 `economic:grocery-basket:v1` 和 `economic:bigmac:v1` 不存在
+**Big Mac Index 修复方案**:
+1. ✅ GitHub Action `seed-consumer-daily.yml` 每日 UTC 9:00 运行 → Upstash Redis
+2. ✅ Economist CSV URL 支持 `main` 和 `master` 双分支回退
+3. ✅ 服务端 CSV fallback 补全 `wowPct` 字段、格式化重构
+4. ✅ EXA fallback 移除死链 specialist sites（theburgerindex.com / eatmyindex.com），改为开放搜索
+5. ✅ 补充 `EXA_API_KEY` 环境变量到 GitHub Action
+6. ✅ 移除 seed-bundle-macro.mjs 中的冗余 bigmac 条目（daily workflow 已覆盖）
 
-**修复步骤**:
-1. 检查 Railway 上的 seed-bigmac.mjs 和 seed-grocery-basket.mjs
-2. 确保外部 API 可访问
-3. 验证 cron 调度
+**数据流**: GitHub Actions seed → Upstash Redis → Bootstrap API → 前端面板; 服务端 fallback: Redis → Economist CSV
+
+**Grocery Index 状态**: 仍需 seed 脚本
 
 ---
 
@@ -126,7 +131,7 @@ node scripts/seed-xxx.mjs
 | ~~高~~ | ~~Economic Warfare~~ | ~~高~~ | ~~中~~ | ✅ 已修复
 | 高 | Sanctions & Designations | 高 | 中 |
 | 中 | Hormuz Trade Tracker | 中 | 高 |
-| 中 | Big Mac Index | 中 | 低 |
+| ~~中~~ | ~~Big Mac Index~~ | ~~中~~ | ~~低~~ | ✅ 已修复 |
 | 低 | Social Velocity | 低 | 中 |
 | 低 | WSB Ticker Scanner | 低 | 中 |
 | 低 | Grocery Index | 低 | 低 |

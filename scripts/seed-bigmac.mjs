@@ -18,70 +18,109 @@ const WOW_ANOMALY_THRESHOLD = 20; // % change that signals a data bug
 const USD_MIN = 1.50;
 const USD_MAX = 12.00;
 
-const COUNTRIES = [
-  // Americas
-  { code: 'US', name: 'United States', currency: 'USD', flag: '🇺🇸' },
-  { code: 'CA', name: 'Canada',        currency: 'CAD', flag: '🇨🇦' },
-  { code: 'MX', name: 'Mexico',        currency: 'MXN', flag: '🇲🇽' },
-  { code: 'BR', name: 'Brazil',        currency: 'BRL', flag: '🇧🇷' },
-  { code: 'AR', name: 'Argentina',     currency: 'ARS', flag: '🇦🇷' },
-  { code: 'CO', name: 'Colombia',      currency: 'COP', flag: '🇨🇴' },
-  { code: 'CL', name: 'Chile',         currency: 'CLP', flag: '🇨🇱' },
-  // Europe
-  { code: 'GB', name: 'UK',            currency: 'GBP', flag: '🇬🇧' },
-  { code: 'DE', name: 'Germany',       currency: 'EUR', flag: '🇩🇪' },
-  { code: 'FR', name: 'France',        currency: 'EUR', flag: '🇫🇷' },
-  { code: 'IT', name: 'Italy',         currency: 'EUR', flag: '🇮🇹' },
-  { code: 'ES', name: 'Spain',         currency: 'EUR', flag: '🇪🇸' },
-  { code: 'CH', name: 'Switzerland',   currency: 'CHF', flag: '🇨🇭' },
-  { code: 'NO', name: 'Norway',        currency: 'NOK', flag: '🇳🇴' },
-  { code: 'SE', name: 'Sweden',        currency: 'SEK', flag: '🇸🇪' },
-  { code: 'DK', name: 'Denmark',       currency: 'DKK', flag: '🇩🇰' },
-  { code: 'PL', name: 'Poland',        currency: 'PLN', flag: '🇵🇱' },
-  { code: 'CZ', name: 'Czechia',       currency: 'CZK', flag: '🇨🇿' },
-  { code: 'HU', name: 'Hungary',       currency: 'HUF', flag: '🇭🇺' },
-  { code: 'RO', name: 'Romania',       currency: 'RON', flag: '🇷🇴' },
-  { code: 'UA', name: 'Ukraine',       currency: 'UAH', flag: '🇺🇦' },
-  // Asia-Pacific
-  { code: 'CN', name: 'China',         currency: 'CNY', flag: '🇨🇳' },
-  { code: 'JP', name: 'Japan',         currency: 'JPY', flag: '🇯🇵' },
-  { code: 'KR', name: 'South Korea',   currency: 'KRW', flag: '🇰🇷' },
-  { code: 'AU', name: 'Australia',     currency: 'AUD', flag: '🇦🇺' },
-  { code: 'NZ', name: 'New Zealand',   currency: 'NZD', flag: '🇳🇿' },
-  { code: 'SG', name: 'Singapore',     currency: 'SGD', flag: '🇸🇬' },
-  { code: 'HK', name: 'Hong Kong',     currency: 'HKD', flag: '🇭🇰' },
-  { code: 'TW', name: 'Taiwan',        currency: 'TWD', flag: '🇹🇼' },
-  { code: 'TH', name: 'Thailand',      currency: 'THB', flag: '🇹🇭' },
-  { code: 'MY', name: 'Malaysia',      currency: 'MYR', flag: '🇲🇾' },
-  { code: 'ID', name: 'Indonesia',     currency: 'IDR', flag: '🇮🇩' },
-  { code: 'PH', name: 'Philippines',   currency: 'PHP', flag: '🇵🇭' },
-  { code: 'VN', name: 'Vietnam',       currency: 'VND', flag: '🇻🇳' },
-  { code: 'IN', name: 'India',         currency: 'INR', flag: '🇮🇳' },
-  { code: 'PK', name: 'Pakistan',      currency: 'PKR', flag: '🇵🇰' },
-  // Middle East
-  { code: 'AE', name: 'UAE',           currency: 'AED', flag: '🇦🇪' },
-  { code: 'SA', name: 'Saudi Arabia',  currency: 'SAR', flag: '🇸🇦' },
-  { code: 'QA', name: 'Qatar',         currency: 'QAR', flag: '🇶🇦' },
-  { code: 'KW', name: 'Kuwait',        currency: 'KWD', flag: '🇰🇼' },
-  { code: 'BH', name: 'Bahrain',       currency: 'BHD', flag: '🇧🇭' },
-  { code: 'OM', name: 'Oman',          currency: 'OMR', flag: '🇴🇲' },
-  { code: 'EG', name: 'Egypt',         currency: 'EGP', flag: '🇪🇬' },
-  { code: 'JO', name: 'Jordan',        currency: 'JOD', flag: '🇯🇴' },
-  { code: 'LB', name: 'Lebanon',       currency: 'LBP', flag: '🇱🇧' },
-  { code: 'IL', name: 'Israel',        currency: 'ILS', flag: '🇮🇱' },
-  // Africa
-  { code: 'ZA', name: 'South Africa',  currency: 'ZAR', flag: '🇿🇦' },
-  { code: 'NG', name: 'Nigeria',       currency: 'NGN', flag: '🇳🇬' },
-  { code: 'KE', name: 'Kenya',         currency: 'KES', flag: '🇰🇪' },
-];
+// ISO A3 -> A2 mapping for Economist CSV data
+const A3_TO_A2 = {
+  ARE: 'AE', ARG: 'AR', AUS: 'AU', AUT: 'AT', BEL: 'BE', BRA: 'BR',
+  GBR: 'GB', CAN: 'CA', CHL: 'CL', CHN: 'CN', COL: 'CO', CRI: 'CR',
+  CZE: 'CZ', DNK: 'DK', EGY: 'EG', EST: 'EE', FIN: 'FI', FRA: 'FR',
+  DEU: 'DE', GRC: 'GR', HKG: 'HK', HUN: 'HU', IND: 'IN', IDN: 'ID',
+  IRL: 'IE', ISR: 'IL', ITA: 'IT', JPN: 'JP', KOR: 'KR', KWT: 'KW',
+  LVA: 'LV', LTU: 'LT', LUX: 'LU', MYS: 'MY', MEX: 'MX', NLD: 'NL',
+  NZL: 'NZ', NOR: 'NO', PAK: 'PK', PER: 'PE', PHL: 'PH', POL: 'PL',
+  PRT: 'PT', QAT: 'QA', ROU: 'RO', RUS: 'RU', SAU: 'SA', SGP: 'SG',
+  ZAF: 'ZA', ESP: 'ES', SWE: 'SE', CHE: 'CH', TWN: 'TW', THA: 'TH',
+  TUR: 'TR', UKR: 'UA', UAE: 'AE', USA: 'US', VEN: 'VE', VNM: 'VN',
+  LBN: 'LB', JOR: 'JO', BHR: 'BH', OMN: 'OM', KEN: 'KE', NGA: 'NG',
+  PRY: 'PY', URY: 'UY', LKA: 'LK', BGD: 'BD', AZE: 'AZ', GEO: 'GE',
+  SRB: 'RS', CYP: 'CY', SVK: 'SK', SVN: 'SI',
+};
+
+// ISO A2 -> country metadata (flag, name, currency)
+const COUNTRY_META = {
+  US: { name: 'United States', currency: 'USD', flag: '🇺🇸' },
+  CA: { name: 'Canada', currency: 'CAD', flag: '🇨🇦' },
+  MX: { name: 'Mexico', currency: 'MXN', flag: '🇲🇽' },
+  BR: { name: 'Brazil', currency: 'BRL', flag: '🇧🇷' },
+  AR: { name: 'Argentina', currency: 'ARS', flag: '🇦🇷' },
+  CO: { name: 'Colombia', currency: 'COP', flag: '🇨🇴' },
+  CL: { name: 'Chile', currency: 'CLP', flag: '🇨🇱' },
+  GB: { name: 'UK', currency: 'GBP', flag: '🇬🇧' },
+  DE: { name: 'Germany', currency: 'EUR', flag: '🇩🇪' },
+  FR: { name: 'France', currency: 'EUR', flag: '🇫🇷' },
+  IT: { name: 'Italy', currency: 'EUR', flag: '🇮🇹' },
+  ES: { name: 'Spain', currency: 'EUR', flag: '🇪🇸' },
+  CH: { name: 'Switzerland', currency: 'CHF', flag: '🇨🇭' },
+  NO: { name: 'Norway', currency: 'NOK', flag: '🇳🇴' },
+  SE: { name: 'Sweden', currency: 'SEK', flag: '🇸🇪' },
+  DK: { name: 'Denmark', currency: 'DKK', flag: '🇩🇰' },
+  PL: { name: 'Poland', currency: 'PLN', flag: '🇵🇱' },
+  CZ: { name: 'Czechia', currency: 'CZK', flag: '🇨🇿' },
+  HU: { name: 'Hungary', currency: 'HUF', flag: '🇭🇺' },
+  RO: { name: 'Romania', currency: 'RON', flag: '🇷🇴' },
+  UA: { name: 'Ukraine', currency: 'UAH', flag: '🇺🇦' },
+  CN: { name: 'China', currency: 'CNY', flag: '🇨🇳' },
+  JP: { name: 'Japan', currency: 'JPY', flag: '🇯🇵' },
+  KR: { name: 'South Korea', currency: 'KRW', flag: '🇰🇷' },
+  AU: { name: 'Australia', currency: 'AUD', flag: '🇦🇺' },
+  NZ: { name: 'New Zealand', currency: 'NZD', flag: '🇳🇿' },
+  SG: { name: 'Singapore', currency: 'SGD', flag: '🇸🇬' },
+  HK: { name: 'Hong Kong', currency: 'HKD', flag: '🇭🇰' },
+  TW: { name: 'Taiwan', currency: 'TWD', flag: '🇹🇼' },
+  TH: { name: 'Thailand', currency: 'THB', flag: '🇹🇭' },
+  MY: { name: 'Malaysia', currency: 'MYR', flag: '🇲🇾' },
+  ID: { name: 'Indonesia', currency: 'IDR', flag: '🇮🇩' },
+  PH: { name: 'Philippines', currency: 'PHP', flag: '🇵🇭' },
+  VN: { name: 'Vietnam', currency: 'VND', flag: '🇻🇳' },
+  IN: { name: 'India', currency: 'INR', flag: '🇮🇳' },
+  PK: { name: 'Pakistan', currency: 'PKR', flag: '🇵🇰' },
+  AE: { name: 'UAE', currency: 'AED', flag: '🇦🇪' },
+  SA: { name: 'Saudi Arabia', currency: 'SAR', flag: '🇸🇦' },
+  QA: { name: 'Qatar', currency: 'QAR', flag: '🇶🇦' },
+  KW: { name: 'Kuwait', currency: 'KWD', flag: '🇰🇼' },
+  BH: { name: 'Bahrain', currency: 'BHD', flag: '🇧🇭' },
+  OM: { name: 'Oman', currency: 'OMR', flag: '🇴🇲' },
+  EG: { name: 'Egypt', currency: 'EGP', flag: '🇪🇬' },
+  JO: { name: 'Jordan', currency: 'JOD', flag: '🇯🇴' },
+  LB: { name: 'Lebanon', currency: 'LBP', flag: '🇱🇧' },
+  IL: { name: 'Israel', currency: 'ILS', flag: '🇮🇱' },
+  ZA: { name: 'South Africa', currency: 'ZAR', flag: '🇿🇦' },
+  NG: { name: 'Nigeria', currency: 'NGN', flag: '🇳🇬' },
+  KE: { name: 'Kenya', currency: 'KES', flag: '🇰🇪' },
+  RU: { name: 'Russia', currency: 'RUB', flag: '🇷🇺' },
+  TR: { name: 'Turkey', currency: 'TRY', flag: '🇹🇷' },
+  PE: { name: 'Peru', currency: 'PEN', flag: '🇵🇪' },
+  NL: { name: 'Netherlands', currency: 'EUR', flag: '🇳🇱' },
+  BE: { name: 'Belgium', currency: 'EUR', flag: '🇧🇪' },
+  AT: { name: 'Austria', currency: 'EUR', flag: '🇦🇹' },
+  FI: { name: 'Finland', currency: 'EUR', flag: '🇫🇮' },
+  GR: { name: 'Greece', currency: 'EUR', flag: '🇬🇷' },
+  PT: { name: 'Portugal', currency: 'EUR', flag: '🇵🇹' },
+  IE: { name: 'Ireland', currency: 'EUR', flag: '🇮🇪' },
+  EE: { name: 'Estonia', currency: 'EUR', flag: '🇪🇪' },
+  LV: { name: 'Latvia', currency: 'EUR', flag: '🇱🇻' },
+  LT: { name: 'Lithuania', currency: 'EUR', flag: '🇱🇹' },
+  LU: { name: 'Luxembourg', currency: 'EUR', flag: '🇱🇺' },
+  CY: { name: 'Cyprus', currency: 'EUR', flag: '🇨🇾' },
+  SK: { name: 'Slovakia', currency: 'EUR', flag: '🇸🇰' },
+  SI: { name: 'Slovenia', currency: 'EUR', flag: '🇸🇮' },
+  CR: { name: 'Costa Rica', currency: 'CRC', flag: '🇨🇷' },
+  PY: { name: 'Paraguay', currency: 'PYG', flag: '🇵🇾' },
+  UY: { name: 'Uruguay', currency: 'UYU', flag: '🇺🇾' },
+  VE: { name: 'Venezuela', currency: 'VES', flag: '🇻🇪' },
+  LK: { name: 'Sri Lanka', currency: 'LKR', flag: '🇱🇰' },
+  BD: { name: 'Bangladesh', currency: 'BDT', flag: '🇧🇩' },
+  AZ: { name: 'Azerbaijan', currency: 'AZN', flag: '🇦🇿' },
+  GE: { name: 'Georgia', currency: 'GEL', flag: '🇬🇪' },
+  RS: { name: 'Serbia', currency: 'RSD', flag: '🇷🇸' },
+};
 
 const FX_SYMBOLS = Object.fromEntries(
-  [...new Set(COUNTRIES.map(c => c.currency))].map(ccy => [ccy, `${ccy}USD=X`])
+  [...new Set(Object.values(COUNTRY_META).map(c => c.currency))].map(ccy => [ccy, `${ccy}USD=X`])
 );
 
 // Handle both plain numbers and thousands-separated (480,000 LBP or 12,000 KRW)
 const NUM = '\\d{1,3}(?:[,\\s]\\d{3})*(?:\\.\\d{1,3})?';
-const CCY = 'USD|GBP|EUR|JPY|CHF|CNY|INR|AUD|CAD|NZD|BRL|MXN|ZAR|TRY|KRW|SGD|HKD|TWD|THB|IDR|NOK|SEK|DKK|PLN|CZK|HUF|RON|PHP|VND|MYR|PKR|ILS|ARS|COP|CLP|UAH|NGN|KES|AED|SAR|QAR|KWD|BHD|OMR|EGP|JOD|LBP';
+const CCY = 'USD|GBP|EUR|JPY|CHF|CNY|INR|AUD|CAD|NZD|BRL|MXN|ZAR|TRY|KRW|SGD|HKD|TWD|THB|IDR|NOK|SEK|DKK|PLN|CZK|HUF|RON|PHP|VND|MYR|PKR|ILS|ARS|COP|CLP|UAH|NGN|KES|AED|SAR|QAR|KWD|BHD|OMR|EGP|JOD|LBP|RUB|PEN|CRC|PYG|UYU|VES|LKR|BDT|AZN|GEL|RSD';
 const PRICE_PATTERNS = [
   new RegExp(`(${NUM})\\s*(${CCY})`, 'i'),
   new RegExp(`(${CCY})\\s*(${NUM})`, 'i'),
@@ -129,26 +168,113 @@ async function searchExa(query, includeDomains = null) {
   return resp.json();
 }
 
-async function fetchBigMacPrices(prevSnapshot) {
+/**
+ * PRIMARY: Fetch Big Mac Index from The Economist's official GitHub CSV.
+ * This is the canonical, reliable data source — updated semi-annually.
+ * CSV columns: date,iso_a3,currency_code,name,local_price,dollar_ex,dollar_price,...
+ */
+async function fetchEconomistCsv() {
+  const CSV_URLS = [
+    'https://raw.githubusercontent.com/TheEconomist/big-mac-data/refs/heads/main/output-data/big-mac-full-index.csv',
+    'https://raw.githubusercontent.com/TheEconomist/big-mac-data/master/output-data/big-mac-full-index.csv',
+  ];
+  console.log('\n📥 Fetching Economist Big Mac Index CSV...');
+
+  let text;
+  for (const url of CSV_URLS) {
+    try {
+      const resp = await fetch(url, {
+        headers: { 'User-Agent': CHROME_UA },
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!resp.ok) continue;
+      text = await resp.text();
+      if (text.length > 100) break;
+      text = undefined;
+    } catch {
+      // try next URL
+    }
+  }
+  if (!text) throw new Error('All Economist CSV URLs failed');
+
+  const lines = text.split('\n').filter(Boolean);
+  if (lines.length < 2) throw new Error('Economist CSV has no data rows');
+
+  // Parse header
+  const header = lines[0].split(',');
+  const dateIdx = header.indexOf('date');
+  const a3Idx = header.indexOf('iso_a3');
+  const ccyIdx = header.indexOf('currency_code');
+  const nameIdx = header.indexOf('name');
+  const localIdx = header.indexOf('local_price');
+  const exIdx = header.indexOf('dollar_ex');
+  const usdIdx = header.indexOf('dollar_price');
+
+  if ([dateIdx, a3Idx, ccyIdx, localIdx, usdIdx].some(i => i < 0)) {
+    throw new Error('Economist CSV missing required columns');
+  }
+
+  // Find the latest date
+  const allDates = [...new Set(lines.slice(1).map(l => l.split(',')[dateIdx]).filter(Boolean))];
+  const latestDate = allDates.sort().at(-1);
+  console.log(`  Latest Economist data: ${latestDate} (${allDates.length} periods available)`);
+
+  // Parse rows for the latest date
+  const rows = lines.slice(1).filter(l => l.startsWith(latestDate));
+  const results = [];
+
+  for (const row of rows) {
+    const cols = row.split(',');
+    const a3 = cols[a3Idx]?.trim();
+    const currencyCode = cols[ccyIdx]?.trim();
+    const countryName = cols[nameIdx]?.trim();
+    const localPrice = parseFloat(cols[localIdx]);
+    const dollarEx = parseFloat(cols[exIdx]);
+    const dollarPrice = parseFloat(cols[usdIdx]);
+
+    if (!a3 || isNaN(localPrice) || isNaN(dollarPrice)) continue;
+
+    const a2 = A3_TO_A2[a3] || null;
+    const meta = a2 ? COUNTRY_META[a2] : null;
+
+    results.push({
+      code: a2 || a3,
+      name: meta?.name || countryName || a3,
+      currency: meta?.currency || currencyCode || '',
+      flag: meta?.flag || '🌍',
+      localPrice: +localPrice.toFixed(4),
+      usdPrice: +dollarPrice.toFixed(4),
+      fxRate: isNaN(dollarEx) ? 0 : +dollarEx.toFixed(6),
+      sourceSite: 'economist-github',
+      available: dollarPrice > 0,
+    });
+  }
+
+  console.log(`  ✅ Economist CSV: ${results.length} countries, ${results.filter(r => r.available).length} with prices`);
+  return { results, date: latestDate };
+}
+
+/**
+ * FALLBACK: EXA search for Big Mac prices (original method).
+ * Only used if Economist CSV is unavailable.
+ */
+async function fetchExaPrices(prevSnapshot) {
   const fxRates = await getSharedFxRates(FX_SYMBOLS, FX_FALLBACKS);
   const results = [];
 
-  for (const country of COUNTRIES) {
+  for (const [code, meta] of Object.entries(COUNTRY_META)) {
     await sleep(EXA_DELAY_MS);
-    console.log(`\n  Processing ${country.flag} ${country.name} (${country.currency})...`);
+    console.log(`\n  Processing ${meta.flag} ${meta.name} (${meta.currency})...`);
 
-    const fxRate = fxRates[country.currency] ?? FX_FALLBACKS[country.currency] ?? null;
+    const fxRate = fxRates[meta.currency] ?? FX_FALLBACKS[meta.currency] ?? null;
     let localPrice = null;
     let usdPrice = null;
     let sourceSite = '';
 
     try {
-      // Include currency code in query — helps EXA find per-country specialist pages
-      const query = `Big Mac price ${country.name} ${country.currency}`;
-      const SPECIALIST_SITES = ['theburgerindex.com', 'eatmyindex.com'];
+      const query = `Big Mac price ${meta.name} ${meta.currency} 2025 2026`;
 
-      // Specialist Big Mac Index sites only — clean, verified per-country data
-      const exaResult = await searchExa(query, SPECIALIST_SITES);
+      const exaResult = await searchExa(query);
       await sleep(EXA_DELAY_MS);
 
       if (exaResult?.results?.length) {
@@ -156,7 +282,7 @@ async function fetchBigMacPrices(prevSnapshot) {
           const summary = result?.summary;
           if (!summary || typeof summary !== 'string') continue;
           const hit = matchPrice(summary, result.url || '');
-          if (hit?.currency === country.currency) {
+          if (hit?.currency === meta.currency) {
             localPrice = hit.price;
             sourceSite = hit.source;
             break;
@@ -164,28 +290,27 @@ async function fetchBigMacPrices(prevSnapshot) {
         }
       }
     } catch (err) {
-      console.warn(`    [${country.code}] EXA error: ${err.message}`);
+      console.warn(`  [${code}] EXA error: ${err.message}`);
     }
 
     if (usdPrice === null) {
       usdPrice = localPrice !== null && fxRate ? +(localPrice * fxRate).toFixed(4) : null;
     }
 
-    // Sanity check: Big Mac USD price must be in a plausible global range
     if (usdPrice !== null && (usdPrice < USD_MIN || usdPrice > USD_MAX)) {
-      console.warn(`  [PRICE] ANOMALY ${country.flag} ${country.name}: $${usdPrice} out of range [$${USD_MIN}-$${USD_MAX}] — dropping price`);
+      console.warn(`  [PRICE] ANOMALY ${meta.flag} ${meta.name}: $${usdPrice} out of range [$${USD_MIN}-$${USD_MAX}] — dropping price`);
       usdPrice = null;
       localPrice = null;
     }
 
-    const status = localPrice !== null ? `${localPrice} ${country.currency} = $${usdPrice}` : 'N/A';
-    console.log(`    Big Mac: ${status}`);
+    const status = localPrice !== null ? `${localPrice} ${meta.currency} = $${usdPrice}` : 'N/A';
+    console.log(`  Big Mac: ${status}`);
 
     results.push({
-      code: country.code,
-      name: country.name,
-      currency: country.currency,
-      flag: country.flag,
+      code,
+      name: meta.name,
+      currency: meta.currency,
+      flag: meta.flag,
       localPrice: localPrice !== null ? +localPrice.toFixed(4) : null,
       usdPrice,
       fxRate: fxRate || 0,
@@ -193,6 +318,43 @@ async function fetchBigMacPrices(prevSnapshot) {
       available: usdPrice !== null,
     });
   }
+
+  return results;
+}
+
+async function fetchBigMacPrices(prevSnapshot) {
+  let results = [];
+  let dataSource = 'none';
+
+  // ── Tier 1: Economist GitHub CSV (canonical, reliable) ──
+  try {
+    const csvData = await fetchEconomistCsv();
+    if (csvData.results.filter(r => r.available).length >= 10) {
+      results = csvData.results;
+      dataSource = 'economist-csv';
+    }
+  } catch (err) {
+    console.warn(`\n⚠️ Economist CSV failed: ${err.message}`);
+  }
+
+  // ── Tier 2: EXA search fallback ──
+  if (results.filter(r => r.available).length < 10) {
+    console.log('\n📥 Falling back to EXA search for Big Mac prices...');
+    try {
+      results = await fetchExaPrices(prevSnapshot);
+      if (results.filter(r => r.available).length >= 5) {
+        dataSource = 'exa-search';
+      }
+    } catch (err) {
+      console.warn(`\n⚠️ EXA search failed: ${err.message}`);
+    }
+  }
+
+  if (results.filter(r => r.available).length === 0) {
+    throw new Error('No Big Mac price data available from any source');
+  }
+
+  console.log(`\n📊 Data source: ${dataSource} (${results.filter(r => r.available).length} countries with prices)`);
 
   const withData = results.filter(r => r.usdPrice != null);
   const cheapest = withData.length ? withData.reduce((a, b) => a.usdPrice < b.usdPrice ? a : b).code : '';
@@ -213,7 +375,7 @@ async function fetchBigMacPrices(prevSnapshot) {
 
   if (wowAvailable) {
     const prevMap = Object.fromEntries(prevSnapshot.countries.map(c => [c.code, c.usdPrice]));
-    const rawWowValues = []; // unfiltered — used for global anomaly check
+    const rawWowValues = [];
 
     for (const r of results) {
       if (r.usdPrice != null && prevMap[r.code] != null && prevMap[r.code] > 0) {
@@ -236,8 +398,6 @@ async function fetchBigMacPrices(prevSnapshot) {
       console.error(`  [WoW] ADMIN ALERT: ${suspiciousCount} country/ies had anomalous WoW (>±${WOW_ANOMALY_THRESHOLD}%): ${suspiciousNames}`);
     }
 
-    // Global check uses unfiltered average — individual filtering bounds each value to ≤20%
-    // so the filtered average can never exceed the threshold (dead check). Use raw values instead.
     const rawAvg = rawWowValues.length > 0
       ? +(rawWowValues.reduce((s, v) => s + v, 0) / rawWowValues.length).toFixed(2)
       : 0;
@@ -274,13 +434,12 @@ await runSeed('economic', 'bigmac', CANONICAL_KEY, () => fetchBigMacPrices(prevS
   validateFn: (data) => data?.countries?.length > 0,
   recordCount: (data) => data?.countries?.filter(c => c.available).length || 0,
   declareRecords,
-  sourceVersion: 'economist-bigmac-v1',
+  sourceVersion: 'economist-bigmac-v2',
   schemaVersion: 1,
   maxStaleMin: 10080,
   extraKeys: prevSnapshot ? [{
     key: `${CANONICAL_KEY}:prev`,
-    transform: () => prevSnapshot,  // write PRE-overwrite snapshot; ignore new data
+    transform: () => prevSnapshot,
     ttl: CACHE_TTL * 2,
     declareRecords,
   }] : undefined,
-});
