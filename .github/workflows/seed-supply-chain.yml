@@ -2,8 +2,8 @@ name: Seed Supply Chain & Trade
 
 on:
   schedule:
-    # Every 6h — matches Railway cadence
-    - cron: '0 */6 * * *'
+    # Daily 06:00 UTC — supply chain, trade, chokepoints
+    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:

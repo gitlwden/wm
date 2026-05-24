@@ -2,8 +2,8 @@ name: Seed Resilience Scores
 
 on:
   schedule:
-    # Every 6h — matches Railway cadence
-    - cron: '0 */6 * * *'
+    # Daily 08:00 UTC — resilience scores
+    - cron: '0 8 * * *'
   workflow_dispatch:
 
 jobs:

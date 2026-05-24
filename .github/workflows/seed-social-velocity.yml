@@ -2,8 +2,8 @@ name: Seed Social Velocity
 
 on:
   schedule:
-    # Every 3h — Reddit social velocity/trending
-    - cron: '0 */3 * * *'
+    # Every 12h — Reddit social velocity/trending
+    - cron: '0 */12 * * *'
   workflow_dispatch:
 
 jobs:

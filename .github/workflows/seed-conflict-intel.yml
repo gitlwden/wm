@@ -2,8 +2,8 @@ name: Seed Conflict & Intel
 
 on:
   schedule:
-    # Every hour — conflict intel, GDELT, Iran events, unrest
-    - cron: '0 * * * *'
+    # Every 6h — conflict intel, GDELT, Iran events, unrest
+    - cron: '15 */6 * * *'
   workflow_dispatch:
 
 jobs:

@@ -2,8 +2,8 @@ name: Seed Climate & Weather
 
 on:
   schedule:
-    # Every 6h — climate, weather, fire detections, CO2
-    - cron: '0 */6 * * *'
+    # Daily 04:00 UTC — climate, weather, fire detections, CO2
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 jobs:

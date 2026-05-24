@@ -2,8 +2,8 @@ name: Seed Relay Backup
 
 on:
   schedule:
-    # Every 2h — relay backup bundle
-    - cron: '0 */2 * * *'
+    # Every 6h — relay backup bundle
+    - cron: '45 */6 * * *'
   workflow_dispatch:
 
 jobs:

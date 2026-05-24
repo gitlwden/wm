@@ -2,8 +2,8 @@ name: Seed Derived Signals
 
 on:
   schedule:
-    # Every 30 min — derives compound signals from upstream data
-    - cron: '*/30 * * * *'
+    # Every 6h — derives compound signals from upstream data
+    - cron: '25 */6 * * *'
   workflow_dispatch:
 
 jobs:

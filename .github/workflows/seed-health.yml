@@ -2,8 +2,8 @@ name: Seed Health & Disease
 
 on:
   schedule:
-    # Every 4h — health, disease, air quality
-    - cron: '17 */4 * * *'
+    # Every 12h — health, disease, air quality
+    - cron: '17 */12 * * *'
   workflow_dispatch:
 
 jobs:

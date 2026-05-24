@@ -2,8 +2,8 @@ name: Seed Market Data
 
 on:
   schedule:
-    # Every 30 min — market backup (crypto/ETF/commodity)
-    - cron: '*/30 * * * *'
+    # Every 6h — market backup (crypto/ETF/commodity)
+    - cron: '5 */6 * * *'
   workflow_dispatch:
 
 jobs:
