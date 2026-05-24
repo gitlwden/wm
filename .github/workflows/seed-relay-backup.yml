@@ -2,8 +2,8 @@ name: Seed Relay Backup
 
 on:
   schedule:
-    # Every 30 min — matches Railway seed-bundle-relay-backup
-    - cron: '*/30 * * * *'
+    # Every 2h — relay backup bundle
+    - cron: '0 */2 * * *'
   workflow_dispatch:
 
 jobs:

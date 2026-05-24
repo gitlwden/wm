@@ -2,8 +2,8 @@ name: Seed Market Data
 
 on:
   schedule:
-    # Every 5 min — backup for ais-relay, matches Railway cadence
-    - cron: '*/5 * * * *'
+    # Every 30 min — market backup (crypto/ETF/commodity)
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:

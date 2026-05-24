@@ -2,8 +2,8 @@ name: Seed Derived Signals
 
 on:
   schedule:
-    # Every 5 min — matches Railway seed-bundle-derived-signals
-    - cron: '*/5 * * * *'
+    # Every 30 min — derives compound signals from upstream data
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:

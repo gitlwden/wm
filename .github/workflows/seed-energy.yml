@@ -2,8 +2,8 @@ name: Seed Energy Data
 
 on:
   schedule:
-    # Every hour — covers seed-economy (EIA+FRED+crude+natgas), seed-hormuz, seed-energy-intelligence
-    - cron: '7 * * * *'
+    # Every 3h — energy economy, petroleum, Hormuz, energy intelligence
+    - cron: '7 */3 * * *'
   workflow_dispatch:
 
 jobs:

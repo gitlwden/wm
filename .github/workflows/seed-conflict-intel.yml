@@ -2,8 +2,8 @@ name: Seed Conflict & Intel
 
 on:
   schedule:
-    # Every 15 min — matches Railway cadence for conflict-intel
-    - cron: '*/15 * * * *'
+    # Every hour — conflict intel, GDELT, Iran events, unrest
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 jobs:

@@ -2,8 +2,8 @@ name: Seed Climate & Weather
 
 on:
   schedule:
-    # Every 3h — matches Railway seed-bundle-climate
-    - cron: '0 */3 * * *'
+    # Every 6h — climate, weather, fire detections, CO2
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:

@@ -2,8 +2,8 @@ name: Seed Social Velocity
 
 on:
   schedule:
-    # Every hour — matches Reddit API rate limits
-    - cron: '0 * * * *'
+    # Every 3h — Reddit social velocity/trending
+    - cron: '0 */3 * * *'
   workflow_dispatch:
 
 jobs:
