@@ -4,6 +4,33 @@ import { buildUpstreamEvent, getUsageScope, sendToAxiom } from './usage';
 const REDIS_OP_TIMEOUT_MS = 180_000;
 const REDIS_PIPELINE_TIMEOUT_MS = 180_000;
 
+// ── In-process TTL cache ─────────────────────────────────────────────
+// Avoids redundant Redis round-trips when the same key is read multiple
+// times within a short window (e.g. bootstrap burst, repeated RPC calls).
+// Entries are invalidated on setCachedJson writes.
+const _localCache = new Map<string, { value: unknown; expires: number }>();
+const LOCAL_CACHE_TTL_MS = 30_000;
+const LOCAL_CACHE_MAX = 200;
+
+function localCacheGet(key: string): { hit: true; value: unknown } | { hit: false } {
+  const entry = _localCache.get(key);
+  if (!entry) return { hit: false };
+  if (entry.expires < Date.now()) { _localCache.delete(key); return { hit: false }; }
+  return { hit: true, value: entry.value };
+}
+
+function localCacheSet(key: string, value: unknown): void {
+  _localCache.set(key, { value, expires: Date.now() + LOCAL_CACHE_TTL_MS });
+  if (_localCache.size > LOCAL_CACHE_MAX) {
+    const oldest = _localCache.keys().next().value;
+    if (oldest) _localCache.delete(oldest);
+  }
+}
+
+function localCacheInvalidate(key: string): void {
+  _localCache.delete(key);
+}
+
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -105,6 +132,12 @@ export async function getCachedJson(key: string, raw = false): Promise<unknown |
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return null;
+
+  // In-process cache — skip Redis for recently-fetched keys
+  const cacheKey = raw ? `raw:${key}` : key;
+  const localHit = localCacheGet(cacheKey);
+  if (localHit.hit) return localHit.value;
+
   try {
     const finalKey = raw ? key : prefixKey(key);
     const resp = await fetch(`${url}/get/${encodeURIComponent(finalKey)}`, {
@@ -117,7 +150,9 @@ export async function getCachedJson(key: string, raw = false): Promise<unknown |
     // Envelope-aware by default — RPC consumers get the bare payload regardless
     // of whether the writer has migrated to contract mode. Legacy shapes pass
     // through unchanged (unwrapEnvelope returns {_seed: null, data: raw}).
-    return unwrapEnvelope(JSON.parse(data.result)).data;
+    const parsed = unwrapEnvelope(JSON.parse(data.result)).data;
+    localCacheSet(cacheKey, parsed);
+    return parsed;
   } catch (err) {
     // Structured timeout log goes to Sentry via Vercel integration. Large-
     // payload timeouts used to silently return null and let downstream callers
@@ -148,6 +183,11 @@ export async function setCachedJson(key: string, value: unknown, ttlSeconds: num
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) return;
+
+  // Invalidate local cache so next getCachedJson hits Redis
+  const cacheKey = raw ? `raw:${key}` : key;
+  localCacheInvalidate(cacheKey);
+
   try {
     const finalKey = raw ? key : prefixKey(key);
     // Atomic SET with EX — single call avoids race between SET and EXPIRE (C-3 fix)
