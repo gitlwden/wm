@@ -1568,7 +1568,7 @@ body.panel-resize-active iframe {
 /* ---- Close (X) button on panels (extends .icon-btn) ---- */
 .panel-header .panel-close-btn {
   font-size: 14px;
-  opacity: 0;
+  opacity: 0.4;
   transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
   order: 999;
 }

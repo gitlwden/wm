@@ -1790,6 +1790,15 @@ export class DataLoaderManager implements AppModule {
     try {
       const predictions = await fetchPredictions({ region: this.ctx.resolvedLocation });
       this.ctx.latestPredictions = predictions;
+
+      if (predictions.length === 0) {
+        (this.ctx.panels['polymarket'] as PredictionPanel | undefined)?.renderPredictions([]);
+        this.ctx.statusPanel?.updateFeed('Polymarket', { status: 'error', errorMessage: 'No prediction data available' });
+        this.ctx.statusPanel?.updateApi('Polymarket', { status: 'error' });
+        dataFreshness.recordError('polymarket', 'empty');
+        return;
+      }
+
       (this.ctx.panels['polymarket'] as PredictionPanel | undefined)?.renderPredictions(predictions);
 
       this.ctx.statusPanel?.updateFeed('Polymarket', { status: 'ok', itemCount: predictions.length });
@@ -1799,6 +1808,7 @@ export class DataLoaderManager implements AppModule {
 
       void this.runCorrelationAnalysis();
     } catch (error) {
+      (this.ctx.panels['polymarket'] as PredictionPanel | undefined)?.renderPredictions([]);
       this.ctx.statusPanel?.updateFeed('Polymarket', { status: 'error', errorMessage: String(error) });
       this.ctx.statusPanel?.updateApi('Polymarket', { status: 'error' });
       dataFreshness.recordError('polymarket', String(error));
