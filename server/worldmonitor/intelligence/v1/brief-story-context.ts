@@ -16,7 +16,7 @@
  * `getCachedJson(key, true)` is the same cache-layer Redis adapter.
  */
 
-import { getCachedJson } from '../../../_shared/redis';
+import { getCachedJson, getCachedJsonBatch } from '../../../_shared/redis';
 
 import {
   buildWorldBrief,
@@ -59,23 +59,19 @@ export async function assembleBriefStoryContext(
   const iso2 = args.iso2;
   const countryKey = iso2 ? `intelligence:country-brief:v1:${iso2}` : null;
 
-  const [
-    insightsResult,
-    riskResult,
-    forecastsResult,
-    stocksResult,
-    commoditiesResult,
-    macroResult,
-    countryResult,
-  ] = await Promise.allSettled([
-    getCachedJson('news:insights:v1', true),
-    getCachedJson('risk:scores:sebuf:stale:v1', true),
-    getCachedJson('forecast:predictions:v2', true),
-    getCachedJson('market:stocks-bootstrap:v1', true),
-    getCachedJson('market:commodities-bootstrap:v1', true),
-    getCachedJson('economic:macro-signals:v1', true),
+  const FIXED_KEYS = ['news:insights:v1', 'risk:scores:sebuf:stale:v1', 'forecast:predictions:v2', 'market:stocks-bootstrap:v1', 'market:commodities-bootstrap:v1', 'economic:macro-signals:v1'] as const;
+  const [briefBatch, countryRaw] = await Promise.all([
+    getCachedJsonBatch([...FIXED_KEYS], true),
     countryKey ? getCachedJson(countryKey, true) : Promise.resolve(null),
   ]);
+
+  const insightsResult = { status: 'fulfilled' as const, value: briefBatch.get(FIXED_KEYS[0]) ?? null };
+  const riskResult = { status: 'fulfilled' as const, value: briefBatch.get(FIXED_KEYS[1]) ?? null };
+  const forecastsResult = { status: 'fulfilled' as const, value: briefBatch.get(FIXED_KEYS[2]) ?? null };
+  const stocksResult = { status: 'fulfilled' as const, value: briefBatch.get(FIXED_KEYS[3]) ?? null };
+  const commoditiesResult = { status: 'fulfilled' as const, value: briefBatch.get(FIXED_KEYS[4]) ?? null };
+  const macroResult = { status: 'fulfilled' as const, value: briefBatch.get(FIXED_KEYS[5]) ?? null };
+  const countryResult = { status: 'fulfilled' as const, value: countryRaw };
 
   const get = (r: PromiseSettledResult<unknown>): unknown =>
     r.status === 'fulfilled' ? r.value : null;

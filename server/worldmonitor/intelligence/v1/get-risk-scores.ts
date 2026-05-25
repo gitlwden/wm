@@ -9,7 +9,7 @@ import type {
 } from '../../../../src/generated/server/worldmonitor/intelligence/v1/service_server';
 
 import iso3ToIso2Json from '../../../../shared/iso3-to-iso2.json';
-import { getCachedJson, setCachedJson, cachedFetchJsonWithMeta } from '../../../_shared/redis';
+import { getCachedJson, getCachedJsonBatch, setCachedJson, cachedFetchJsonWithMeta } from '../../../_shared/redis';
 import { CLIMATE_ANOMALIES_KEY } from '../../../_shared/cache-keys';
 import { TIER1_COUNTRIES } from './_shared';
 import { fetchAcledCached } from '../../../_shared/acled';
@@ -238,23 +238,29 @@ interface AuxiliarySources {
 
 async function fetchAuxiliarySources(): Promise<AuxiliarySources> {
   const currentYear = new Date().getFullYear();
-  const [ucdpRaw, outagesRaw, climateRaw, cyberRaw, firesRaw, gpsRaw, iranRaw, orefRaw, advisoriesRaw, displacementRaw, insightsRaw, threatSummaryRaw] = await Promise.all([
-    getCachedJson('conflict:ucdp-events:v1', true).catch(() => null),
-    getCachedJson('infra:outages:v1', true).catch(() => null),
-    getCachedJson(CLIMATE_ANOMALIES_KEY, true).catch(() => null),
-    getCachedJson('cyber:threats-bootstrap:v2', true).catch(() => null),
-    getCachedJson('wildfire:fires:v1', true).catch(() => null),
-    getCachedJson('intelligence:gpsjam:v2', true).catch(() => null),
-    getCachedJson('conflict:iran-events:v1', true).catch(() => null),
-    getCachedJson('relay:oref:history:v1', true).catch(() => null),
-    getCachedJson('intelligence:advisories:v1', true).catch(() => null),
-    // Try current year, fall back to previous year if not yet seeded
+  const FIXED_KEYS = [
+    'conflict:ucdp-events:v1', 'infra:outages:v1', CLIMATE_ANOMALIES_KEY, 'cyber:threats-bootstrap:v2',
+    'wildfire:fires:v1', 'intelligence:gpsjam:v2', 'conflict:iran-events:v1', 'relay:oref:history:v1',
+    'intelligence:advisories:v1', 'news:insights:v1', 'news:threat:summary:v1',
+  ];
+  const [auxBatch, displacementRaw] = await Promise.all([
+    getCachedJsonBatch(FIXED_KEYS, true),
+    // Displacement: try current year, fall back to previous year
     getCachedJson(`displacement:summary:v1:${currentYear}`, true)
       .catch(() => null)
       .then(d => d ?? getCachedJson(`displacement:summary:v1:${currentYear - 1}`, true).catch(() => null)),
-    getCachedJson('news:insights:v1', true).catch(() => null),
-    getCachedJson('news:threat:summary:v1', true).catch(() => null),
   ]);
+  const ucdpRaw = auxBatch.get('conflict:ucdp-events:v1') ?? null;
+  const outagesRaw = auxBatch.get('infra:outages:v1') ?? null;
+  const climateRaw = auxBatch.get(CLIMATE_ANOMALIES_KEY) ?? null;
+  const cyberRaw = auxBatch.get('cyber:threats-bootstrap:v2') ?? null;
+  const firesRaw = auxBatch.get('wildfire:fires:v1') ?? null;
+  const gpsRaw = auxBatch.get('intelligence:gpsjam:v2') ?? null;
+  const iranRaw = auxBatch.get('conflict:iran-events:v1') ?? null;
+  const orefRaw = auxBatch.get('relay:oref:history:v1') ?? null;
+  const advisoriesRaw = auxBatch.get('intelligence:advisories:v1') ?? null;
+  const insightsRaw = auxBatch.get('news:insights:v1') ?? null;
+  const threatSummaryRaw = auxBatch.get('news:threat:summary:v1') ?? null;
   const arr = (v: any, field?: string, maxLen = 10000) => {
     let a: any[];
     if (field && v && Array.isArray(v[field])) a = v[field];

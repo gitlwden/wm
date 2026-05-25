@@ -14,7 +14,7 @@ import type {
   GoldCbHolder,
   GoldCbMover,
 } from '../../../../src/generated/server/worldmonitor/market/v1/service_server';
-import { getCachedJson } from '../../../_shared/redis';
+import { getCachedJsonBatch } from '../../../_shared/redis';
 
 const COMMODITY_KEY = 'market:commodities-bootstrap:v1';
 const COT_KEY = 'market:cot:v1';
@@ -186,13 +186,12 @@ export async function getGoldIntelligence(
   _req: GetGoldIntelligenceRequest,
 ): Promise<GetGoldIntelligenceResponse> {
   try {
-    const [rawPayload, rawCot, rawExtended, rawEtfFlows, rawCbReserves] = await Promise.all([
-      getCachedJson(COMMODITY_KEY, true) as Promise<{ quotes?: RawQuote[] } | null>,
-      getCachedJson(COT_KEY, true) as Promise<{ instruments?: RawCotInstrument[]; reportDate?: string } | null>,
-      getCachedJson(GOLD_EXTENDED_KEY, true) as Promise<GoldExtendedPayload | null>,
-      getCachedJson(GOLD_ETF_FLOWS_KEY, true) as Promise<GoldEtfFlowsPayload | null>,
-      getCachedJson(GOLD_CB_RESERVES_KEY, true) as Promise<GoldCbReservesPayload | null>,
-    ]);
+    const goldBatch = await getCachedJsonBatch([COMMODITY_KEY, COT_KEY, GOLD_EXTENDED_KEY, GOLD_ETF_FLOWS_KEY, GOLD_CB_RESERVES_KEY], true);
+    const rawPayload = goldBatch.get(COMMODITY_KEY) as { quotes?: RawQuote[] } | null | undefined ?? null;
+    const rawCot = goldBatch.get(COT_KEY) as { instruments?: RawCotInstrument[]; reportDate?: string } | null | undefined ?? null;
+    const rawExtended = goldBatch.get(GOLD_EXTENDED_KEY) as GoldExtendedPayload | null | undefined ?? null;
+    const rawEtfFlows = goldBatch.get(GOLD_ETF_FLOWS_KEY) as GoldEtfFlowsPayload | null | undefined ?? null;
+    const rawCbReserves = goldBatch.get(GOLD_CB_RESERVES_KEY) as GoldCbReservesPayload | null | undefined ?? null;
 
     const rawQuotes = rawPayload?.quotes;
     if (!rawQuotes || !Array.isArray(rawQuotes) || rawQuotes.length === 0) return emptyResponse();

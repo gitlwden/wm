@@ -1,4 +1,4 @@
-import { getCachedJson } from '../../../_shared/redis';
+import { getCachedJson, getCachedJsonBatch } from '../../../_shared/redis';
 import { sanitizeForPrompt, sanitizeHeadline } from '../../../_shared/llm-sanitize.js';
 import { CHROME_UA } from '../../../_shared/constants';
 import { tokenizeForMatch, findMatchingKeywords } from '../../../../src/utils/keyword-match';
@@ -286,22 +286,21 @@ async function buildGasStorage(): Promise<string | undefined> {
   try {
     const countries = await getCachedJson(GAS_STORAGE_COUNTRIES_KEY, true);
     if (!Array.isArray(countries) || countries.length === 0) return undefined;
+
+    // Batch all country reads in a single Redis pipeline instead of N parallel GETs
+    const keys = (countries as string[]).map((iso2) => `${GAS_STORAGE_KEY_PREFIX}${iso2}`);
+    const batch = await getCachedJsonBatch(keys, true);
+
     const entries: Array<{ iso2: string; fillPct: number; trend?: string }> = [];
-    await Promise.allSettled(
-      (countries as string[]).map(async (iso2) => {
-        try {
-          const data = await getCachedJson(`${GAS_STORAGE_KEY_PREFIX}${iso2}`, true);
-          if (data && typeof data === 'object') {
-            const d = data as Record<string, unknown>;
-            if (typeof d.fillPct === 'number') {
-              entries.push({ iso2: safeStr(d.iso2) || iso2, fillPct: d.fillPct, trend: safeStr(d.trend) || undefined });
-            }
-          }
-        } catch {
-          // skip missing country
+    for (const [key, data] of batch) {
+      if (data && typeof data === 'object') {
+        const d = data as Record<string, unknown>;
+        if (typeof d.fillPct === 'number') {
+          const iso2 = key.replace(GAS_STORAGE_KEY_PREFIX, '');
+          entries.push({ iso2: safeStr(d.iso2) || iso2, fillPct: d.fillPct, trend: safeStr(d.trend) || undefined });
         }
-      }),
-    );
+      }
+    }
     if (entries.length === 0) return undefined;
     const sorted = entries.sort((a, b) => a.fillPct - b.fillPct).slice(0, 5);
     const parts = sorted.map((e) => `${e.iso2}: ${e.fillPct.toFixed(1)}%${e.trend ? ` (${e.trend})` : ''}`);

@@ -4,7 +4,7 @@ import type {
   GetOilInventoriesResponse,
 } from '../../../../src/generated/server/worldmonitor/economic/v1/service_server';
 
-import { getCachedJson } from '../../../_shared/redis';
+import { getCachedJsonBatch } from '../../../_shared/redis';
 
 const CRUDE_KEY = 'economic:crude-inventories:v1';
 const SPR_KEY = 'economic:spr:v1';
@@ -68,14 +68,13 @@ export async function getOilInventories(
   _req: GetOilInventoriesRequest,
 ): Promise<GetOilInventoriesResponse> {
   try {
-    const [crudeRaw, sprRaw, natGasRaw, euGasRaw, ieaRaw, refineryRaw] = await Promise.all([
-      getCachedJson(CRUDE_KEY, true) as Promise<CrudeRaw | null>,
-      getCachedJson(SPR_KEY, true) as Promise<SprRaw | null>,
-      getCachedJson(NAT_GAS_KEY, true) as Promise<NatGasRaw | null>,
-      getCachedJson(EU_GAS_KEY, true) as Promise<EuGasRaw | null>,
-      getCachedJson(IEA_KEY, true) as Promise<IeaRaw | null>,
-      getCachedJson(REFINERY_KEY, true) as Promise<RefineryRaw | null>,
-    ]);
+    const oilBatch = await getCachedJsonBatch([CRUDE_KEY, SPR_KEY, NAT_GAS_KEY, EU_GAS_KEY, IEA_KEY, REFINERY_KEY], true);
+    const crudeRaw = oilBatch.get(CRUDE_KEY) as CrudeRaw | null | undefined ?? null;
+    const sprRaw = oilBatch.get(SPR_KEY) as SprRaw | null | undefined ?? null;
+    const natGasRaw = oilBatch.get(NAT_GAS_KEY) as NatGasRaw | null | undefined ?? null;
+    const euGasRaw = oilBatch.get(EU_GAS_KEY) as unknown as EuGasRaw | null | undefined ?? null;
+    const ieaRaw = oilBatch.get(IEA_KEY) as IeaRaw | null | undefined ?? null;
+    const refineryRaw = oilBatch.get(REFINERY_KEY) as RefineryRaw | null | undefined ?? null;
 
     const crudeWeeks = crudeRaw?.weeks?.map((w) => ({
       period: w.period,
