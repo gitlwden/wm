@@ -88,6 +88,7 @@ async function exchangeCredentials(
     password,
     grant_type: 'password',
     client_id: ACLED_CLIENT_ID,
+    scope: 'authenticated',
   });
   const data = await requestAcledToken(body, 'exchange');
 
