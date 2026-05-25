@@ -6,7 +6,7 @@ import { resolveIso2, normalizeCountryToken } from './_country-resolver.mjs';
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'correlation:cards-bootstrap:v1';
-const CACHE_TTL = 1200; // 20min — outlives maxStaleMin:15 with buffer (cron runs every 5min)
+const CACHE_TTL = 25200; // 7h — covers the 6h workflow interval with buffer
 
 const INPUT_KEYS = [
   'military:flights:v1',
@@ -748,7 +748,7 @@ if (process.argv[1]?.endsWith('seed-correlation.mjs')) {
   
     declareRecords,
     schemaVersion: 1,
-    maxStaleMin: 15,
+    maxStaleMin: 420,
   }).catch((err) => {
     const _cause = err.cause ? ` (cause: ${err.cause.message || err.cause.code || err.cause})` : ''; console.error('FATAL:', (err.message || err) + _cause);
     process.exit(1);
