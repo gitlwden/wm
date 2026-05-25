@@ -749,7 +749,7 @@ const TOOL_REGISTRY: ToolDef[] = [
       // Step 2: summarize with LLM (budget: 18 s — combined 24 s, well under 30 s edge ceiling)
       const briefUrl = `${base}/api/news/v1/summarize-article`;
       const briefBody = JSON.stringify({
-        provider: 'openrouter',
+        provider: 'groq',
         headlines,
         bodies,
         mode: 'brief',
