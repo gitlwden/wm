@@ -61,7 +61,7 @@ export function getProviderCredentials(
     if (!apiKey) return null;
     return {
       apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
-      model: overrides.model || 'llama-3.1-70b-versatile',
+      model: overrides.model || 'llama-3.3-70b-versatile',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
