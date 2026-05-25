@@ -48,5 +48,8 @@ jobs:
         run: node scripts/seed-unrest-events.mjs
         continue-on-error: true
         env:
+          ACLED_EMAIL: ${{ secrets.ACLED_EMAIL_ADDRESS }}
+          ACLED_PASSWORD: ${{ secrets.ACLED_PASSWORD }}
+          ACLED_ACCESS_TOKEN: ${{ secrets.ACLED_ACCESS_TOKEN }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
