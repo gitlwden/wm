@@ -282,7 +282,12 @@ export class InsightsPanel extends Panel {
       this.setDataBadge('live');
       this.renderServerInsights({ ...serverInsights, topStories: sortedStories }, sentiments);
     } catch (error) {
-      console.error('[InsightsPanel] Server path error, falling back:', error);
+      console.error('[InsightsPanel] Server path error:', error);
+      // If badge is already 'live', data was rendered before the error — keep it.
+      // Falling back to updateFromClient would overwrite the 'live' badge with
+      // 'unavailable' (when no AI providers are enabled) while stale-but-valid
+      // server content remains visible, creating a confusing mismatch.
+      if (this.statusBadgeEl?.classList.contains('live')) return;
       await this.updateFromClient(clusters, thisGeneration);
     }
   }

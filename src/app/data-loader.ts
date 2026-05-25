@@ -1816,7 +1816,7 @@ export class DataLoaderManager implements AppModule {
       const { fetchForecasts } = await import('@/services/forecast');
       const forecasts = await fetchForecasts();
       this.callPanel('forecast', 'updateForecasts', forecasts);
-    } catch { /* premium feature, silent fail */ }
+    } catch { this.callPanel('forecast', 'updateForecasts', [] as import('@/services/forecast').Forecast[]); }
   }
 
   async loadSimulationOutcome(): Promise<void> {
