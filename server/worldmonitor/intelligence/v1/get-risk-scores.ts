@@ -12,7 +12,6 @@ import iso3ToIso2Json from '../../../../shared/iso3-to-iso2.json';
 import { getCachedJson, getCachedJsonBatch, setCachedJson, cachedFetchJsonWithMeta } from '../../../_shared/redis';
 import { CLIMATE_ANOMALIES_KEY } from '../../../_shared/cache-keys';
 import { TIER1_COUNTRIES } from './_shared';
-import { fetchAcledCached } from '../../../_shared/acled';
 
 // ========================================================================
 // Country risk baselines and multipliers
@@ -190,33 +189,18 @@ function emptySignals(): CountrySignals {
   };
 }
 
-async function fetchACLEDEvents(): Promise<Array<{ country: string; event_type: string; fatalities: number; daysAgo: number }>> {
-  const now = Date.now();
-  const today = new Date(now).toISOString().split('T')[0]!;
-  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
-  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]!;
-  const eventTypes = 'Protests|Riots|Battles|Explosions/Remote violence|Violence against civilians';
+/** Redis key for pre-computed GDELT conflict events (written by seed script). */
+const GDELT_CII_CACHE_KEY = 'conflict:gdelt:v1:cii';
 
-  // Two separate cached queries so each window has its own 1 000-event budget.
-  // A single 30-day request at limit:1500 silently drops tail events once the
-  // global count exceeds the cap; splitting ensures post-conflict countries
-  // (low recent activity, higher older activity) are not squeezed out.
-  const [recent, older] = await Promise.all([
-    fetchAcledCached({ eventTypes, startDate: sevenDaysAgo, endDate: today, limit: 1000 }),
-    fetchAcledCached({ eventTypes, startDate: thirtyDaysAgo, endDate: sevenDaysAgo, limit: 1000 }),
-  ]);
-
-  const toRow = (e: (typeof recent)[number]) => {
-    const eventMs = e.event_date ? new Date(e.event_date).getTime() : now;
-    return {
-      country: e.country || '',
-      event_type: e.event_type || '',
-      fatalities: parseInt(e.fatalities || '0', 10) || 0,
-      daysAgo: Math.max(0, Math.floor((now - eventMs) / (24 * 60 * 60 * 1000))),
-    };
-  };
-
-  return [...recent.map(toRow), ...older.map(toRow)];
+async function fetchConflictEvents(): Promise<Array<{ country: string; event_type: string; fatalities: number; daysAgo: number }>> {
+  try {
+    const cached = await getCachedJson(GDELT_CII_CACHE_KEY);
+    if (cached && typeof cached === 'object' && 'events' in (cached as Record<string, unknown>)) {
+      const events = (cached as { events: unknown[] }).events;
+      if (Array.isArray(events)) return events as Array<{ country: string; event_type: string; fatalities: number; daysAgo: number }>;
+    }
+  } catch { /* Redis miss — fall through to empty */ }
+  return [];
 }
 
 interface AuxiliarySources {
@@ -341,7 +325,7 @@ export function computeCIIScores(
     }
   }
 
-  // --- ACLED ingestion with fatality split and time decay ---
+  // --- Conflict event ingestion with fatality split and time decay (GDELT) ---
   // Events 0-7 days old: weight 1.0 (full impact)
   // Events 8-30 days old: weight 0.4 (partial — captures post-ceasefire/post-conflict tail)
   for (const ev of acled) {
@@ -608,7 +592,7 @@ export async function getRiskScores(
       RISK_CACHE_TTL,
       async () => {
         const [acled, aux] = await Promise.all([
-          fetchACLEDEvents(),
+          fetchConflictEvents(),
           fetchAuxiliarySources(),
         ]);
         const ciiScores = computeCIIScores(acled, aux);

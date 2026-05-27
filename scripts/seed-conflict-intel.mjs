@@ -4,7 +4,7 @@
  * Seed conflict + intelligence data to Redis.
  *
  * Seedable (fixed/predictable inputs):
- * - listAcledEvents (all countries, last 30 days)
+ * - GDELT conflict events (all countries, last 30 days)
  * - getHumanitarianSummary (top conflict countries)
  * - getPizzintStatus (base + gdelt variants)
  *
@@ -17,11 +17,13 @@
  */
 
 import { loadEnvFile, CHROME_UA, runSeed, writeExtraKeyWithMeta, sleep, loadSharedConfig } from './_seed-utils.mjs';
+import { fetchGdeltJson } from './_gdelt-fetch.mjs';
 
 loadEnvFile(import.meta.url);
 
-const ACLED_CACHE_KEY = 'conflict:acled:v1:all:0:0';
-const ACLED_TTL = 900;
+const GDELT_CACHE_KEY = 'conflict:gdelt:v1:all:0:0';
+const GDELT_CII_KEY = 'conflict:gdelt:v1:cii';
+const GDELT_TTL = 900;
 const HAPI_CACHE_KEY_PREFIX = 'conflict:humanitarian:v1';
 const HAPI_TTL = 21600;
 const PIZZINT_TTL = 600;
@@ -33,83 +35,120 @@ const CONFLICT_COUNTRIES = [
 
 const ISO2_TO_ISO3 = loadSharedConfig('iso2-to-iso3.json');
 
-// ─── ACLED Events ───
+// ─── GDELT Conflict Events ───
 
-async function fetchAcledToken() {
-  // Priority 1: ACLED_EMAIL + ACLED_PASSWORD -> OAuth flow (matches server/acled-auth.ts)
-  const email = process.env.ACLED_EMAIL?.trim();
-  const password = process.env.ACLED_PASSWORD?.trim();
-  if (email && password) {
-    const body = new URLSearchParams({
-      username: email, password, grant_type: 'password', client_id: 'acled',
-    });
-    const resp = await fetch('https://acleddata.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': CHROME_UA },
-      body,
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!resp.ok) throw new Error(`ACLED OAuth failed: HTTP ${resp.status}`);
-    const data = await resp.json();
-    if (data.access_token) return data.access_token;
-    throw new Error('ACLED OAuth response missing access_token');
-  }
-
-  // Priority 2: Static token fallback (legacy)
-  const staticToken = process.env.ACLED_ACCESS_TOKEN?.trim();
-  if (staticToken) return staticToken;
-
-  return null;
+/** Map GDELT location name to an event type. */
+function classifyEventType(name) {
+  const lower = name.toLowerCase();
+  if (lower.includes('bomb') || lower.includes('explos') || lower.includes('shell') || lower.includes('airstrik') || lower.includes('missil'))
+    return 'Explosions/Remote violence';
+  if (lower.includes('battle') || lower.includes('clash') || lower.includes('offensiv') || lower.includes('siege'))
+    return 'Battles';
+  if (lower.includes('attack') || lower.includes('kill') || lower.includes('massacr') || lower.includes('violence'))
+    return 'Violence against civilians';
+  return 'Battles';
 }
 
-async function fetchAcledEvents() {
-  const token = await fetchAcledToken();
-  if (!token) {
-    console.log('  ACLED: no credentials configured, skipping');
+/** Map event type to CII category. */
+function toCiiCategory(eventType) {
+  const lower = eventType.toLowerCase();
+  if (lower.includes('explosion') || lower.includes('remote')) return { type: 'Explosions/Remote violence', bucket: 'explosions' };
+  if (lower.includes('battle')) return { type: 'Battles', bucket: 'battles' };
+  if (lower.includes('violence')) return { type: 'Violence against civilians', bucket: 'civilianViolence' };
+  return { type: 'Battles', bucket: 'battles' };
+}
+
+function extractCountry(name) {
+  const parts = name.split(',').map(p => p.trim());
+  return parts[parts.length - 1] || name;
+}
+
+function extractAdmin1(name) {
+  const parts = name.split(',').map(p => p.trim());
+  return parts.length >= 2 ? parts[parts.length - 2] : '';
+}
+
+async function fetchGdeltConflictEvents() {
+  const params = new URLSearchParams({
+    query: 'battle OR explosion OR airstrike OR "violence against" OR shelling OR offensive',
+    maxrows: '2500',
+  });
+  const url = `https://api.gdeltproject.org/api/v1/gkg_geojson?${params}`;
+
+  let data;
+  try {
+    data = await fetchGdeltJson(url, { label: 'conflict-events', timeoutMs: 20_000, proxyMaxAttempts: 5 });
+  } catch (err) {
+    console.warn(`  GDELT conflict fetch failed: ${err.message}`);
     return null;
   }
 
+  const features = data?.features || [];
   const now = Date.now();
-  const startDate = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const endDate = new Date(now).toISOString().split('T')[0];
 
-  const params = new URLSearchParams({
-    event_type: 'Battles|Explosions/Remote violence|Violence against civilians',
-    event_date: `${startDate}|${endDate}`,
-    event_date_where: 'BETWEEN',
-    limit: '500',
-    _format: 'json',
-  });
+  // Aggregate by location cell (0.1° grid)
+  const cellMap = new Map();
+  for (const f of features) {
+    const name = f.properties?.name || '';
+    if (!name) continue;
 
-  const resp = await fetch(`https://acleddata.com/api/acled/read?${params}`, {
-    headers: { Accept: 'application/json', Authorization: `Bearer ${token}`, 'User-Agent': CHROME_UA },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!resp.ok) throw new Error(`ACLED HTTP ${resp.status}`);
-  const data = await resp.json();
-  if (data.error || data.message) throw new Error(data.error || data.message);
+    const coords = f.geometry?.coordinates;
+    if (!Array.isArray(coords) || coords.length < 2) continue;
+    const [lon, lat] = coords;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) continue;
 
-  const rawEvents = data.data || [];
-  const events = rawEvents
-    .filter(e => {
-      const lat = parseFloat(e.latitude || '');
-      const lon = parseFloat(e.longitude || '');
-      return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-    })
-    .map(e => ({
-      id: `acled-${e.event_id_cnty}`,
-      eventType: e.event_type || '',
-      country: e.country || '',
-      location: { latitude: parseFloat(e.latitude || '0'), longitude: parseFloat(e.longitude || '0') },
-      occurredAt: new Date(e.event_date || '').getTime(),
-      fatalities: parseInt(e.fatalities || '', 10) || 0,
-      actors: [e.actor1, e.actor2].filter(Boolean),
-      source: e.source || '',
-      admin1: e.admin1 || '',
-    }));
+    const key = `${Math.round(lat * 10)}:${Math.round(lon * 10)}`;
+    const existing = cellMap.get(key);
+    if (existing) {
+      existing.count++;
+      const tone = f.properties?.urltone ?? 0;
+      if (tone < existing.worstTone) existing.worstTone = tone;
+    } else {
+      cellMap.set(key, { name, lat, lon, count: 1, worstTone: f.properties?.urltone ?? 0 });
+    }
+  }
 
-  console.log(`  ACLED: ${events.length} events (${startDate} to ${endDate})`);
-  return { events, pagination: undefined };
+  // Build events for RPC handler
+  const events = [];
+  // Build per-country CII rows for risk scoring
+  const ciiCountryCounts = new Map(); // country -> { events: N, buckets: {battles, explosions, civilianViolence} }
+
+  for (const [, cell] of cellMap) {
+    if (cell.count < 3) continue;
+
+    const eventType = classifyEventType(cell.name);
+    const country = extractCountry(cell.name);
+
+    events.push({
+      id: `gdelt-${cell.lat.toFixed(2)}-${cell.lon.toFixed(2)}`,
+      eventType,
+      country,
+      location: { latitude: cell.lat, longitude: cell.lon },
+      occurredAt: now,
+      fatalities: 0,
+      actors: [],
+      source: 'GDELT',
+      admin1: extractAdmin1(cell.name),
+    });
+
+    // Accumulate CII counts per country
+    const { bucket } = toCiiCategory(eventType);
+    let agg = ciiCountryCounts.get(country);
+    if (!agg) { agg = { total: 0, battles: 0, explosions: 0, civilianViolence: 0 }; ciiCountryCounts.set(country, agg); }
+    agg.total += cell.count;
+    agg[bucket] = (agg[bucket] || 0) + cell.count;
+  }
+
+  // Build CII event rows — one per country bucket, proportional to count
+  const ciiEvents = [];
+  for (const [country, agg] of ciiCountryCounts) {
+    if (agg.battles > 0) ciiEvents.push({ country, event_type: 'Battles', fatalities: 0, daysAgo: 0 });
+    if (agg.explosions > 0) ciiEvents.push({ country, event_type: 'Explosions/Remote violence', fatalities: 0, daysAgo: 0 });
+    if (agg.civilianViolence > 0) ciiEvents.push({ country, event_type: 'Violence against civilians', fatalities: 0, daysAgo: 0 });
+  }
+
+  console.log(`  GDELT: ${features.length} mentions → ${events.length} conflict events, ${ciiEvents.length} CII rows`);
+  return { events, ciiEvents, pagination: undefined };
 }
 
 // ─── Humanitarian Summary (HAPI) ───
@@ -245,31 +284,32 @@ async function fetchGdeltTensions() {
 // ─── Main ───
 
 async function fetchAll() {
-  const [acled, hapi, pizzint, gdelt] = await Promise.allSettled([
-    fetchAcledEvents(),
+  const [gdelt, hapi, pizzint, tensions] = await Promise.allSettled([
+    fetchGdeltConflictEvents(),
     fetchAllHumanitarianSummaries(),
     fetchPizzintStatus(),
     fetchGdeltTensions(),
   ]);
 
-  const ac = acled.status === 'fulfilled' ? acled.value : null;
+  const gd = gdelt.status === 'fulfilled' ? gdelt.value : null;
   const ha = hapi.status === 'fulfilled' ? hapi.value : null;
   const pi = pizzint.status === 'fulfilled' ? pizzint.value : null;
-  const gd = gdelt.status === 'fulfilled' ? gdelt.value : null;
+  const tn = tensions.status === 'fulfilled' ? tensions.value : null;
 
-  if (acled.status === 'rejected') console.warn(`  ACLED failed: ${acled.reason?.message || acled.reason}`);
+  if (gdelt.status === 'rejected') console.warn(`  GDELT failed: ${gdelt.reason?.message || gdelt.reason}`);
   if (hapi.status === 'rejected') console.warn(`  HAPI failed: ${hapi.reason?.message || hapi.reason}`);
   if (pizzint.status === 'rejected') console.warn(`  PizzINT failed: ${pizzint.reason?.message || pizzint.reason}`);
-  if (gdelt.status === 'rejected') console.warn(`  GDELT failed: ${gdelt.reason?.message || gdelt.reason}`);
+  if (tensions.status === 'rejected') console.warn(`  GDELT tensions failed: ${tensions.reason?.message || tensions.reason}`);
 
-  if (!ac && !ha && !pi) throw new Error('All conflict/intel fetches failed');
+  if (!gd && !ha && !pi) throw new Error('All conflict/intel fetches failed');
 
   // Write secondary keys BEFORE returning (runSeed calls process.exit after primary write)
+  if (gd?.ciiEvents) await writeExtraKeyWithMeta(GDELT_CII_KEY, { events: gd.ciiEvents }, GDELT_TTL, gd.ciiEvents.length);
   if (ha) { for (const [cc, data] of Object.entries(ha)) await writeExtraKeyWithMeta(`${HAPI_CACHE_KEY_PREFIX}:${cc}`, data, HAPI_TTL, 1); }
   if (pi) await writeExtraKeyWithMeta('intel:pizzint:v1:base', { pizzint: pi, tensionPairs: [] }, PIZZINT_TTL, pi.locationsMonitored ?? 0);
-  if (pi && gd) await writeExtraKeyWithMeta('intel:pizzint:v1:gdelt', { pizzint: pi, tensionPairs: gd }, PIZZINT_TTL, gd.length ?? 0);
+  if (pi && tn) await writeExtraKeyWithMeta('intel:pizzint:v1:gdelt', { pizzint: pi, tensionPairs: tn }, PIZZINT_TTL, tn.length ?? 0);
 
-  return ac || { events: [], pagination: undefined };
+  return gd ? { events: gd.events, pagination: gd.pagination } : { events: [], pagination: undefined };
 }
 
 function validate(data) {
@@ -280,12 +320,12 @@ export function declareRecords(data) {
   return Array.isArray(data?.events) ? data.events.length : 0;
 }
 
-runSeed('conflict', 'acled-intel', ACLED_CACHE_KEY, fetchAll, {
+runSeed('conflict', 'gdelt-intel', GDELT_CACHE_KEY, fetchAll, {
   validateFn: validate,
-  ttlSeconds: ACLED_TTL,
-  sourceVersion: 'acled-hapi-pizzint',
+  ttlSeconds: GDELT_TTL,
+  sourceVersion: 'gdelt-hapi-pizzint',
   declareRecords,
-  schemaVersion: 1,
+  schemaVersion: 2,
   maxStaleMin: 38,
 }).catch((err) => {
   const _cause = err.cause ? ` (cause: ${err.cause.message || err.cause.code || err.cause})` : ''; console.error('FATAL:', (err.message || err) + _cause);

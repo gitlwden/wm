@@ -1,34 +1,15 @@
 #!/usr/bin/env node
 
 import { loadEnvFile, CHROME_UA, runSeed, httpsProxyFetchRaw, resolveProxyForConnect, describeErr } from './_seed-utils.mjs';
-import { getAcledToken } from './shared/acled-oauth.mjs';
 
 loadEnvFile(import.meta.url);
 
 const GDELT_GKG_URL = 'https://api.gdeltproject.org/api/v1/gkg_geojson';
-const ACLED_API_URL = 'https://acleddata.com/api/acled/read';
 const CANONICAL_KEY = 'unrest:events:v1';
-const CACHE_TTL = 16200; // 4.5h — 6x the 45 min cron interval (was 1.3x)
+const CACHE_TTL = 16200; // 4.5h
 const MAX_SOURCE_URLS = 5;
 
-// ---------- ACLED Event Type Mapping (from _shared.ts) ----------
-
-function mapAcledEventType(eventType, subEventType) {
-  const lower = (eventType + ' ' + subEventType).toLowerCase();
-  if (lower.includes('riot') || lower.includes('mob violence')) return 'UNREST_EVENT_TYPE_RIOT';
-  if (lower.includes('strike')) return 'UNREST_EVENT_TYPE_STRIKE';
-  if (lower.includes('demonstration')) return 'UNREST_EVENT_TYPE_DEMONSTRATION';
-  if (lower.includes('protest')) return 'UNREST_EVENT_TYPE_PROTEST';
-  return 'UNREST_EVENT_TYPE_CIVIL_UNREST';
-}
-
-// ---------- Severity Classification (from _shared.ts) ----------
-
-function classifySeverity(fatalities, eventType) {
-  if (fatalities > 0 || eventType.toLowerCase().includes('riot')) return 'SEVERITY_LEVEL_HIGH';
-  if (eventType.toLowerCase().includes('protest')) return 'SEVERITY_LEVEL_MEDIUM';
-  return 'SEVERITY_LEVEL_LOW';
-}
+// ---------- Severity Classification ----------
 
 function classifyGdeltSeverity(count, name) {
   const lowerName = name.toLowerCase();
@@ -64,15 +45,6 @@ function uniqueSourceUrls(values) {
   return [...new Set(values.map(normalizeSourceUrl).filter(Boolean))];
 }
 
-function extractAcledSourceUrls(event) {
-  return mergeSourceUrls([
-    event.source_url,
-    event.sourceUrl,
-    event.url,
-    event.link,
-  ]);
-}
-
 function extractGdeltSourceUrls(properties = {}) {
   return mergeSourceUrls([
     properties.url,
@@ -89,38 +61,7 @@ function mergeSourceUrls(...groups) {
   return uniqueSourceUrls(groups.flatMap((group) => Array.isArray(group) ? group : [])).slice(0, MAX_SOURCE_URLS);
 }
 
-// ---------- Deduplication (from _shared.ts) ----------
-
-function deduplicateEvents(events) {
-  const unique = new Map();
-  for (const event of events) {
-    const lat = event.location?.latitude ?? 0;
-    const lon = event.location?.longitude ?? 0;
-    const latKey = Math.round(lat * 10) / 10;
-    const lonKey = Math.round(lon * 10) / 10;
-    const dateKey = new Date(event.occurredAt).toISOString().split('T')[0];
-    const key = `${latKey}:${lonKey}:${dateKey}`;
-
-    const existing = unique.get(key);
-    if (!existing) {
-      unique.set(key, event);
-    } else if (event.sourceType === 'UNREST_SOURCE_TYPE_ACLED' && existing.sourceType !== 'UNREST_SOURCE_TYPE_ACLED') {
-      event.sources = [...new Set([...event.sources, ...existing.sources])];
-      event.sourceUrls = mergeSourceUrls(event.sourceUrls, existing.sourceUrls);
-      unique.set(key, event);
-    } else if (existing.sourceType === 'UNREST_SOURCE_TYPE_ACLED') {
-      existing.sources = [...new Set([...existing.sources, ...event.sources])];
-      existing.sourceUrls = mergeSourceUrls(existing.sourceUrls, event.sourceUrls);
-    } else {
-      existing.sources = [...new Set([...existing.sources, ...event.sources])];
-      existing.sourceUrls = mergeSourceUrls(existing.sourceUrls, event.sourceUrls);
-      if (existing.sources.length >= 2) existing.confidence = 'CONFIDENCE_LEVEL_HIGH';
-    }
-  }
-  return Array.from(unique.values());
-}
-
-// ---------- Sort (from _shared.ts) ----------
+// ---------- Sort ----------
 
 function sortBySeverityAndRecency(events) {
   const severityOrder = {
@@ -134,76 +75,6 @@ function sortBySeverityAndRecency(events) {
     if (sevDiff !== 0) return sevDiff;
     return b.occurredAt - a.occurredAt;
   });
-}
-
-// ---------- ACLED Fetch ----------
-
-async function fetchAcledProtests() {
-  const token = await getAcledToken({ userAgent: CHROME_UA });
-  if (!token) {
-    console.log('  ACLED: no credentials configured, skipping');
-    return [];
-  }
-
-  const now = Date.now();
-  const startDate = new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  const endDate = new Date(now).toISOString().split('T')[0];
-
-  const params = new URLSearchParams({
-    event_type: 'Protests',
-    event_date: `${startDate}|${endDate}`,
-    event_date_where: 'BETWEEN',
-    limit: '500',
-    _format: 'json',
-  });
-
-  const resp = await fetch(`${ACLED_API_URL}?${params}`, {
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${token}`,
-      'User-Agent': CHROME_UA,
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  if (!resp.ok) throw new Error(`ACLED API error: ${resp.status}`);
-  const data = await resp.json();
-  if (data.message || data.error) throw new Error(data.message || data.error || 'ACLED API error');
-
-  const rawEvents = data.data || [];
-  console.log(`  ACLED: ${rawEvents.length} raw events`);
-
-  return rawEvents
-    .filter((e) => {
-      const lat = parseFloat(e.latitude || '');
-      const lon = parseFloat(e.longitude || '');
-      return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-    })
-    .map((e) => {
-      const fatalities = parseInt(e.fatalities || '', 10) || 0;
-      return {
-        id: `acled-${e.event_id_cnty}`,
-        title: e.notes?.slice(0, 200) || `${e.sub_event_type} in ${e.location}`,
-        summary: typeof e.notes === 'string' ? e.notes.substring(0, 500) : '',
-        eventType: mapAcledEventType(e.event_type || '', e.sub_event_type || ''),
-        city: e.location || '',
-        country: e.country || '',
-        region: e.admin1 || '',
-        location: {
-          latitude: parseFloat(e.latitude || '0'),
-          longitude: parseFloat(e.longitude || '0'),
-        },
-        occurredAt: new Date(e.event_date || '').getTime(),
-        severity: classifySeverity(fatalities, e.event_type || ''),
-        fatalities,
-        sources: [e.source].filter(Boolean),
-        sourceType: 'UNREST_SOURCE_TYPE_ACLED',
-        tags: e.tags?.split(';').map((t) => t.trim()).filter(Boolean) ?? [],
-        actors: [e.actor1, e.actor2].filter(Boolean),
-        confidence: 'CONFIDENCE_LEVEL_HIGH',
-        sourceUrls: extractAcledSourceUrls(e),
-      };
-    });
 }
 
 // ---------- GDELT Fetch ----------
@@ -341,18 +212,10 @@ export async function fetchGdeltEvents(opts = {}) {
 // ---------- Main Fetch ----------
 
 async function fetchUnrestEvents() {
-  const results = await Promise.allSettled([fetchAcledProtests(), fetchGdeltEvents()]);
+  const gdeltEvents = await fetchGdeltEvents();
+  const sorted = sortBySeverityAndRecency(gdeltEvents);
 
-  const acledEvents = results[0].status === 'fulfilled' ? results[0].value : [];
-  const gdeltEvents = results[1].status === 'fulfilled' ? results[1].value : [];
-
-  if (results[0].status === 'rejected') console.log(`  ACLED failed: ${describeErr(results[0].reason)}`);
-  if (results[1].status === 'rejected') console.log(`  GDELT failed: ${describeErr(results[1].reason)}`);
-
-  const merged = deduplicateEvents([...acledEvents, ...gdeltEvents]);
-  const sorted = sortBySeverityAndRecency(merged);
-
-  console.log(`  Merged: ${acledEvents.length} ACLED + ${gdeltEvents.length} GDELT = ${sorted.length} deduplicated`);
+  console.log(`  GDELT: ${gdeltEvents.length} events (GDELT-only)`);
 
   return { events: sorted, clusters: [], pagination: undefined };
 }
@@ -374,10 +237,10 @@ if (isMain) {
   runSeed('unrest', 'events', CANONICAL_KEY, fetchUnrestEvents, {
     validateFn: validate,
     ttlSeconds: CACHE_TTL,
-    sourceVersion: 'acled+gdelt',
+    sourceVersion: 'gdelt',
 
     declareRecords,
-    schemaVersion: 1,
+    schemaVersion: 2,
     maxStaleMin: 120,
   }).catch((err) => {
     const _cause = err.cause ? ` (cause: ${err.cause.message || err.cause.code || err.cause})` : ''; console.error('FATAL:', (err.message || err) + _cause);

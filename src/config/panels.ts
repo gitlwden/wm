@@ -1211,7 +1211,7 @@ export const LAYER_TO_SOURCE: Partial<Record<keyof MapLayers, DataSourceId[]>> =
   weather: ['weather'],
   outages: ['outages'],
   cyberThreats: ['cyber_threats'],
-  protests: ['acled', 'gdelt_doc'],
+  protests: ['gdelt_doc'],
   ucdpEvents: ['ucdp_events'],
   displacement: ['unhcr'],
   climate: ['climate'],
