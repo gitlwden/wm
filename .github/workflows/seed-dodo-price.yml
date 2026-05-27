@@ -1,0 +1,26 @@
+name: Seed Dodo Price
+
+on:
+  schedule:
+    - cron: '30 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Seed dodo prices
+        run: node scripts/seed-dodo-price.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          DODO_API_KEY: ${{ secrets.DODO_API_KEY }}
+          DODO_PAYMENTS_ENVIRONMENT: ${{ secrets.DODO_PAYMENTS_ENVIRONMENT }}

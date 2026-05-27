@@ -34,3 +34,7 @@ jobs:
       - name: Seed GSCPI
         run: node scripts/seed-gscpi.mjs
         continue-on-error: true
+
+      - name: Seed USNI fleet
+        run: node scripts/seed-usni-fleet.mjs
+        continue-on-error: true
