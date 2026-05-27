@@ -30,6 +30,8 @@ import { jsonResponse } from './_json-response.js';
 import { readRawJsonFromUpstash } from './_upstash-json.js';
 // @ts-expect-error — JS module, no declaration file
 import { captureSilentError } from './_sentry-edge.js';
+// @ts-expect-error — JS module, no declaration file
+import { validateApiKey } from './_api-key.js';
 import { validateBearerToken } from '../server/auth-session';
 import { getEntitlements } from '../server/_shared/entitlement-check';
 import { signBriefUrl, BriefUrlError } from '../server/_shared/brief-url';
@@ -129,29 +131,52 @@ export default async function handler(
 
   const authHeader = req.headers.get('Authorization') ?? '';
   const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (!jwt) {
-    return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
+
+  // Development mode: skip auth when WM_SESSION_SECRET is not set (mirrors bootstrap.js).
+  const isDev = !process.env.WM_SESSION_SECRET;
+
+  let userId: string | null = null;
+
+  if (isDev) {
+    // Dev mode: use userId from query param or fall back to 'dev-user'.
+    const urlForDev = new URL(req.url);
+    userId = urlForDev.searchParams.get('userId') || 'dev-user';
+  } else if (jwt) {
+    // Clerk JWT path — authoritative user identity + entitlement.
+    const session = await validateBearerToken(jwt);
+    if (!session.valid || !session.userId) {
+      return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
+    }
+    userId = session.userId;
+
+    const ent = await getEntitlements(userId);
+    if (!ent || ent.features.tier < 1) {
+      return jsonResponse(
+        {
+          error: 'pro_required',
+          message: 'The Brief is available on the Pro plan.',
+          upgradeUrl: 'https://worldmonitor.app/pro',
+        },
+        403,
+        cors,
+      );
+    }
+  } else {
+    // API key path — enterprise / tester keys bypass entitlement.
+    const apiKeyResult = await validateApiKey(req);
+    if (!apiKeyResult.valid) {
+      return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
+    }
+    // API keys carry no user identity; the client may supply userId
+    // via query parameter. Fall back to env-configured default or
+    // 'api-key-user' so the endpoint doesn't hard-fail.
+    const urlForUser = new URL(req.url);
+    userId = urlForUser.searchParams.get('userId')
+      || process.env.BRIEF_DEFAULT_USER_ID
+      || 'api-key-user';
   }
 
-  const session = await validateBearerToken(jwt);
-  if (!session.valid || !session.userId) {
-    return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
-  }
-
-  const ent = await getEntitlements(session.userId);
-  if (!ent || ent.features.tier < 1) {
-    return jsonResponse(
-      {
-        error: 'pro_required',
-        message: 'The Brief is available on the Pro plan.',
-        upgradeUrl: 'https://worldmonitor.app/pro',
-      },
-      403,
-      cors,
-    );
-  }
-
-  const secret = process.env.BRIEF_URL_SIGNING_SECRET ?? '';
+  const secret = process.env.BRIEF_URL_SIGNING_SECRET || (isDev ? 'dev-only-signing-secret' : '');
   if (!secret) {
     console.error('[api/latest-brief] BRIEF_URL_SIGNING_SECRET is not configured');
     return jsonResponse({ error: 'service_unavailable' }, 503, cors);
@@ -171,9 +196,9 @@ export default async function handler(
   let issueSlot: string | null = null;
   let preview: BriefPreview | null = null;
   try {
-    const targetSlot = requestedSlot ?? (await readLatestPointer(session.userId));
+    const targetSlot = requestedSlot ?? (await readLatestPointer(userId));
     if (targetSlot) {
-      const hit = await readBriefPreview(session.userId, targetSlot, ctx);
+      const hit = await readBriefPreview(userId, targetSlot, ctx);
       if (hit) {
         issueSlot = targetSlot;
         preview = hit;
@@ -215,7 +240,7 @@ export default async function handler(
   let magazineUrl: string;
   try {
     magazineUrl = await signBriefUrl({
-      userId: session.userId,
+      userId: userId,
       issueDate: issueSlot,
       baseUrl: publicBaseUrl(req),
       secret,

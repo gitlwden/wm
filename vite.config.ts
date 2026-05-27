@@ -256,6 +256,7 @@ function sebufApiPlugin(): Plugin {
   let cachedCorsMod: any = null;
   let cachedBootstrapHandler: any = null;
   let cachedChatAnalystHandler: any = null;
+  let cachedLatestBriefHandler: any = null;
 
   async function buildRouter() {
     const [
@@ -469,6 +470,40 @@ if (req.url?.startsWith('/api/chat-analyst')) {
     return;
   } catch (err) {
     console.error('[chat-analyst] Error:', err);
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Internal server error' }));
+    return;
+  }
+}
+// Handle /api/latest-brief requests directly
+if (req.url?.startsWith('/api/latest-brief')) {
+  console.log('[latest-brief] Handler hit:', req.url);
+  if (!cachedLatestBriefHandler) {
+    console.log('[latest-brief] Importing handler...');
+    cachedLatestBriefHandler = await import('./api/latest-brief.ts');
+    console.log('[latest-brief] Handler imported:', typeof cachedLatestBriefHandler.default);
+  }
+  try {
+    const port = server.config.server.port || 3000;
+    const url = new URL(req.url, `http://localhost:${port}`);
+    const webRequest = new Request(url.toString(), {
+      method: req.method || 'GET',
+      headers: req.headers as Record<string, string>,
+    });
+    console.log('[latest-brief] Calling handler...');
+    const response = await cachedLatestBriefHandler.default(webRequest);
+    console.log('[latest-brief] Response status:', response.status);
+    res.statusCode = response.status;
+    response.headers.forEach((value: string, key: string) => {
+      res.setHeader(key, value);
+    });
+    const bodyText = await response.text();
+    console.log('[latest-brief] Response body:', bodyText.slice(0, 200));
+    res.end(bodyText);
+    return;
+  } catch (err) {
+    console.error('[latest-brief] Error:', err);
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'Internal server error' }));

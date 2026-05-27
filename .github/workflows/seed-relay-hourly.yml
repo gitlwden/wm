@@ -1,0 +1,48 @@
+name: Seed Relay (Hourly)
+
+# Replaces Railway cron for hourly seeds.
+# Bundled into one workflow to reduce Upstash connection overhead.
+
+on:
+  schedule:
+    - cron: '5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Seed WSB tickers
+        run: node scripts/seed-wsb-tickers.mjs
+        continue-on-error: true
+
+      - name: Seed UCDP events
+        run: node scripts/seed-ucdp-events.mjs
+        continue-on-error: true
+
+      - name: Seed USA spending
+        run: node scripts/seed-usa-spending.mjs
+        continue-on-error: true
+
+      - name: Seed chokepoint flows
+        run: node scripts/seed-chokepoint-flows.mjs
+        continue-on-error: true
+
+      - name: Seed classify
+        run: node scripts/seed-classify.mjs
+        continue-on-error: true
+
+      - name: Seed corridor risk
+        run: node scripts/seed-corridor-risk.mjs
+        continue-on-error: true

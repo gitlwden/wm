@@ -62,22 +62,32 @@ export class WsbTickerScannerPanel extends Panel {
 
   public async fetchData(): Promise<boolean> {
     const hydrated = getHydratedData('wsbTickers') as { tickers?: WsbTicker[] } | undefined;
+    console.log('[WSB] hydrated:', hydrated ? `keys=${Object.keys(hydrated)}` : 'undefined');
     if (hydrated?.tickers?.length) {
       this.updateData(hydrated.tickers);
       return true;
     }
     try {
-      const resp = await fetch(toApiUrl('/api/bootstrap?keys=wsbTickers'), {
+      const bootstrapUrl = toApiUrl('/api/bootstrap?keys=wsbTickers');
+      console.log('[WSB] fetching:', bootstrapUrl);
+      const resp = await fetch(bootstrapUrl, {
         signal: AbortSignal.timeout(5_000),
       });
+      console.log('[WSB] response:', resp.status, resp.ok);
       if (resp.ok) {
-        const { data } = (await resp.json()) as { data: { wsbTickers?: { tickers?: WsbTicker[] } } };
+        const json = await resp.json();
+        console.log('[WSB] json keys:', Object.keys(json), 'data keys:', json.data ? Object.keys(json.data) : 'none');
+        const { data } = json as { data: { wsbTickers?: { tickers?: WsbTicker[] } } };
         if (data.wsbTickers?.tickers?.length) {
           this.updateData(data.wsbTickers.tickers);
           return true;
         }
+        console.log('[WSB] no tickers in response. wsbTickers:', JSON.stringify(data.wsbTickers)?.slice(0, 200));
+      } else {
+        const body = await resp.text();
+        console.log('[WSB] error body:', body.slice(0, 200));
       }
-    } catch { /* fallback failed */ }
+    } catch (e) { console.error('[WSB] fetch error:', e); }
     this.showError('No ticker data available yet', () => { void this.fetchData(); }, 60);
     return false;
   }

@@ -1,0 +1,36 @@
+name: Seed Relay (Slow)
+
+# Replaces Railway cron for low-frequency seeds (6h+ cadence).
+# Bundled into one workflow to reduce Upstash connection overhead.
+
+on:
+  schedule:
+    - cron: '30 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Seed satellites
+        run: node scripts/seed-satellites.mjs
+        continue-on-error: true
+
+      - name: Seed tech events
+        run: node scripts/seed-tech-events-standalone.mjs
+        continue-on-error: true
+
+      - name: Seed GSCPI
+        run: node scripts/seed-gscpi.mjs
+        continue-on-error: true

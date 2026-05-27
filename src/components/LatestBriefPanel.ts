@@ -20,7 +20,7 @@
  */
 
 import { Panel } from './Panel';
-import { getClerkToken, clearClerkTokenCache } from '@/services/clerk';
+import { clearClerkTokenCache } from '@/services/clerk';
 import { PanelGateReason, hasPremiumAccess } from '@/services/panel-gating';
 import { getAuthState, subscribeAuthState } from '@/services/auth-state';
 import { hasTier, getEntitlementState } from '@/services/entitlements';
@@ -175,31 +175,13 @@ export class LatestBriefPanel extends Panel {
     // Check #1: gate before starting.
     const authState = getAuthState();
     if (this.gateLocked || !hasPremiumAccess(authState)) return;
-    // Per-user endpoint needs a Clerk userId. Desktop API key +
-    // browser tester keys satisfy hasPremiumAccess but don't bind
-    // to a Clerk user, so there's nothing to fetch.
+    // Track the Clerk userId if present, but don't require it —
+    // API key auth (from .env.local / runtime config) is an
+    // alternative path that doesn't bind to a Clerk session.
     const requestUserId = authState.user?.id ?? null;
-    if (!requestUserId) {
-      this.renderSignInRequired();
-      return;
-    }
     // Client-side entitlement is NOT authoritative. /api/latest-brief
-    // does its own server-side entitlement check against the Clerk
-    // JWT — that IS the source of truth. We only use the client
-    // snapshot for AFFIRMATIVE DENIAL: skip the doomed fetch when
-    // we KNOW the user is free. If the snapshot is missing, stale,
-    // or the Convex subscription failed to establish, we fall
-    // through and let the server decide. The server's 403 response
-    // is translated to renderUpgradeRequired() in the catch block
-    // below (via BriefAccessError).
-    //
-    // Consequence: an API-key-only user with a free Clerk account
-    // will fire one doomed fetch per refresh and see the upgrade
-    // CTA a beat later than they would with a client-side gate.
-    // Accepted — the alternative (trusting the client snapshot as
-    // a gate) locked legitimate Pro users out whenever the Convex
-    // entitlement subscription was skipped or failed, which is a
-    // worse failure mode.
+    // does its own server-side entitlement check — skip the doomed
+    // fetch only when we KNOW the user is free.
     if (getEntitlementState() !== null && !hasTier(1)) {
       this.renderUpgradeRequired();
       return;
@@ -208,14 +190,9 @@ export class LatestBriefPanel extends Panel {
     const controller = new AbortController();
     this.inflightAbort = controller;
     try {
-      const data = await this.fetchLatest(controller.signal);
-      // Check #3 (post-response): verify we're still on the SAME
-      // user AND still unlocked. A Clerk account switch during the
-      // await (A→B) would otherwise paint user A's brief into user
-      // B's session because getClerkToken caches for up to 50s
-      // across account changes.
+      const data = await this.fetchLatest(controller.signal, requestUserId);
       if (this.gateLocked || !hasPremiumAccess(getAuthState())) return;
-      if ((getAuthState().user?.id ?? null) !== requestUserId) return;
+      if (requestUserId && (getAuthState().user?.id ?? null) !== requestUserId) return;
       if (data.status === 'ready') {
         this.renderReady(data);
       } else {
@@ -225,7 +202,7 @@ export class LatestBriefPanel extends Panel {
       // AbortError comes from showGatedCta's abort() → render nothing.
       if ((err as { name?: string } | null)?.name === 'AbortError') return;
       if (this.gateLocked || !hasPremiumAccess(getAuthState())) return;
-      if ((getAuthState().user?.id ?? null) !== requestUserId) return;
+      if (requestUserId && (getAuthState().user?.id ?? null) !== requestUserId) return;
       // Structured access errors render a terminal CTA, not a retry
       // error — retrying a 401 or 403 can't flip the outcome.
       if (err instanceof BriefAccessError) {
@@ -275,37 +252,30 @@ export class LatestBriefPanel extends Panel {
     }
   }
 
-  private async fetchLatest(signal: AbortSignal): Promise<LatestBriefResponse> {
-    // /api/latest-brief is user-scoped and Bearer-only. premiumFetch
-    // short-circuits on desktop WORLDMONITOR_API_KEY / tester keys
-    // and never sends Clerk, producing a 401 we can't recover from.
-    // Always mint a fresh Bearer here — the refresh() pre-check
-    // guaranteed authState.user exists.
-    const token = await getClerkToken();
-    if (!token) {
-      // Clerk token evicted between the pre-check and now (logout,
-      // cache expiry + Clerk session gone). Surface as sign-in.
-      throw new Error('Sign in to view your brief.');
-    }
-    const res = await fetch(LATEST_BRIEF_ENDPOINT, {
-      signal,
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  private async fetchLatest(signal: AbortSignal, requestUserId: string | null): Promise<LatestBriefResponse> {
+    // Let the runtime fetch patch inject auth (API key from .env.local
+    // or Clerk Bearer token). Don't send an explicit Authorization
+    // header — the patch enriches /api/* requests automatically.
+    // Pass userId as query param so the server can resolve the brief
+    // when authenticating via API key (which carries no user identity).
+    const params = requestUserId ? `?userId=${encodeURIComponent(requestUserId)}` : '';
+    const res = await fetch(`${LATEST_BRIEF_ENDPOINT}${params}`, { signal });
     if (res.status === 401) {
       throw new BriefAccessError('sign_in_required');
     }
     if (res.status === 403) {
-      // Server says the Clerk userId is not Pro. This can happen
-      // when the client's authState says role=pro but the server's
-      // entitlement source (Convex) disagrees, or when the Clerk
-      // plan claim goes stale. Surface as upgrade CTA — not a
-      // retryable error, since retrying won't flip entitlement.
       throw new BriefAccessError('upgrade_required');
     }
     if (!res.ok) {
       throw new Error(`Brief service unavailable (${res.status})`);
     }
-    const body = (await res.json()) as LatestBriefResponse;
+    const text = await res.text();
+    let body: LatestBriefResponse;
+    try {
+      body = JSON.parse(text) as LatestBriefResponse;
+    } catch {
+      throw new Error(`Brief service returned invalid response`);
+    }
     if (!body || (body.status !== 'ready' && body.status !== 'composing')) {
       throw new Error('Unexpected response from brief service');
     }

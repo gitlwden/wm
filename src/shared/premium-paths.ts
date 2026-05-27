@@ -5,6 +5,8 @@
  * and the web client runtime (token injection).
  */
 export const PREMIUM_RPC_PATHS = new Set<string>([
+  '/api/latest-brief',
+  '/api/bootstrap',
   '/api/market/v1/analyze-stock',
   '/api/market/v1/get-stock-analysis-history',
   '/api/market/v1/backtest-stock',

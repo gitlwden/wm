@@ -1,0 +1,37 @@
+name: Seed Digest & Brief
+
+on:
+  schedule:
+    # Every 30min — digest dispatch + brief compose
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # scripts/ has its own package.json for resend, convex, etc.
+      - run: npm ci --prefix scripts
+
+      - name: Seed digest notifications + brief compose
+        run: node scripts/seed-digest-notifications.mjs
+        continue-on-error: true
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          CONVEX_URL: ${{ secrets.CONVEX_URL }}
+          RELAY_SHARED_SECRET: ${{ secrets.RELAY_SHARED_SECRET }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          BRIEF_URL_SIGNING_SECRET: ${{ secrets.BRIEF_URL_SIGNING_SECRET }}
+          WORLDMONITOR_PUBLIC_BASE_URL: ${{ secrets.WORLDMONITOR_PUBLIC_BASE_URL }}

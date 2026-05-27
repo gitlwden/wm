@@ -1,0 +1,44 @@
+name: Seed Relay (Frequent)
+
+# Replaces Railway cron for high-frequency seeds (10-30min cadence).
+# Bundled into one workflow to reduce Upstash connection overhead.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Seed positive events
+        run: node scripts/seed-positive-events.mjs
+        continue-on-error: true
+
+      - name: Seed theater posture
+        run: node scripts/seed-theater-posture.mjs
+        continue-on-error: true
+
+      - name: Seed shipping stress
+        run: node scripts/seed-shipping-stress.mjs
+        continue-on-error: true
+
+      - name: Seed service statuses
+        run: node scripts/seed-service-statuses.mjs
+        continue-on-error: true
+
+      - name: Seed weather alerts
+        run: node scripts/seed-weather-alerts.mjs
+        continue-on-error: true
