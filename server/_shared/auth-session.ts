@@ -27,6 +27,15 @@ export interface ClerkSession {
  * Fail-open: errors are logged but never thrown.
  */
 export async function resolveClerkSession(request: Request): Promise<ClerkSession | null> {
+  // Dev mode: when no Clerk is configured, return dev-user for any bearer token.
+  if (!process.env.CLERK_JWT_ISSUER_DOMAIN) {
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader?.startsWith('Bearer ')) {
+      return { userId: 'dev-user', orgId: null };
+    }
+    return null;
+  }
+
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) return null;

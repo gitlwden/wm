@@ -95,6 +95,11 @@ async function lookupPlanFromClerk(userId: string): Promise<'free' | 'pro'> {
  * Fails closed: invalid/expired/unverifiable tokens return { valid: false }.
  */
 export async function validateBearerToken(token: string): Promise<SessionResult> {
+  // Dev mode: when no Clerk is configured, accept any token as a pro dev-user.
+  if (!CLERK_JWT_ISSUER_DOMAIN) {
+    return { valid: true, userId: 'dev-user', role: 'pro', name: 'Dev User', email: 'dev@localhost' };
+  }
+
   const jwks = getJWKS();
   if (!jwks) return { valid: false };
 

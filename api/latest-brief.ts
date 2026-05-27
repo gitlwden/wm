@@ -132,8 +132,8 @@ export default async function handler(
   const authHeader = req.headers.get('Authorization') ?? '';
   const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
 
-  // Development mode: skip auth when WM_SESSION_SECRET is not set (mirrors bootstrap.js).
-  const isDev = !process.env.WM_SESSION_SECRET;
+  // Development mode: skip auth when CLERK_JWT_ISSUER_DOMAIN is not set.
+  const isDev = !process.env.CLERK_JWT_ISSUER_DOMAIN;
 
   let userId: string | null = null;
 

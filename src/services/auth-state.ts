@@ -16,11 +16,11 @@ export interface AuthSession {
   isPending: boolean;
 }
 
-// Default admin pro user
+// Default admin pro user (dev mode — must match server/auth-session.ts dev-user)
 const FAKE_PRO_USER: AuthUser = {
-  id: 'fake-admin-001',
-  name: 'Admin',
-  email: 'admin@localhost',
+  id: 'dev-user',
+  name: 'Dev User',
+  email: 'dev@localhost',
   image: null,
   role: 'pro',
 };
