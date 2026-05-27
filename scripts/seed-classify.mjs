@@ -22,39 +22,57 @@ if (!UPSTASH_URL || !UPSTASH_TOKEN) {
   process.exit(1);
 }
 
-async function redisSet(key, value, ttlSeconds) {
-  try {
-    const body = JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(ttlSeconds)]);
-    const resp = await fetch(UPSTASH_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-      body,
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!resp.ok) return false;
-    const data = await resp.json();
-    return data?.result === 'OK';
-  } catch { return false; }
+async function redisSet(key, value, ttlSeconds, retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const body = JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(ttlSeconds)]);
+      const resp = await fetch(UPSTASH_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!resp.ok) {
+        if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
+        return false;
+      }
+      const data = await resp.json();
+      return data?.result === 'OK';
+    } catch (e) {
+      if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
+      return false;
+    }
+  }
+  return false;
 }
 
-async function redisMGet(keys) {
+async function redisMGet(keys, retries = 3) {
   if (!keys.length) return [];
-  try {
-    const url = new URL('/pipeline', UPSTASH_URL);
-    const body = JSON.stringify(keys.map((k) => ['GET', k]));
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-      body,
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!resp.ok) return keys.map(() => null);
-    const parsed = await resp.json();
-    return parsed.map((r) => {
-      if (!r?.result) return null;
-      try { return JSON.parse(r.result); } catch { return null; }
-    });
-  } catch { return keys.map(() => null); }
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const url = new URL('/pipeline', UPSTASH_URL);
+      const body = JSON.stringify(keys.map((k) => ['GET', k]));
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
+        return keys.map(() => null);
+      }
+      const parsed = await resp.json();
+      return parsed.map((r) => {
+        if (!r?.result) return null;
+        try { return JSON.parse(r.result); } catch { return null; }
+      });
+    } catch {
+      if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
+      return keys.map(() => null);
+    }
+  }
+  return keys.map(() => null);
 }
 
 function envelopeWrite(key, data, ttlSeconds, meta) {
