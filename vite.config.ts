@@ -285,9 +285,6 @@ function sebufApiPlugin(): Plugin {
       naturalServerMod, naturalHandlerMod,
       resilienceServerMod, resilienceHandlerMod,
       leadsServerMod, leadsHandlerMod,
-      scenarioServerMod, scenarioHandlerMod,
-      shippingV2ServerMod, shippingV2HandlerMod,
-      forecastServerMod, forecastHandlerMod,
     ] = await Promise.all([
         import('./server/router'),
         import('./server/cors'),
@@ -340,13 +337,26 @@ function sebufApiPlugin(): Plugin {
         import('./server/worldmonitor/resilience/v1/handler'),
         import('./src/generated/server/worldmonitor/leads/v1/service_server'),
         import('./server/worldmonitor/leads/v1/handler'),
-        import('./src/generated/server/worldmonitor/scenario/v1/service_server'),
-        import('./server/worldmonitor/scenario/v1/handler'),
-        import('./src/generated/server/worldmonitor/shipping/v2/service_server'),
-        import('./server/worldmonitor/shipping/v2/handler'),
-        import('./src/generated/server/worldmonitor/forecast/v1/service_server'),
-        import('./server/worldmonitor/forecast/v1/handler'),
       ]);
+
+    // Load these sequentially — Vite's module graph can lose named exports when
+    // too many dynamic imports resolve concurrently (observed with ~50+ imports).
+    const [scenarioServerMod, scenarioHandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/scenario/v1/service_server'),
+      import('./server/worldmonitor/scenario/v1/handler'),
+    ]);
+    const [shippingV2ServerMod, shippingV2HandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/shipping/v2/service_server'),
+      import('./server/worldmonitor/shipping/v2/handler'),
+    ]);
+    const [forecastServerMod, forecastHandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/forecast/v1/service_server'),
+      import('./server/worldmonitor/forecast/v1/handler'),
+    ]);
+    const [consumerPricesServerMod, consumerPricesHandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/consumer_prices/v1/service_server'),
+      import('./server/worldmonitor/consumer-prices/v1/handler'),
+    ]);
 
     const serverOptions = { onError: errorMod.mapErrorToResponse };
     const allRoutes = [
@@ -377,6 +387,7 @@ function sebufApiPlugin(): Plugin {
       ...scenarioServerMod.createScenarioServiceRoutes(scenarioHandlerMod.scenarioHandler, serverOptions),
       ...shippingV2ServerMod.createShippingV2ServiceRoutes(shippingV2HandlerMod.shippingV2Handler, serverOptions),
       ...forecastServerMod.createForecastServiceRoutes(forecastHandlerMod.forecastHandler, serverOptions),
+      ...consumerPricesServerMod.createConsumerPricesServiceRoutes(consumerPricesHandlerMod.consumerPricesHandler, serverOptions),
     ];
     cachedCorsMod = corsMod;
     return routerMod.createRouter(allRoutes);
