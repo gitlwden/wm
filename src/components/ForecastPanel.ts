@@ -322,6 +322,11 @@ export class ForecastPanel extends Panel {
     this.render();
   }
 
+  /** Returns true if the panel currently holds forecast data. */
+  hasForecasts(): boolean {
+    return this.forecasts.length > 0;
+  }
+
   updateSimulation(theaterSummariesJson: string): void {
     this.theaters = parseTheaters(theaterSummariesJson);
     // Only re-render if forecasts are already loaded — prevents a flash of "No forecasts available"

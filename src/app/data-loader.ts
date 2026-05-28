@@ -1830,8 +1830,20 @@ export class DataLoaderManager implements AppModule {
       }
       const { fetchForecasts } = await import('@/services/forecast');
       const forecasts = await fetchForecasts();
+      // Only update the panel with fresh data (even if empty). On transient
+      // errors (catch below) we avoid overwriting already-rendered forecasts
+      // with an empty array — this prevents a brief "UNAVAILABLE" flash when
+      // a single refresh cycle fails but the panel already has valid data.
       this.callPanel('forecast', 'updateForecasts', forecasts);
-    } catch { this.callPanel('forecast', 'updateForecasts', [] as import('@/services/forecast').Forecast[]); }
+    } catch {
+      // Only set empty if the panel has no existing data (first load failed).
+      // If the panel already has data from a prior successful fetch, preserve
+      // it — a transient network/Redis error should not wipe visible forecasts.
+      const panel = this.ctx.panels['forecast'] as import('@/components/ForecastPanel').ForecastPanel | undefined;
+      if (!panel?.hasForecasts()) {
+        this.callPanel('forecast', 'updateForecasts', [] as import('@/services/forecast').Forecast[]);
+      }
+    }
   }
 
   async loadSimulationOutcome(): Promise<void> {
