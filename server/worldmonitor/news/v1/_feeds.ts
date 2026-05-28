@@ -143,6 +143,14 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'TechCrunch Layoffs', url: 'https://techcrunch.com/tag/layoffs/feed/' },
       { name: 'Layoffs News', url: gn('(layoffs OR "job cuts" OR "workforce reduction") when:3d') },
     ],
+    github: [
+      { name: 'GitHub Blog', url: 'https://github.blog/feed/' },
+      { name: 'GitHub Trending', url: 'https://mshibanami.github.io/GitHubTrendingRSS/daily/all.xml' },
+      { name: 'Show HN', url: 'https://hnrss.org/show' },
+      { name: 'YC Launches', url: gn('("Y Combinator" OR "YC launch" OR "YC W25" OR "YC S25") when:7d') },
+      { name: 'Dev Events', url: gn('("developer conference" OR "tech summit" OR "devcon" OR "developer event") when:7d') },
+      { name: 'Open Source News', url: gn('"open source" project release OR launch when:3d') },
+    ],
   },
 
   tech: {
@@ -198,6 +206,11 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
     ],
     github: [
       { name: 'GitHub Blog', url: 'https://github.blog/feed/' },
+      { name: 'GitHub Trending', url: 'https://mshibanami.github.io/GitHubTrendingRSS/daily/all.xml' },
+      { name: 'Show HN', url: 'https://hnrss.org/show' },
+      { name: 'YC Launches', url: gn('("Y Combinator" OR "YC launch" OR "YC W25" OR "YC S25") when:7d') },
+      { name: 'Dev Events', url: gn('("developer conference" OR "tech summit" OR "devcon" OR "developer event") when:7d') },
+      { name: 'Open Source News', url: gn('"open source" project release OR launch when:3d') },
     ],
     funding: [
       { name: 'VC News', url: gn('("Series A" OR "Series B" OR "Series C" OR "venture capital" OR "funding round") when:2d') },

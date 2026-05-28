@@ -402,6 +402,21 @@ function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParseResul
   let parsedTotal = 0;
   let droppedUndated = 0;
 
+  // Extract channel-level <pubDate> as a fallback for feeds whose items lack
+  // per-item dates (e.g. GitHub Trending RSS which only has <title>/<link>).
+  // The channel pubDate represents the feed generation timestamp — a valid
+  // proxy for when the trending data was computed. Still guarded by the
+  // future-date check to reject clock-skewed feeds.
+  const channelPubDateStr = extractTag(xml.split(/<item[\s>]|<entry[\s>]/i)[0] ?? '', 'pubDate');
+  let channelPubDateMs = 0;
+  if (channelPubDateStr) {
+    const channelParsed = new Date(channelPubDateStr);
+    const channelMs = channelParsed.getTime();
+    if (!Number.isNaN(channelMs) && channelMs <= Date.now() + FUTURE_DATE_TOLERANCE_MS) {
+      channelPubDateMs = channelMs;
+    }
+  }
+
   const itemRegex = /<item[\s>]([\s\S]*?)<\/item>/gi;
   const entryRegex = /<entry[\s>]([\s\S]*?)<\/entry>/gi;
 
@@ -427,26 +442,33 @@ function parseRssXml(xml: string, feed: ServerFeed, variant: string): ParseResul
     // Strip non-HTTP links (javascript:, data:, etc.) before any downstream use.
     if (!/^https?:\/\//i.test(link)) link = '';
 
-    // Strict date gate (R2): walk the dialect-specific tag priority list and
-    // require at least one non-empty, parseable, non-future timestamp. Items
-    // that fail the gate are dropped — never silently stamped with Date.now()
-    // (which is the bug that let static institutional pages reach the brief).
+    // Date gate (R2): walk the dialect-specific tag priority list. If no
+    // per-item date is found, fall back to the channel-level <pubDate>
+    // (extracted above). Only drop the item if neither source yields a valid
+    // timestamp. This handles feeds like GitHub Trending RSS whose items have
+    // no <pubDate> but whose channel element carries the generation timestamp.
+    let publishedAt: number;
     const pubDateStr = extractFirstDateTag(block, isAtom);
-    if (!pubDateStr) {
+    if (pubDateStr) {
+      const parsedDate = new Date(pubDateStr);
+      const parsedMs = parsedDate.getTime();
+      if (Number.isNaN(parsedMs) || parsedMs > Date.now() + FUTURE_DATE_TOLERANCE_MS) {
+        // Per-item date is malformed or future-dated — try channel fallback
+        if (channelPubDateMs > 0) {
+          publishedAt = channelPubDateMs;
+        } else {
+          droppedUndated++;
+          continue;
+        }
+      } else {
+        publishedAt = parsedMs;
+      }
+    } else if (channelPubDateMs > 0) {
+      publishedAt = channelPubDateMs;
+    } else {
       droppedUndated++;
       continue;
     }
-    const parsedDate = new Date(pubDateStr);
-    const parsedMs = parsedDate.getTime();
-    if (Number.isNaN(parsedMs)) {
-      droppedUndated++;
-      continue;
-    }
-    if (parsedMs > Date.now() + FUTURE_DATE_TOLERANCE_MS) {
-      droppedUndated++;
-      continue;
-    }
-    const publishedAt = parsedMs;
 
     const threat = classifyByKeyword(title, variant);
     const isAlert = threat.level === 'critical' || threat.level === 'high';

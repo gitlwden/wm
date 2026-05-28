@@ -898,37 +898,44 @@ export class DataLoaderManager implements AppModule {
       }
       const enabledNames = new Set(enabledFeeds.map(f => f.name));
 
-      // Digest branch: server already aggregated feeds — map proto items to client types
+      // Digest branch: server already aggregated feeds — map proto items to client types.
+      // When the digest returns 0 items (e.g. GitHub Blog hasn't published recently),
+      // fall through to the per-feed RSS fallback so client-side feeds (GitHub Trending
+      // RSS, Show HN, etc.) can still populate the panel.
       if (digest?.categories && category in digest.categories) {
         const items = (digest.categories[category]?.items ?? [])
           .map(protoItemToNewsItem)
           .filter(i => enabledNames.has(i.source));
 
-        ingestHeadlines(items.map(i => ({ title: i.title, pubDate: i.pubDate, source: i.source, link: i.link })));
+        if (items.length > 0) {
+          ingestHeadlines(items.map(i => ({ title: i.title, pubDate: i.pubDate, source: i.source, link: i.link })));
 
-        // Skip client-side AI reclassification for digest items.
-        // The server already ran enrichWithAiCache() which checks the same Redis keys
-        // that classifyEvent writes to. Re-firing classifyEvent from every client wastes
-        // edge requests even when they're Redis cache hits.
+          // Skip client-side AI reclassification for digest items.
+          // The server already ran enrichWithAiCache() which checks the same Redis keys
+          // that classifyEvent writes to. Re-firing classifyEvent from every client wastes
+          // edge requests even when they're Redis cache hits.
 
-        checkBatchForBreakingAlerts(items);
-        this.flashMapForNews(items);
-        this.renderNewsForCategory(category, items);
+          checkBatchForBreakingAlerts(items);
+          this.flashMapForNews(items);
+          this.renderNewsForCategory(category, items);
 
-        this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
-          status: 'ok',
-          itemCount: items.length,
-        });
+          this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
+            status: 'ok',
+            itemCount: items.length,
+          });
 
-        if (panel) {
-          try {
-            const baseline = await updateBaseline(`news:${category}`, items.length);
-            const deviation = calculateDeviation(items.length, baseline);
-            panel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
-          } catch (e) { console.warn(`[Baseline] news:${category} write failed:`, e); }
+          if (panel) {
+            try {
+              const baseline = await updateBaseline(`news:${category}`, items.length);
+              const deviation = calculateDeviation(items.length, baseline);
+              panel.setDeviation(deviation.zScore, deviation.percentChange, deviation.level);
+            } catch (e) { console.warn(`[Baseline] news:${category} write failed:`, e); }
+          }
+
+          return items;
         }
-
-        return items;
+        // Digest returned 0 items for this category — fall through to per-feed fallback
+        console.warn(`[News] Digest empty for "${category}", falling through to per-feed fallback`);
       }
 
       // Per-feed fallback: fetch each feed individually (first load or digest unavailable)
