@@ -115,12 +115,28 @@ export async function fetchMultipleStocks(
   const allSymbolStrings = [...symbolMetaMap.keys()];
   const setKey = symbolSetKey(allSymbolStrings);
 
-  const resp = await stockBreaker.execute(async () => {
-    return client.listMarketQuotes({ symbols: allSymbolStrings });
-  }, emptyStockFallback, {
-    cacheKey: setKey,
-    shouldCache: (r) => r.quotes.length > 0,
-  });
+  // When the circuit breaker is on cooldown, try a direct call first.
+  // This prevents local dev (or transient failures) from locking the panel
+  // for the full 5-minute cooldown when the API is actually reachable.
+  let resp: ListMarketQuotesResponse;
+  if (stockBreaker.isOnCooldown()) {
+    try {
+      resp = await client.listMarketQuotes({ symbols: allSymbolStrings });
+      // Direct call succeeded — reset the breaker so future calls go through normally
+      if (resp.quotes.length > 0) {
+        stockBreaker.recordSuccess(resp, setKey);
+      }
+    } catch {
+      resp = emptyStockFallback;
+    }
+  } else {
+    resp = await stockBreaker.execute(async () => {
+      return client.listMarketQuotes({ symbols: allSymbolStrings });
+    }, emptyStockFallback, {
+      cacheKey: setKey,
+      shouldCache: (r) => r.quotes.length > 0,
+    });
+  }
 
   const results = resp.quotes.map((q) => {
     const trimmed = q.symbol.trim();
