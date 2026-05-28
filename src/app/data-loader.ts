@@ -1357,14 +1357,16 @@ export class DataLoaderManager implements AppModule {
   async loadMarkets(): Promise<void> {
     try {
       const customEntries = getMarketWatchlistEntries();
-      const customSymbols: Array<{ symbol: string; name: string; display: string }> = [];
-      if (customEntries.length > 0) {
-        const defaultSet = new Set(MARKET_SYMBOLS.map((s) => s.symbol));
+      const hasWatchlist = customEntries.length > 0;
+
+      // Build the symbol list: watchlist items only (if set), otherwise defaults
+      const watchlistSymbols: Array<{ symbol: string; name: string; display: string }> = [];
+      if (hasWatchlist) {
         for (const entry of customEntries) {
           const sym = entry.symbol;
-          if (!sym || defaultSet.has(sym)) continue;
-          customSymbols.push({ symbol: sym, name: entry.name || sym, display: entry.display || sym });
-          if (customSymbols.length >= 50) break;
+          if (!sym) continue;
+          watchlistSymbols.push({ symbol: sym, name: entry.name || sym, display: entry.display || sym });
+          if (watchlistSymbols.length >= 50) break;
         }
       }
 
@@ -1372,14 +1374,13 @@ export class DataLoaderManager implements AppModule {
       const hydratedMarkets = getHydratedData('marketQuotes') as ListMarketQuotesResponse | undefined;
       const marketsPanel = this.ctx.panels['markets'] as MarketPanel | undefined;
 
-      // Always use hydration for default symbols when available
-      let defaultData: MarketData[] = [];
-      let defaultSkipped = false;
-      let defaultRateLimited = false;
+      let stocksResult: Awaited<ReturnType<typeof fetchMultipleStocks>>;
+      const symbolsToFetch = hasWatchlist ? watchlistSymbols : MARKET_SYMBOLS;
 
-      if (hydratedMarkets?.quotes?.length) {
+      if (!hasWatchlist && hydratedMarkets?.quotes?.length) {
+        // No watchlist: use bootstrap hydration for instant display
         const symbolMetaMap = new Map(MARKET_SYMBOLS.map((s) => [s.symbol, s]));
-        defaultData = hydratedMarkets.quotes.map((q) => ({
+        const data = hydratedMarkets.quotes.map((q) => ({
           symbol: q.symbol,
           name: symbolMetaMap.get(q.symbol)?.name || q.name,
           display: symbolMetaMap.get(q.symbol)?.display || q.display || q.symbol,
@@ -1387,47 +1388,20 @@ export class DataLoaderManager implements AppModule {
           change: q.change ?? null,
           sparkline: q.sparkline?.length > 0 ? q.sparkline : undefined,
         }));
-        defaultSkipped = hydratedMarkets.finnhubSkipped || false;
-        defaultRateLimited = hydratedMarkets.rateLimited || false;
-      }
-
-      // Fetch custom watchlist symbols separately (they aren't in the bootstrap cache)
-      // If hydration was empty (Redis down), fetch ALL symbols (defaults + custom) as fallback
-      const needsLiveDefaults = defaultData.length === 0;
-      const fetchSymbols = needsLiveDefaults
-        ? [...MARKET_SYMBOLS, ...customSymbols]
-        : customSymbols;
-
-      let customData: MarketData[] = [];
-      if (fetchSymbols.length > 0) {
-        const liveResult = await fetchMultipleStocks(fetchSymbols, {
-          onBatch: (partial) => {
-            if (needsLiveDefaults) {
-              // Stream partial results so panel shows data as it arrives
-              this.ctx.latestMarkets = partial;
-              marketsPanel?.renderMarkets(partial);
-            }
+        this.ctx.latestMarkets = data;
+        marketsPanel?.renderMarkets(data);
+        stocksResult = { data, skipped: hydratedMarkets.finnhubSkipped || undefined, rateLimited: hydratedMarkets.rateLimited || undefined };
+      } else {
+        // Watchlist set or no hydration: fetch from API
+        stocksResult = await fetchMultipleStocks(symbolsToFetch, {
+          onBatch: (partialStocks) => {
+            this.ctx.latestMarkets = partialStocks;
+            marketsPanel?.renderMarkets(partialStocks);
           },
         });
-        if (needsLiveDefaults) {
-          defaultData = liveResult.data;
-          defaultSkipped = liveResult.skipped || false;
-          defaultRateLimited = liveResult.rateLimited || false;
-        } else {
-          customData = liveResult.data;
-        }
+        this.ctx.latestMarkets = stocksResult.data;
+        marketsPanel?.renderMarkets(stocksResult.data, stocksResult.rateLimited);
       }
-
-      // Merge: defaults + custom, render immediately
-      const merged = [...defaultData, ...customData];
-      this.ctx.latestMarkets = merged;
-      marketsPanel?.renderMarkets(merged, defaultRateLimited);
-
-      const stocksResult: Awaited<ReturnType<typeof fetchMultipleStocks>> = {
-        data: merged,
-        skipped: defaultSkipped || undefined,
-        rateLimited: defaultRateLimited || undefined,
-      };
 
       const finnhubConfigMsg = 'FINNHUB_API_KEY not configured — add in Settings';
 
