@@ -1392,10 +1392,30 @@ export class DataLoaderManager implements AppModule {
       }
 
       // Fetch custom watchlist symbols separately (they aren't in the bootstrap cache)
+      // If hydration was empty (Redis down), fetch ALL symbols (defaults + custom) as fallback
+      const needsLiveDefaults = defaultData.length === 0;
+      const fetchSymbols = needsLiveDefaults
+        ? [...MARKET_SYMBOLS, ...customSymbols]
+        : customSymbols;
+
       let customData: MarketData[] = [];
-      if (customSymbols.length > 0) {
-        const customResult = await fetchMultipleStocks(customSymbols);
-        customData = customResult.data;
+      if (fetchSymbols.length > 0) {
+        const liveResult = await fetchMultipleStocks(fetchSymbols, {
+          onBatch: (partial) => {
+            if (needsLiveDefaults) {
+              // Stream partial results so panel shows data as it arrives
+              this.ctx.latestMarkets = partial;
+              marketsPanel?.renderMarkets(partial);
+            }
+          },
+        });
+        if (needsLiveDefaults) {
+          defaultData = liveResult.data;
+          defaultSkipped = liveResult.skipped || false;
+          defaultRateLimited = liveResult.rateLimited || false;
+        } else {
+          customData = liveResult.data;
+        }
       }
 
       // Merge: defaults + custom, render immediately

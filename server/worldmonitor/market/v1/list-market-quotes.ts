@@ -22,15 +22,16 @@ export async function listMarketQuotes(
 
   try {
     const bootstrap = await getCachedJson(BOOTSTRAP_KEY, true) as ListMarketQuotesResponse | null;
-    if (!bootstrap?.quotes?.length) {
-      return { quotes: [], finnhubSkipped: false, skipReason: '', rateLimited: false };
+    const bootstrapQuotes = bootstrap?.quotes ?? [];
+
+    if (parsedSymbols.length === 0) {
+      return bootstrapQuotes.length
+        ? { quotes: bootstrapQuotes, finnhubSkipped: false, skipReason: '', rateLimited: false }
+        : { quotes: [], finnhubSkipped: false, skipReason: '', rateLimited: false };
     }
 
-    if (parsedSymbols.length === 0) return bootstrap;
-
     // Filter bootstrap for requested symbols
-    const bootstrapMap = new Map(bootstrap.quotes.map((q: MarketQuote) => [q.symbol, q]));
-    const requestedSet = new Set(parsedSymbols);
+    const bootstrapMap = new Map(bootstrapQuotes.map((q: MarketQuote) => [q.symbol, q]));
     const filtered: MarketQuote[] = [];
     const missing: string[] = [];
 
@@ -44,6 +45,7 @@ export async function listMarketQuotes(
     }
 
     // Fetch live data for symbols not in bootstrap (custom watchlist entries)
+    // Also fires when Redis is down (bootstrap empty → all symbols are "missing")
     if (missing.length > 0) {
       const finnhubKey = process.env.FINNHUB_API_KEY;
       const liveQuotes = await fetchLiveQuotes(missing, finnhubKey);
