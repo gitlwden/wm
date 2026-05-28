@@ -1400,7 +1400,10 @@ export class DataLoaderManager implements AppModule {
           },
         });
         this.ctx.latestMarkets = stocksResult.data;
-        marketsPanel?.renderMarkets(stocksResult.data, stocksResult.rateLimited);
+        // When rate-limited with empty data, don't overwrite previous render — panel keeps stale data
+        if (stocksResult.data.length > 0 || !stocksResult.rateLimited) {
+          marketsPanel?.renderMarkets(stocksResult.data, stocksResult.rateLimited);
+        }
       }
 
       const finnhubConfigMsg = 'FINNHUB_API_KEY not configured — add in Settings';
