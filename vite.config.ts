@@ -1131,6 +1131,11 @@ export default defineConfig(({ mode }) => {
         ],
       },
       proxy: {
+        // Legacy API routes not handled by sebuf plugin — forward to production
+        '/api/supply-chain/hormuz-tracker': {
+          target: 'https://api.worldmonitor.app',
+          changeOrigin: true,
+        },
         // Widget agent — forward to Railway relay for SSE streaming
         '/widget-agent': {
           target: 'https://proxy.worldmonitor.app',
