@@ -431,7 +431,11 @@ export class InsightsPanel extends Panel {
         this.setProgress(3, totalSteps, t('components.insights.usingCachedBrief'));
       }
 
-      this.setDataBadge(worldBrief ? 'live' : 'unavailable');
+      // At this point importantItems.length > 0 (early return at line 373 handles the
+      // empty case), so there IS data to display. Mirror the server path (line 282)
+      // which unconditionally sets 'live' — the badge should reflect data availability,
+      // not whether the AI brief was successfully generated.
+      this.setDataBadge('live');
 
       // Step 4: Wait for parallel analysis to complete
       this.setProgress(4, totalSteps, t('components.insights.multiPerspectiveAnalysis'));
