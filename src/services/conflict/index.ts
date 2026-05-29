@@ -12,7 +12,7 @@ import {
   type IranEvent,
   type ListIranEventsResponse,
 } from '@/generated/client/worldmonitor/conflict/v1/service_client';
-import type { UcdpGeoEvent, UcdpEventType } from '@/types';
+import type { UcdpGeoEvent } from '@/types';
 import { createCircuitBreaker } from '@/utils';
 import { getHydratedData } from '@/services/bootstrap';
 import { toApiUrl } from '@/services/runtime';
@@ -118,32 +118,6 @@ function toConflictEvent(proto: ProtoAcledEvent): ConflictEvent {
   };
 }
 
-// ---- Adapter 2: Proto UcdpViolenceEvent -> legacy UcdpGeoEvent ----
-
-const VIOLENCE_TYPE_REVERSE: Record<string, UcdpEventType> = {
-  UCDP_VIOLENCE_TYPE_STATE_BASED: 'state-based',
-  UCDP_VIOLENCE_TYPE_NON_STATE: 'non-state',
-  UCDP_VIOLENCE_TYPE_ONE_SIDED: 'one-sided',
-};
-
-function toUcdpGeoEvent(proto: ProtoUcdpEvent): UcdpGeoEvent {
-  return {
-    id: proto.id,
-    date_start: proto.dateStart ? new Date(proto.dateStart).toISOString().substring(0, 10) : '',
-    date_end: proto.dateEnd ? new Date(proto.dateEnd).toISOString().substring(0, 10) : '',
-    latitude: proto.location?.latitude ?? 0,
-    longitude: proto.location?.longitude ?? 0,
-    country: proto.country,
-    side_a: proto.sideA,
-    side_b: proto.sideB,
-    deaths_best: proto.deathsBest,
-    deaths_low: proto.deathsLow,
-    deaths_high: proto.deathsHigh,
-    type_of_violence: VIOLENCE_TYPE_REVERSE[proto.violenceType] || 'state-based',
-    source_original: proto.sourceOriginal,
-  };
-}
-
 // ---- Adapter 3: Proto HumanitarianCountrySummary -> legacy HapiConflictSummary ----
 
 const HAPI_COUNTRY_CODES = [
@@ -220,27 +194,6 @@ function deriveUcdpClassifications(events: ProtoUcdpEvent[]): Map<string, UcdpCo
   }
 
   return result;
-}
-
-// ---- Haversine helper (ported exactly from legacy ucdp-events.ts) ----
-
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
-    Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// ---- AcledEvent interface for deduplication (ported from legacy) ----
-
-interface AcledEvent {
-  latitude: string | number;
-  longitude: string | number;
-  event_date: string;
-  fatalities: string | number;
 }
 
 // ---- Empty fallbacks ----
@@ -331,67 +284,6 @@ export async function fetchHapiSummary(): Promise<Map<string, HapiConflictSummar
   }
 
   return byCode;
-}
-
-interface UcdpEventsResponse {
-  success: boolean;
-  count: number;
-  data: UcdpGeoEvent[];
-  cached_at: string;
-}
-
-export async function fetchUcdpEvents(hydrated?: ListUcdpEventsResponse): Promise<UcdpEventsResponse> {
-  if (hydrated?.events?.length) {
-    const events = hydrated.events.map(toUcdpGeoEvent);
-    return { success: true, count: events.length, data: events, cached_at: '' };
-  }
-
-  const resp = await ucdpBreaker.execute(async () => {
-    return client.listUcdpEvents({ country: '', start: 0, end: 0, pageSize: 0, cursor: '' });
-  }, emptyUcdpFallback, { shouldCache: (r) => r.events.length > 0 });
-
-  const events = resp.events.map(toUcdpGeoEvent);
-
-  return {
-    success: events.length > 0,
-    count: events.length,
-    data: events,
-    cached_at: '',
-  };
-}
-
-export function deduplicateAgainstAcled(
-  ucdpEvents: UcdpGeoEvent[],
-  acledEvents: AcledEvent[],
-): UcdpGeoEvent[] {
-  if (!acledEvents.length) return ucdpEvents;
-
-  return ucdpEvents.filter(ucdp => {
-    const uLat = ucdp.latitude;
-    const uLon = ucdp.longitude;
-    const uDate = new Date(ucdp.date_start).getTime();
-    const uDeaths = ucdp.deaths_best;
-
-    for (const acled of acledEvents) {
-      const aLat = Number(acled.latitude);
-      const aLon = Number(acled.longitude);
-      const aDate = new Date(acled.event_date).getTime();
-      const aDeaths = Number(acled.fatalities) || 0;
-
-      const dayDiff = Math.abs(uDate - aDate) / (1000 * 60 * 60 * 24);
-      if (dayDiff > 7) continue;
-
-      const dist = haversineKm(uLat, uLon, aLat, aLon);
-      if (dist > 50) continue;
-
-      if (uDeaths === 0 && aDeaths === 0) return false;
-      if (uDeaths > 0 && aDeaths > 0) {
-        const ratio = uDeaths / aDeaths;
-        if (ratio >= 0.5 && ratio <= 2.0) return false;
-      }
-    }
-    return true;
-  });
 }
 
 export function groupByCountry(events: UcdpGeoEvent[]): Map<string, UcdpGeoEvent[]> {

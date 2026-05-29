@@ -1,7 +1,7 @@
 import type { AppContext, AppModule } from '@/app/app-context';
 import { getRpcBaseUrl } from '@/services/rpc-client';
 import { enqueuePanelCall } from '@/app/pending-panel-data';
-import type { NewsItem, MapLayers, SocialUnrestEvent } from '@/types';
+import type { NewsItem, MapLayers, SocialUnrestEvent, UcdpGeoEvent } from '@/types';
 import type { MarketData } from '@/types';
 import type { TimeRange } from '@/components';
 import {
@@ -111,7 +111,7 @@ import { fetchGpsInterference } from '@/services/gps-interference';
 import { fetchSatelliteTLEs, initSatRecs, propagatePositions, startPropagationLoop } from '@/services/satellites';
 import type { SatRecEntry } from '@/services/satellites';
 import { dataFreshness, type DataSourceId } from '@/services/data-freshness';
-import { fetchConflictEvents, fetchUcdpClassifications, fetchHapiSummary, fetchUcdpEvents, deduplicateAgainstAcled, fetchIranEvents } from '@/services/conflict';
+import { fetchConflictEvents, fetchUcdpClassifications, fetchHapiSummary, fetchIranEvents, type ConflictEvent } from '@/services/conflict';
 import { fetchUnhcrPopulation } from '@/services/displacement';
 import { fetchClimateAnomalies } from '@/services/climate';
 import { fetchSecurityAdvisories } from '@/services/security-advisories';
@@ -215,6 +215,31 @@ const PROTO_TO_CLIENT_PHASE: Record<string, import('@/types').StoryPhase> = {
   STORY_PHASE_SUSTAINED:  'sustained',
   STORY_PHASE_FADING:     'fading',
 };
+
+/** Convert GDELT-backed ConflictEvent to UcdpGeoEvent for the armed-conflict panel. */
+function gdeltToUcdpGeoEvent(e: ConflictEvent): UcdpGeoEvent {
+  const typeMap: Record<string, import('@/types').UcdpEventType> = {
+    battle: 'state-based',
+    explosion: 'state-based',
+    remote_violence: 'state-based',
+    violence_against_civilians: 'one-sided',
+  };
+  return {
+    id: e.id,
+    date_start: e.time.toISOString().substring(0, 10),
+    date_end: e.time.toISOString().substring(0, 10),
+    latitude: e.lat,
+    longitude: e.lon,
+    country: e.country,
+    side_a: e.actors[0] || 'Unknown',
+    side_b: e.actors[1] || 'Unknown',
+    deaths_best: e.fatalities,
+    deaths_low: 0,
+    deaths_high: 0,
+    type_of_violence: typeMap[e.eventType] || 'state-based',
+    source_original: e.source,
+  };
+}
 
 function protoItemToNewsItem(p: ProtoNewsItem): NewsItem {
   const level = PROTO_TO_CLIENT_LEVEL[p.threat?.level ?? 'THREAT_LEVEL_UNSPECIFIED'];
@@ -2069,9 +2094,18 @@ export class DataLoaderManager implements AppModule {
         const conflictData = await fetchConflictEvents();
         ingestConflictsForCII(conflictData.events);
         if (conflictData.count > 0) dataFreshness.recordUpdate('acled_conflict', conflictData.count);
+
+        // Feed armed-conflict panel with GDELT-backed events
+        const ucdpEvents = conflictData.events.map(gdeltToUcdpGeoEvent);
+        (this.ctx.panels['ucdp-events'] as UcdpEventsPanel)?.setEvents(ucdpEvents);
+        if (this.ctx.mapLayers.ucdpEvents) {
+          this.ctx.map?.setUcdpEvents(ucdpEvents);
+        }
+        if (ucdpEvents.length > 0) dataFreshness.recordUpdate('ucdp_events', ucdpEvents.length);
       } catch (error) {
         console.error('[Intelligence] Conflict events fetch failed:', error);
         dataFreshness.recordError('acled_conflict', String(error));
+        dataFreshness.recordError('ucdp_events', String(error));
       }
     })());
 
@@ -2160,31 +2194,6 @@ export class DataLoaderManager implements AppModule {
       } catch (error) {
         console.error('[Intelligence] Military fetch failed:', error);
         dataFreshness.recordError('opensky', String(error));
-      }
-    })());
-
-    tasks.push((async () => {
-      try {
-        const protestEvents = await protestsTask;
-        const result = await fetchUcdpEvents(hydratedUcdp);
-        if (!result.success) {
-          // listUcdpEvents is a pure Redis-read (gold standard). Retrying returns
-          // the same empty result until the Railway seed refreshes the key.
-          dataFreshness.recordError('ucdp_events', 'UCDP events unavailable (retaining prior event state)');
-          return;
-        }
-        const acledEvents = protestEvents.map(e => ({
-          latitude: e.lat, longitude: e.lon, event_date: e.time.toISOString(), fatalities: e.fatalities ?? 0,
-        }));
-        const events = deduplicateAgainstAcled(result.data, acledEvents);
-        (this.ctx.panels['ucdp-events'] as UcdpEventsPanel)?.setEvents(events);
-        if (this.ctx.mapLayers.ucdpEvents) {
-          this.ctx.map?.setUcdpEvents(events);
-        }
-        if (events.length > 0) dataFreshness.recordUpdate('ucdp_events', events.length);
-      } catch (error) {
-        console.error('[Intelligence] UCDP events fetch failed:', error);
-        dataFreshness.recordError('ucdp_events', String(error));
       }
     })());
 
