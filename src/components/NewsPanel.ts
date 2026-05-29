@@ -719,6 +719,7 @@ export class NewsPanel extends Panel {
           ${riskBadge}
         </div>
         <a class="item-title" href="${sanitizeUrl(cluster.primaryLink)}" target="_blank" rel="noopener">${escapeHtml(cluster.primaryTitle)}</a>
+        ${(() => { const p = cluster.allItems.find(i => i.link === cluster.primaryLink); return p?.githubMeta ? `<div class="item-github-meta"><span class="gh-stars" title="${p.githubMeta.stars.toLocaleString()} stars">★ ${formatStarCount(p.githubMeta.stars)}</span><span class="gh-updated" title="Last push: ${p.githubMeta.pushedAt}">⟳ ${formatRelativeDate(p.githubMeta.pushedAt)}</span></div>` : ''; })()}
         <div class="cluster-meta">
           <span class="top-sources">${topSourcesHtml}</span>
           <span class="item-time">${formatTime(cluster.lastUpdated)}</span>

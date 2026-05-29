@@ -908,6 +908,16 @@ export class DataLoaderManager implements AppModule {
           .filter(i => enabledNames.has(i.source));
 
         if (items.length > 0) {
+          // Enrich github items with repo metadata (stars, last push date) BEFORE rendering
+          if (category === 'github') {
+            try {
+              const { enrichItemsWithGithubMeta } = await import('@/services/github-repo-meta');
+              await enrichItemsWithGithubMeta(items);
+            } catch (e) {
+              console.warn('[App] GitHub repo meta enrichment failed:', e);
+            }
+          }
+
           ingestHeadlines(items.map(i => ({ title: i.title, pubDate: i.pubDate, source: i.source, link: i.link })));
 
           // Skip client-side AI reclassification for digest items.
@@ -1009,14 +1019,25 @@ export class DataLoaderManager implements AppModule {
         },
       });
 
+      // Clear pending render timeout to prevent stale intermediate renders during enrichment
+      if (renderTimeout) {
+        clearTimeout(renderTimeout);
+        renderTimeout = null;
+        pendingItems = null;
+      }
+
+      // Enrich github items with repo metadata (stars, last push date) BEFORE final render
+      if (category === 'github' && items.length > 0) {
+        try {
+          const { enrichItemsWithGithubMeta } = await import('@/services/github-repo-meta');
+          await enrichItemsWithGithubMeta(items);
+        } catch (e) {
+          console.warn('[App] GitHub repo meta enrichment failed:', e);
+        }
+      }
+
       this.renderNewsForCategory(category, items);
       if (panel) {
-        if (renderTimeout) {
-          clearTimeout(renderTimeout);
-          renderTimeout = null;
-          pendingItems = null;
-        }
-
         if (items.length === 0) {
           const failures = getFeedFailures();
           const failedFeeds = fallbackFeeds.filter(f => failures.has(f.name));
@@ -1094,21 +1115,6 @@ export class DataLoaderManager implements AppModule {
         console.error(`[App] News category ${categories[idx]?.key} failed:`, result.reason);
       }
     });
-
-    // Enrich github category items with GitHub repo metadata (stars, last push date)
-    const githubCategoryIdx = categories.findIndex(c => c.key === 'github');
-    if (githubCategoryIdx >= 0) {
-      const githubResult = categoryResults[githubCategoryIdx];
-      if (githubResult.status === 'fulfilled' && githubResult.value.length > 0) {
-        try {
-          const { enrichItemsWithGithubMeta } = await import('@/services/github-repo-meta');
-          await enrichItemsWithGithubMeta(githubResult.value);
-          this.renderNewsForCategory('github', githubResult.value);
-        } catch (e) {
-          console.warn('[App] GitHub repo meta enrichment failed:', e);
-        }
-      }
-    }
 
     if (SITE_VARIANT === 'full') {
       const enabledIntelSources = INTEL_SOURCES.filter(f => !this.ctx.disabledSources.has(f.name));
