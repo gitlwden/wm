@@ -864,8 +864,10 @@ export default defineConfig(({ mode }) => {
   const isDesktopBuild = process.env.VITE_DESKTOP_RUNTIME === '1';
   const activeVariant = process.env.VITE_VARIANT || 'full';
   const activeMeta = VARIANT_META[activeVariant] || VARIANT_META.full;
+  const cacheDir = process.env.VITE_CACHE_DIR || 'node_modules/.vite';
 
   return {
+    cacheDir,
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
       // Vercel sets VERCEL_GIT_COMMIT_SHA on production + preview builds.
