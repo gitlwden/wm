@@ -330,7 +330,9 @@ export async function fetchCoinGeckoMarkets(
   ids: string[],
 ): Promise<CoinGeckoMarketItem[]> {
   const apiKey = process.env.COINGECKO_API_KEY;
-  const baseUrl = apiKey
+  // Demo keys (CG- prefix) use the free tier URL, not pro-api
+  const isDemoKey = !!apiKey && apiKey.startsWith('CG-');
+  const baseUrl = apiKey && !isDemoKey
     ? 'https://pro-api.coingecko.com/api/v3'
     : 'https://api.coingecko.com/api/v3';
   const url = `${baseUrl}/coins/markets?vs_currency=usd&ids=${ids.join(',')}&order=market_cap_desc&sparkline=true&price_change_percentage=24h`;
@@ -338,7 +340,7 @@ export async function fetchCoinGeckoMarkets(
     Accept: 'application/json',
     'User-Agent': CHROME_UA,
   };
-  if (apiKey) headers['x-cg-pro-api-key'] = apiKey;
+  if (apiKey && !isDemoKey) headers['x-cg-pro-api-key'] = apiKey;
 
   const resp = await fetch(url, {
     headers,

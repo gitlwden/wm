@@ -3,44 +3,65 @@
 // Probes provider URLs with a fast request, caches results.
 // All LLM call sites check this before attempting expensive fetch calls.
 
-const PROBE_TIMEOUT_MS = 2_000;
+const PROBE_TIMEOUT_MS = 3_000;
 const CACHE_TTL_MS = 60_000; // re-probe every 60s
+const AUTH_FAIL_TTL_MS = 5 * 60_000; // auth errors: re-probe after 5min
 
 interface HealthEntry {
   available: boolean;
   checkedAt: number;
+  /** TTL for this entry — shorter for auth failures */
+  ttlMs: number;
 }
 
 const cache = new Map<string, HealthEntry>();
 const inFlight = new Map<string, Promise<boolean>>();
 
 /**
- * Probe a provider URL to check if it's reachable.
- * Uses a lightweight GET to the base origin (most OpenAI-compat servers
- * return 200 or 404 on root, either confirms reachability).
+ * Auth-aware probe: sends a minimal chat completion to verify the API key works.
+ * Returns { ok, statusCode } so the caller can decide TTL based on failure type.
  */
-async function probe(url: string): Promise<boolean> {
+async function probeAuth(apiUrl: string, headers: Record<string, string>): Promise<{ ok: boolean; statusCode: number }> {
   try {
-    const origin = new URL(url).origin;
-    await fetch(origin, {
-      method: 'GET',
+    const resp = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'probe', messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
-    return true;
+    // 200 = works, 400 = model not found but auth OK, 404 = endpoint exists
+    // 401/403/402 = auth/credits problem
+    return { ok: resp.status < 401, statusCode: resp.status };
   } catch {
-    return false;
+    return { ok: false, statusCode: 0 };
   }
 }
 
 /**
+ * Resolve auth headers for known LLM providers.
+ */
+function getAuthHeaders(apiUrl: string): Record<string, string> {
+  const origin = new URL(apiUrl).origin;
+  if (origin === 'https://api.groq.com') {
+    const key = process.env.GROQ_API_KEY;
+    if (key) return { Authorization: `Bearer ${key}` };
+  }
+  if (origin === 'https://openrouter.ai') {
+    const key = process.env.OPENROUTER_API_KEY;
+    if (key) return { Authorization: `Bearer ${key}` };
+  }
+  return {};
+}
+
+/**
  * Check if an LLM provider endpoint is available.
- * Returns cached result if fresh (< CACHE_TTL_MS old).
- * Otherwise probes and caches the result.
+ * Returns cached result if fresh (< entry.ttlMs old).
+ * Otherwise probes with auth verification and caches the result.
  */
 export async function isProviderAvailable(apiUrl: string): Promise<boolean> {
   const origin = new URL(apiUrl).origin;
   const cached = cache.get(origin);
-  if (cached && Date.now() - cached.checkedAt < CACHE_TTL_MS) {
+  if (cached && Date.now() - cached.checkedAt < cached.ttlMs) {
     return cached.available;
   }
 
@@ -48,14 +69,39 @@ export async function isProviderAvailable(apiUrl: string): Promise<boolean> {
   const existing = inFlight.get(origin);
   if (existing) return existing;
 
-  const promise = probe(apiUrl).then(available => {
-    cache.set(origin, { available, checkedAt: Date.now() });
-    inFlight.delete(origin);
-    if (!available) {
-      console.warn(`[llm-health] Provider unreachable: ${origin}`);
+  const promise = (async () => {
+    const authHeaders = getAuthHeaders(apiUrl);
+    const hasAuth = Object.keys(authHeaders).length > 0;
+
+    let available: boolean;
+    let ttlMs = CACHE_TTL_MS;
+
+    if (hasAuth) {
+      // Auth-aware probe: verify API key actually works
+      const result = await probeAuth(apiUrl, authHeaders);
+      available = result.ok;
+      if (!available && result.statusCode >= 401 && result.statusCode <= 403) {
+        // Auth/credits failure — use shorter TTL so we retry sooner
+        ttlMs = AUTH_FAIL_TTL_MS;
+        console.warn(`[llm-health] Auth probe failed for ${origin}: HTTP ${result.statusCode} — retry in ${AUTH_FAIL_TTL_MS / 1000}s`);
+      } else if (!available) {
+        console.warn(`[llm-health] Provider unreachable: ${origin}`);
+      }
+    } else {
+      // No auth headers (Ollama, generic) — just check TCP reachability
+      try {
+        await fetch(origin, { method: 'GET', signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+        available = true;
+      } catch {
+        available = false;
+        console.warn(`[llm-health] Provider unreachable: ${origin}`);
+      }
     }
+
+    cache.set(origin, { available, checkedAt: Date.now(), ttlMs });
+    inFlight.delete(origin);
     return available;
-  });
+  })();
   inFlight.set(origin, promise);
   return promise;
 }
@@ -79,8 +125,19 @@ export function getLlmHealthStatus(): Record<string, { available: boolean; check
 export async function reprobeAll(): Promise<void> {
   const origins = [...cache.keys()];
   await Promise.all(origins.map(async (origin) => {
-    const available = await probe(origin);
-    cache.set(origin, { available, checkedAt: Date.now() });
+    const apiUrl = origin + '/v1/chat/completions';
+    const authHeaders = getAuthHeaders(apiUrl);
+    let available: boolean;
+    if (Object.keys(authHeaders).length > 0) {
+      const result = await probeAuth(apiUrl, authHeaders);
+      available = result.ok;
+    } else {
+      try {
+        await fetch(origin, { method: 'GET', signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
+        available = true;
+      } catch { available = false; }
+    }
+    cache.set(origin, { available, checkedAt: Date.now(), ttlMs: CACHE_TTL_MS });
   }));
 }
 
