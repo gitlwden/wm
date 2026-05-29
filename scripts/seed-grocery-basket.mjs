@@ -336,6 +336,7 @@ async function fetchGroceryBasketPrices(prevSnapshot) {
     return buildFallbackData(prevSnapshot);
   }
 
+  try {
   const fxRates = await getSharedFxRates(config.fxSymbols, FX_FALLBACKS);
 
   const countriesResult = [];
@@ -577,6 +578,10 @@ async function fetchGroceryBasketPrices(prevSnapshot) {
     prevFetchedAt: wowAvailable ? (prevSnapshot.fetchedAt ?? '') : '',
     basketVersion: BASKET_VERSION,
   };
+  } catch (err) {
+    console.warn(`  [fallback] EXA scraping failed (${err?.message || err}) — falling back to static prices`);
+    return buildFallbackData(prevSnapshot);
+  }
 }
 
 const prevSnapshot = await readSeedSnapshot(CANONICAL_KEY);
