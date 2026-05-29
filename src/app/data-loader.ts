@@ -1095,6 +1095,21 @@ export class DataLoaderManager implements AppModule {
       }
     });
 
+    // Enrich github category items with GitHub repo metadata (stars, last push date)
+    const githubCategoryIdx = categories.findIndex(c => c.key === 'github');
+    if (githubCategoryIdx >= 0) {
+      const githubResult = categoryResults[githubCategoryIdx];
+      if (githubResult.status === 'fulfilled' && githubResult.value.length > 0) {
+        try {
+          const { enrichItemsWithGithubMeta } = await import('@/services/github-repo-meta');
+          await enrichItemsWithGithubMeta(githubResult.value);
+          this.renderNewsForCategory('github', githubResult.value);
+        } catch (e) {
+          console.warn('[App] GitHub repo meta enrichment failed:', e);
+        }
+      }
+    }
+
     if (SITE_VARIANT === 'full') {
       const enabledIntelSources = INTEL_SOURCES.filter(f => !this.ctx.disabledSources.has(f.name));
       const enabledIntelNames = new Set(enabledIntelSources.map(f => f.name));

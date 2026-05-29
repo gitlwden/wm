@@ -81,6 +81,7 @@ export default [
   "github.blog",
   "githubnext.com",
   "mshibanami.github.io",
+  "api.github.com",
   "www.engadget.com",
   "news.mit.edu",
   "dev.events",

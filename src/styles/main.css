@@ -3625,6 +3625,25 @@ body.live-news-fullscreen-active .panels-grid > *:not(.live-news-fullscreen) {
   margin-top: 4px;
 }
 
+.item-github-meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.gh-stars {
+  color: #f0b429;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.gh-updated {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
 /* Clustering */
 .source-count {
   background: var(--accent);

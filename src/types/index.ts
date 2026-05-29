@@ -125,6 +125,13 @@ export interface NewsItem {
    * Consumers MUST fall back to `title` for display when absent (R6).
    */
   snippet?: string;
+  /** GitHub repository metadata — populated for github category items with github.com links. */
+  githubMeta?: {
+    /** Total star count. */
+    stars: number;
+    /** Last push/commit ISO date (GitHub API `pushed_at`). */
+    pushedAt: string;
+  };
 }
 
 export type VelocityLevel = 'normal' | 'elevated' | 'spike';

@@ -9,6 +9,7 @@ import { getSourcePropagandaRisk, getSourceTier, getSourceType } from '@/config/
 import { SITE_VARIANT } from '@/config';
 import { t, getCurrentLanguage } from '@/services/i18n';
 import { track } from '@/services/analytics';
+import { formatStarCount, formatRelativeDate } from '@/services/github-repo-meta';
 
 type SortMode = 'relevance' | 'newest';
 
@@ -484,6 +485,7 @@ export class NewsPanel extends Panel {
           ${item.isAlert ? '<span class="alert-tag">ALERT</span>' : ''}
         </div>
         <a class="item-title" href="${sanitizeUrl(item.link)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>
+        ${item.githubMeta ? `<div class="item-github-meta"><span class="gh-stars" title="${item.githubMeta.stars.toLocaleString()} stars">★ ${formatStarCount(item.githubMeta.stars)}</span><span class="gh-updated" title="Last push: ${item.githubMeta.pushedAt}">⟳ ${formatRelativeDate(item.githubMeta.pushedAt)}</span></div>` : ''}
         ${item.snippet ? `<div class="item-snippet">${escapeHtml(item.snippet.length > 200 ? item.snippet.slice(0, 200).replace(/\s+\S*$/, '') + '…' : item.snippet)}</div>` : ''}
         <div class="item-time">
           ${formatTime(item.pubDate)}
