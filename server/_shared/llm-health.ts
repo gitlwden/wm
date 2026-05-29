@@ -152,11 +152,6 @@ export async function reprobeAll(): Promise<void> {
 export function warmHealthCache(): void {
   const providerUrls: string[] = [];
 
-  const ollamaUrl = typeof process !== 'undefined'
-    ? (process.env?.OLLAMA_API_URL || process.env?.LLM_API_URL)
-    : undefined;
-  if (ollamaUrl) providerUrls.push(ollamaUrl);
-
   if (typeof process !== 'undefined' && process.env?.GROQ_API_KEY) {
     providerUrls.push('https://api.groq.com/openai/v1/chat/completions');
   }

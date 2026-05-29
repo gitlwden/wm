@@ -9,110 +9,56 @@ export interface ProviderCredentials {
   extraBody?: Record<string, unknown>;
 }
 
-export type LlmProviderName = 'ollama' | 'groq' | 'openrouter' | 'nvidia' | 'generic';
+export type LlmProviderName = 'groq' | 'openrouter' | 'nvidia';
 
-export interface ProviderCredentialOverrides {
-  model?: string;
-}
+/** Candidate models per provider. First is default, rest are fallbacks tried in order. */
+const PROVIDER_MODELS: Record<LlmProviderName, string[]> = {
+  groq: [
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'mixtral-8x7b-32768',
+    'gemma2-9b-it',
+  ],
+  openrouter: [
+    'google/gemini-2.5-flash',
+    'meta-llama/llama-3.3-70b-instruct',
+    'mistralai/mistral-small-3.1-24b-instruct',
+  ],
+  nvidia: [
+    'meta/llama-3.3-70b-instruct',
+    'meta/llama-3.1-8b-instruct',
+    'mistralai/mixtral-8x22b-instruct',
+  ],
+};
 
-const OLLAMA_HOST_ALLOWLIST = new Set([
-  'localhost', '127.0.0.1', '::1', '[::1]', 'host.docker.internal',
-]);
-
-function isLocalDeployment(): boolean {
-  const mode = typeof process !== 'undefined' ? (process.env?.LOCAL_API_MODE || '') : '';
-  return mode.includes('sidecar') || mode.includes('docker');
-}
+const PROVIDER_APIS: Record<LlmProviderName, { url: string; envKey: string }> = {
+  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', envKey: 'GROQ_API_KEY' },
+  openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions', envKey: 'OPENROUTER_API_KEY' },
+  nvidia: { url: 'https://integrate.api.nvidia.com/v1/chat/completions', envKey: 'NVIDIA_NIM_API_KEY' },
+};
 
 export function getProviderCredentials(
   provider: string,
-  overrides: ProviderCredentialOverrides = {},
+  overrides: { model?: string } = {},
 ): ProviderCredentials | null {
-  if (provider === 'ollama') {
-    const baseUrl = process.env.OLLAMA_API_URL;
-    if (!baseUrl) return null;
+  const meta = PROVIDER_APIS[provider as LlmProviderName];
+  if (!meta) return null;
 
-    if (!isLocalDeployment()) {
-      try {
-        const hostname = new URL(baseUrl).hostname;
-        if (!OLLAMA_HOST_ALLOWLIST.has(hostname)) {
-          console.warn(`[llm] Ollama blocked: hostname "${hostname}" not in allowlist`);
-          return null;
-        }
-      } catch {
-        return null;
-      }
-    }
+  const apiKey = process.env[meta.envKey];
+  if (!apiKey) return null;
 
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const apiKey = process.env.OLLAMA_API_KEY;
-    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  const model = overrides.model || process.env[`${meta.envKey.replace('_API_KEY', '')}_MODEL`] || PROVIDER_MODELS[provider as LlmProviderName][0];
 
-    return {
-      apiUrl: new URL('/v1/chat/completions', baseUrl).toString(),
-      model: overrides.model || process.env.OLLAMA_MODEL || 'llama3.1:8b',
-      headers,
-      extraBody: { think: false },
-    };
-  }
-
-  if (provider === 'groq') {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) return null;
-    return {
-      apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
-      model: overrides.model || 'llama-3.3-70b-versatile',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    };
-  }
-
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
   if (provider === 'openrouter') {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey) return null;
-    return {
-      apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
-      model: overrides.model || 'google/gemini-2.5-flash',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://worldmonitor.app',
-        'X-Title': 'World Monitor',
-      },
-    };
+    headers['HTTP-Referer'] = 'https://worldmonitor.app';
+    headers['X-Title'] = 'World Monitor';
   }
 
-  if (provider === 'nvidia') {
-    const apiKey = process.env.NVIDIA_NIM_API_KEY;
-    if (!apiKey) return null;
-    return {
-      apiUrl: 'https://integrate.api.nvidia.com/v1/chat/completions',
-      model: overrides.model || process.env.NVIDIA_NIM_MODEL || 'meta/llama-3.3-70b-instruct',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    };
-  }
-
-  // Generic OpenAI-compatible endpoint via LLM_API_URL/LLM_API_KEY/LLM_MODEL
-  if (provider === 'generic') {
-    const apiUrl = process.env.LLM_API_URL;
-    const apiKey = process.env.LLM_API_KEY;
-    if (!apiUrl || !apiKey) return null;
-    return {
-      apiUrl,
-      model: overrides.model || process.env.LLM_MODEL || 'gpt-3.5-turbo',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    };
-  }
-
-  return null;
+  return { apiUrl: meta.url, model, headers };
 }
 
 export function stripThinkingTags(text: string): string {
@@ -137,7 +83,7 @@ export function stripThinkingTags(text: string): string {
 }
 
 
-const PROVIDER_CHAIN = ['ollama', 'groq', 'openrouter', 'nvidia', 'generic'] as const;
+const PROVIDER_CHAIN: LlmProviderName[] = ['groq', 'openrouter', 'nvidia'];
 const PROVIDER_SET = new Set<string>(PROVIDER_CHAIN);
 
 export interface LlmCallOptions {
@@ -146,13 +92,10 @@ export interface LlmCallOptions {
   maxTokens?: number;
   timeoutMs?: number;
   provider?: string;
-  // Optional overrides. When omitted, the historic provider chain and default
-  // provider models remain unchanged for all existing callers.
   providerOrder?: string[];
   modelOverrides?: Partial<Record<LlmProviderName, string>>;
   stripThinkingTags?: boolean;
   validate?: (content: string) => boolean;
-  /** Optional text to append to the system message (index 0). Appended as \n\n---\n\n<systemAppend>. No-op if no system message at index 0. */
   systemAppend?: string;
 }
 
@@ -166,18 +109,18 @@ export interface LlmCallResult {
 function resolveProviderChain(opts: {
   forcedProvider?: string;
   providerOrder?: string[];
-}): string[] {
-  if (opts.forcedProvider) return [opts.forcedProvider];
+}): LlmProviderName[] {
+  if (opts.forcedProvider) return [opts.forcedProvider as LlmProviderName];
   if (!Array.isArray(opts.providerOrder) || opts.providerOrder.length === 0) {
     return [...PROVIDER_CHAIN];
   }
 
   const seen = new Set<string>();
-  const providers: string[] = [];
+  const providers: LlmProviderName[] = [];
   for (const provider of opts.providerOrder) {
     if (!PROVIDER_SET.has(provider) || seen.has(provider)) continue;
     seen.add(provider);
-    providers.push(provider);
+    providers.push(provider as LlmProviderName);
   }
 
   return providers.length > 0 ? providers : [...PROVIDER_CHAIN];
@@ -226,10 +169,9 @@ export type LlmStreamOptions = Omit<LlmCallOptions, 'stripThinkingTags' | 'valid
 export function callLlmReasoningStream(opts: LlmStreamOptions): ReadableStream<Uint8Array> {
   const envProvider = process.env.LLM_REASONING_PROVIDER;
   const provider = (envProvider && PROVIDER_SET.has(envProvider) ? envProvider : 'groq') as LlmProviderName;
-  const model = process.env.LLM_REASONING_MODEL;
+  const modelOverride = process.env.LLM_REASONING_MODEL;
   const remaining = PROVIDER_CHAIN.filter((p) => p !== provider);
   const providerOrder = [provider, ...remaining];
-  const modelOverrides = model ? { [provider]: model } as Partial<Record<LlmProviderName, string>> : undefined;
 
   const {
     messages: rawMessages,
@@ -271,45 +213,54 @@ export function callLlmReasoningStream(opts: LlmStreamOptions): ReadableStream<U
       for (const providerName of providerOrder) {
         if (streamClosed) break;
 
-        const creds = getProviderCredentials(providerName, {
-          model: modelOverrides?.[providerName as LlmProviderName],
-        });
-        if (!creds) continue;
-
-        if (!(await isProviderAvailable(creds.apiUrl))) {
+        const meta = PROVIDER_APIS[providerName as LlmProviderName];
+        if (meta && !(await isProviderAvailable(meta.url))) {
           console.warn(`[llm-stream:${providerName}] Offline, skipping`);
           continue;
         }
 
-        // Per-fetch abort controller merges client signal + per-request timeout
-        activeController = new AbortController();
-        const timeoutId = setTimeout(() => activeController?.abort(), timeoutMs);
-        if (clientSignal?.aborted) { clearTimeout(timeoutId); break; }
-        clientSignal?.addEventListener('abort', () => activeController?.abort(), { once: true });
+        const models = modelOverride
+          ? [modelOverride]
+          : PROVIDER_MODELS[providerName as LlmProviderName] || [];
 
-        let hasContent = false;
-        try {
-          const resp = await fetch(creds.apiUrl, {
-            method: 'POST',
-            headers: { ...creds.headers, 'User-Agent': CHROME_UA },
-            body: JSON.stringify({
-              ...creds.extraBody,
-              model: creds.model,
-              messages,
-              temperature,
-              max_tokens: maxTokens,
-              stream: true,
-            }),
-            signal: activeController.signal,
-          });
-          // Timeout stays active — it must bound the streaming body read, not just the connection
+        for (const model of models) {
+          if (streamClosed) break;
 
-          if (!resp.ok || !resp.body) {
-            clearTimeout(timeoutId);
-            const errBody = resp.body ? await resp.text().catch(() => '') : '';
-            console.warn(`[llm-stream:${providerName}] HTTP ${resp.status} model=${creds.model} body=${errBody.slice(0, 300)}`);
-            continue;
-          }
+          const creds = getProviderCredentials(providerName, { model });
+          if (!creds) break;
+
+          // Per-fetch abort controller merges client signal + per-request timeout
+          activeController = new AbortController();
+          const timeoutId = setTimeout(() => activeController?.abort(), timeoutMs);
+          if (clientSignal?.aborted) { clearTimeout(timeoutId); break; }
+          clientSignal?.addEventListener('abort', () => activeController?.abort(), { once: true });
+
+          let hasContent = false;
+          try {
+            const resp = await fetch(creds.apiUrl, {
+              method: 'POST',
+              headers: { ...creds.headers, 'User-Agent': CHROME_UA },
+              body: JSON.stringify({
+                model: creds.model,
+                messages,
+                temperature,
+                max_tokens: maxTokens,
+                stream: true,
+              }),
+              signal: activeController.signal,
+            });
+
+            if (!resp.ok || !resp.body) {
+              clearTimeout(timeoutId);
+              const errBody = resp.body ? await resp.text().catch(() => '') : '';
+              const status = resp.status;
+              if (status === 401 || status === 403 || status === 402) {
+                console.warn(`[llm-stream:${providerName}:${model}] HTTP ${status} — skipping provider`);
+                break;
+              }
+              console.warn(`[llm-stream:${providerName}:${model}] HTTP ${status} — trying next model`);
+              continue;
+            }
 
           const reader = resp.body.getReader();
           const decoder = new TextDecoder();
@@ -348,14 +299,14 @@ export function callLlmReasoningStream(opts: LlmStreamOptions): ReadableStream<U
         } catch (err) {
           clearTimeout(timeoutId);
           if (hasContent) {
-            // Partial stream — close without done so the client sees it as truncated, not success
             closeStream();
             return;
           }
           if (streamClosed) return;
-          console.warn(`[llm-stream:${providerName}] ${(err as Error).message}`);
+          console.warn(`[llm-stream:${providerName}:${model}] ${(err as Error).message}`);
         }
-      }
+        } // model loop
+        } // provider loop
 
       if (!streamClosed) {
         emit({ error: 'llm_unavailable' });
@@ -399,76 +350,81 @@ export async function callLlm(opts: LlmCallOptions): Promise<LlmCallResult | nul
   const providers = resolveProviderChain({ forcedProvider, providerOrder });
 
   for (const providerName of providers) {
-    const creds = getProviderCredentials(providerName, {
-      model: modelOverrides?.[providerName as LlmProviderName],
-    });
-    if (!creds) {
-      if (forcedProvider) return null;
-      continue;
-    }
-
-    // Health gate: skip provider if endpoint is unreachable
-    if (!(await isProviderAvailable(creds.apiUrl))) {
+    // Health gate: skip provider if auth/connectivity failed
+    const meta = PROVIDER_APIS[providerName];
+    if (meta && !(await isProviderAvailable(meta.url))) {
       console.warn(`[llm:${providerName}] Offline, skipping`);
       if (forcedProvider) return null;
       continue;
     }
 
-    try {
-      const resp = await fetch(creds.apiUrl, {
-        method: 'POST',
-        headers: { ...creds.headers, 'User-Agent': CHROME_UA },
-        body: JSON.stringify({
-          ...creds.extraBody,
-          model: creds.model,
-          messages,
-          temperature,
-          max_tokens: maxTokens,
-        }),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
+    // Build model list: explicit override first, then provider's candidate list
+    const overrideModel = modelOverrides?.[providerName];
+    const models = overrideModel
+      ? [overrideModel]
+      : PROVIDER_MODELS[providerName];
 
-      if (!resp.ok) {
-        console.warn(`[llm:${providerName}] HTTP ${resp.status}`);
-        if (forcedProvider) return null;
-        continue;
-      }
+    for (const model of models) {
+      const creds = getProviderCredentials(providerName, { model });
+      if (!creds) break;
 
-      const data = (await resp.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-        usage?: { total_tokens?: number };
-      };
+      try {
+        const resp = await fetch(creds.apiUrl, {
+          method: 'POST',
+          headers: { ...creds.headers, 'User-Agent': CHROME_UA },
+          body: JSON.stringify({
+            model: creds.model,
+            messages,
+            temperature,
+            max_tokens: maxTokens,
+          }),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
 
-      let content = data.choices?.[0]?.message?.content?.trim() || '';
-      if (!content) {
-        if (forcedProvider) return null;
-        continue;
-      }
-
-      const tokens = data.usage?.total_tokens ?? 0;
-
-      if (shouldStrip) {
-        content = stripThinkingTags(content);
-        if (!content) {
-          if (forcedProvider) return null;
+        if (!resp.ok) {
+          const status = resp.status;
+          // Auth/credits error → skip entire provider (all models will fail)
+          if (status === 401 || status === 403 || status === 402) {
+            console.warn(`[llm:${providerName}:${model}] HTTP ${status} — skipping provider`);
+            break;
+          }
+          // Model-specific error (404, 429) → try next model
+          console.warn(`[llm:${providerName}:${model}] HTTP ${status} — trying next model`);
           continue;
         }
+
+        const data = (await resp.json()) as {
+          choices?: Array<{ message?: { content?: string } }>;
+          usage?: { total_tokens?: number };
+        };
+
+        let content = data.choices?.[0]?.message?.content?.trim() || '';
+        if (!content) {
+          console.warn(`[llm:${providerName}:${model}] empty response — trying next model`);
+          continue;
+        }
+
+        const tokens = data.usage?.total_tokens ?? 0;
+
+        if (shouldStrip) {
+          content = stripThinkingTags(content);
+          if (!content) continue;
+        }
+
+        content = content.replace(/^```(?:\w+)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
+
+        if (validate && !validate(content)) {
+          console.warn(`[llm:${providerName}:${model}] validate() rejected — trying next model`);
+          continue;
+        }
+
+        return { content, model: creds.model, provider: providerName, tokens };
+      } catch (err) {
+        console.warn(`[llm:${providerName}:${model}] ${(err as Error).message}`);
+        // Network error → try next model
       }
-
-      // Strip markdown code fences (e.g. ```json ... ```) that some models add
-      content = content.replace(/^```(?:\w+)?\s*/m, '').replace(/\s*```\s*$/m, '').trim();
-
-      if (validate && !validate(content)) {
-        console.warn(`[llm:${providerName}] validate() rejected response, trying next`);
-        if (forcedProvider) return null;
-        continue;
-      }
-
-      return { content, model: creds.model, provider: providerName, tokens };
-    } catch (err) {
-      console.warn(`[llm:${providerName}] ${(err as Error).message}`);
-      if (forcedProvider) return null;
     }
+    if (forcedProvider) return null;
   }
 
   return null;
