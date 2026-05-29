@@ -47,7 +47,7 @@
 
 ## 4. Grocery Index / Big Mac Index 面板
 
-**状态**: ✅ Big Mac Index 已修复
+**状态**: ✅ 已修复
 
 **Big Mac Index 修复方案**:
 1. ✅ GitHub Action `seed-consumer-daily.yml` 每日 UTC 9:00 运行 → Upstash Redis
@@ -59,7 +59,14 @@
 
 **数据流**: GitHub Actions seed → Upstash Redis → Bootstrap API → 前端面板; 服务端 fallback: Redis → Economist CSV
 
-**Grocery Index 状态**: 仍需 seed 脚本
+**Grocery Index 修复方案**:
+1. ✅ 面板从 `enabled: false` 改为 `enabled: true`（`src/config/panels.ts`）
+2. ✅ Seed 脚本 `scripts/seed-grocery-basket.mjs` 已存在，通过 EXA API 搜索 24 个国家的超市商品价格
+3. ✅ GitHub Action `seed-consumer-daily.yml` 每日 UTC 9:00 运行 seed 脚本
+4. ✅ 服务端 handler `server/worldmonitor/economic/v1/list-grocery-basket-prices.ts` 从 Redis 读取数据
+5. ✅ Bootstrap hydration 已配置 `groceryBasket: 'economic:grocery-basket:v1'`
+
+**数据流**: GitHub Actions (EXA API + seed-grocery-basket.mjs) → Upstash Redis → Bootstrap API / RPC → 前端面板
 
 ---
 
@@ -134,7 +141,7 @@ node scripts/seed-xxx.mjs
 | ~~中~~ | ~~Big Mac Index~~ | ~~中~~ | ~~低~~ | ✅ 已修复 |
 | 低 | Social Velocity | 低 | 中 |
 | 低 | WSB Ticker Scanner | 低 | 中 |
-| 低 | Grocery Index | 低 | 低 |
+| ~~低~~ | ~~Grocery Index~~ | ~~低~~ | ~~低~~ | ✅ 已修复 |
 
 ---
 

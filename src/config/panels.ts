@@ -84,7 +84,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'energy-risk-overview': { name: 'Global Energy Risk Overview', enabled: false, priority: 2 },
   'gulf-economies': { name: 'Gulf Economies', enabled: false, priority: 2 },
   'consumer-prices': { name: 'Consumer Prices', enabled: false, priority: 2 },
-  'grocery-basket': { name: 'Grocery Index', enabled: false, priority: 2 },
+  'grocery-basket': { name: 'Grocery Index', enabled: true, priority: 2 },
   'bigmac': { name: 'Big Mac Index', enabled: false, priority: 2 },
   'fuel-prices': { name: 'Fuel Prices', enabled: false, priority: 2 },
   'fao-food-price-index': { name: 'FAO Food Price Index', enabled: false, priority: 2 },
