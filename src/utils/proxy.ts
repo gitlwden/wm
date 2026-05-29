@@ -93,8 +93,8 @@ function toResponse(payload: CachedResponsePayload): Response {
   });
 }
 
-async function fetchAndPersist(url: string): Promise<Response> {
-  const response = await fetch(proxyUrl(url));
+async function fetchAndPersist(url: string, init?: RequestInit): Promise<Response> {
+  const response = await fetch(proxyUrl(url), init);
   if (response.ok && shouldPersistResponse(url)) {
     try {
       const body = await response.clone().text();
@@ -106,9 +106,9 @@ async function fetchAndPersist(url: string): Promise<Response> {
   return response;
 }
 
-export async function fetchWithProxy(url: string): Promise<Response> {
+export async function fetchWithProxy(url: string, init?: RequestInit): Promise<Response> {
   if (!shouldPersistResponse(url)) {
-    return fetch(proxyUrl(url));
+    return fetch(proxyUrl(url), init);
   }
 
   const cacheKey = buildResponseCacheKey(url);
@@ -121,5 +121,5 @@ export async function fetchWithProxy(url: string): Promise<Response> {
     return toResponse(cached.data);
   }
 
-  return fetchAndPersist(url);
+  return fetchAndPersist(url, init);
 }

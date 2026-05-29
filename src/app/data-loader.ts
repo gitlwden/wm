@@ -1037,7 +1037,7 @@ export class DataLoaderManager implements AppModule {
       }
 
       const items = await fetchCategoryFeeds(fallbackFeeds, {
-        batchSize: this.perFeedFallbackBatchSize,
+        batchSize: category === 'security' ? fallbackFeeds.length : this.perFeedFallbackBatchSize,
         onBatch: (partialItems) => {
           scheduleRender(partialItems);
           this.flashMapForNews(partialItems);

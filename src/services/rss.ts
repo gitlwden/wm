@@ -16,6 +16,7 @@ const FEED_COOLDOWN_MS = 5 * 60 * 1000;
 const MAX_FAILURES = 2;
 const MAX_CACHE_ENTRIES = 100;
 const FEED_SCOPE_SEPARATOR = '::';
+const FEED_REQUEST_TIMEOUT_MS = 8_000;
 const feedFailures = new Map<string, { count: number; cooldownUntil: number }>();
 const feedCache = new Map<string, { items: NewsItem[]; timestamp: number }>();
 const CACHE_TTL = 30 * 60 * 1000;
@@ -221,7 +222,9 @@ export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
 
     if (!url) throw new Error(`No URL found for feed ${feed.name}`);
 
-    const response = await fetchWithProxy(url);
+    const response = await fetchWithProxy(url, {
+      signal: AbortSignal.timeout(FEED_REQUEST_TIMEOUT_MS),
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const text = await response.text();
     const parser = new DOMParser();
