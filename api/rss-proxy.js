@@ -37,6 +37,24 @@ const DIRECT_FETCH_HEADERS = Object.freeze({
   'Accept-Language': 'en-US,en;q=0.9',
 });
 
+/**
+ * Returns fetch headers for a given URL, injecting GitHub token for api.github.com.
+ * @param {string} feedUrl
+ * @returns {Record<string, string>}
+ */
+function getHeadersForUrl(feedUrl) {
+  const headers = { ...DIRECT_FETCH_HEADERS };
+  if (feedUrl.includes('api.github.com')) {
+    const token = process.env.GITHUB_TOKEN;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    headers['Accept'] = 'application/json';
+    headers['X-GitHub-Api-Version'] = '2022-11-28';
+  }
+  return headers;
+}
+
 async function fetchViaRailway(feedUrl, timeoutMs) {
   const relayBaseUrl = getRelayBaseUrl();
   if (!relayBaseUrl) return null;
@@ -111,9 +129,11 @@ export default async function handler(req, ctx) {
     const isGoogleNews = isGoogleNewsFeedUrl(feedUrl);
     const timeout = isGoogleNews ? 20000 : 12000;
 
+    const fetchHeaders = getHeadersForUrl(feedUrl);
+
     const fetchDirect = async () => {
       const response = await fetchWithTimeout(feedUrl, {
-        headers: DIRECT_FETCH_HEADERS,
+        headers: fetchHeaders,
         redirect: 'manual',
       }, timeout);
 
@@ -129,7 +149,7 @@ export default async function handler(req, ctx) {
             throw new Error('Redirect to disallowed domain');
           }
           return fetchWithTimeout(redirectUrl.href, {
-            headers: DIRECT_FETCH_HEADERS,
+            headers: fetchHeaders,
           }, timeout);
         }
       }

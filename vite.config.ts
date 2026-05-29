@@ -727,19 +727,27 @@ function rssProxyPlugin(): Plugin {
           const timeout = feedUrl.includes('news.google.com') ? 20000 : 12000;
           const timer = setTimeout(() => controller.abort(), timeout);
 
+          const fetchHeaders: Record<string, string> = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+          };
+          if (feedUrl.includes('api.github.com')) {
+            const ghToken = process.env.GITHUB_TOKEN;
+            if (ghToken) fetchHeaders['Authorization'] = `Bearer ${ghToken}`;
+            fetchHeaders['Accept'] = 'application/json';
+            fetchHeaders['X-GitHub-Api-Version'] = '2022-11-28';
+          }
+
           const response = await fetch(feedUrl, {
             signal: controller.signal,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-            },
+            headers: fetchHeaders,
             redirect: 'follow',
           });
           clearTimeout(timer);
 
           const data = await response.text();
           res.statusCode = response.status;
-          res.setHeader('Content-Type', 'application/xml');
+          res.setHeader('Content-Type', response.headers.get('content-type') || 'application/xml');
           res.setHeader('Cache-Control', 'public, max-age=300');
           res.setHeader('Access-Control-Allow-Origin', '*');
           res.end(data);
