@@ -3,14 +3,13 @@
 // Probes provider URLs with a fast request, caches results.
 // All LLM call sites check this before attempting expensive fetch calls.
 
-const PROBE_TIMEOUT_MS = 3_000;
+const PROBE_TIMEOUT_MS = 2_000;
 const CACHE_TTL_MS = 60_000; // re-probe every 60s
 const AUTH_FAIL_TTL_MS = 5 * 60_000; // auth errors: re-probe after 5min
 
 interface HealthEntry {
   available: boolean;
   checkedAt: number;
-  /** TTL for this entry — shorter for auth failures */
   ttlMs: number;
 }
 
@@ -18,30 +17,26 @@ const cache = new Map<string, HealthEntry>();
 const inFlight = new Map<string, Promise<boolean>>();
 
 /**
- * Auth-aware probe: sends a minimal chat completion to verify the API key works.
- * Returns { ok, statusCode } so the caller can decide TTL based on failure type.
+ * Probe a provider by hitting its /models endpoint with auth.
+ * GET /v1/models is lightweight and verifies both reachability + API key.
  */
-async function probeAuth(apiUrl: string, headers: Record<string, string>): Promise<{ ok: boolean; statusCode: number }> {
+async function probe(url: string, headers: Record<string, string>): Promise<{ ok: boolean; statusCode: number }> {
   try {
-    const resp = await fetch(apiUrl, {
-      method: 'POST',
+    // /models endpoint — lightweight, no token consumption
+    const modelsUrl = url.replace(/\/chat\/completions$/, '/models');
+    const resp = await fetch(modelsUrl, {
+      method: 'GET',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'probe', messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
-    // 200 = works, 400 = model not found but auth OK, 404 = endpoint exists
-    // 401/403/402 = auth/credits problem
     return { ok: resp.status < 401, statusCode: resp.status };
   } catch {
     return { ok: false, statusCode: 0 };
   }
 }
 
-/**
- * Resolve auth headers for known LLM providers.
- */
-function getAuthHeaders(apiUrl: string): Record<string, string> {
-  const origin = new URL(apiUrl).origin;
+function getAuthHeaders(url: string): Record<string, string> {
+  const origin = new URL(url).origin;
   if (origin === 'https://api.groq.com') {
     const key = process.env.GROQ_API_KEY;
     if (key) return { Authorization: `Bearer ${key}` };
@@ -60,7 +55,7 @@ function getAuthHeaders(apiUrl: string): Record<string, string> {
 /**
  * Check if an LLM provider endpoint is available.
  * Returns cached result if fresh (< entry.ttlMs old).
- * Otherwise probes with auth verification and caches the result.
+ * Probes /models with auth key to verify both reachability and API key validity.
  */
 export async function isProviderAvailable(apiUrl: string): Promise<boolean> {
   const origin = new URL(apiUrl).origin;
@@ -69,37 +64,22 @@ export async function isProviderAvailable(apiUrl: string): Promise<boolean> {
     return cached.available;
   }
 
-  // Coalesce concurrent probes to the same origin
   const existing = inFlight.get(origin);
   if (existing) return existing;
 
   const promise = (async () => {
     const authHeaders = getAuthHeaders(apiUrl);
-    const hasAuth = Object.keys(authHeaders).length > 0;
+    const result = await probe(apiUrl, authHeaders);
+    const available = result.ok;
+    const ttlMs = (!available && result.statusCode >= 401 && result.statusCode <= 403)
+      ? AUTH_FAIL_TTL_MS
+      : CACHE_TTL_MS;
 
-    let available: boolean;
-    let ttlMs = CACHE_TTL_MS;
-
-    if (hasAuth) {
-      // Auth-aware probe: verify API key actually works
-      const result = await probeAuth(apiUrl, authHeaders);
-      available = result.ok;
-      if (!available && result.statusCode >= 401 && result.statusCode <= 403) {
-        // Auth/credits failure — use shorter TTL so we retry sooner
-        ttlMs = AUTH_FAIL_TTL_MS;
-        console.warn(`[llm-health] Auth probe failed for ${origin}: HTTP ${result.statusCode} — retry in ${AUTH_FAIL_TTL_MS / 1000}s`);
-      } else if (!available) {
-        console.warn(`[llm-health] Provider unreachable: ${origin}`);
-      }
-    } else {
-      // No auth headers (Ollama, generic) — just check TCP reachability
-      try {
-        await fetch(origin, { method: 'GET', signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-        available = true;
-      } catch {
-        available = false;
-        console.warn(`[llm-health] Provider unreachable: ${origin}`);
-      }
+    if (!available) {
+      const label = result.statusCode >= 401 && result.statusCode <= 403
+        ? `Auth failed (HTTP ${result.statusCode})`
+        : 'Unreachable';
+      console.warn(`[llm-health] ${label}: ${origin} — retry in ${ttlMs / 1000}s`);
     }
 
     cache.set(origin, { available, checkedAt: Date.now(), ttlMs });
@@ -131,17 +111,8 @@ export async function reprobeAll(): Promise<void> {
   await Promise.all(origins.map(async (origin) => {
     const apiUrl = origin + '/v1/chat/completions';
     const authHeaders = getAuthHeaders(apiUrl);
-    let available: boolean;
-    if (Object.keys(authHeaders).length > 0) {
-      const result = await probeAuth(apiUrl, authHeaders);
-      available = result.ok;
-    } else {
-      try {
-        await fetch(origin, { method: 'GET', signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) });
-        available = true;
-      } catch { available = false; }
-    }
-    cache.set(origin, { available, checkedAt: Date.now(), ttlMs: CACHE_TTL_MS });
+    const result = await probe(apiUrl, authHeaders);
+    cache.set(origin, { available: result.ok, checkedAt: Date.now(), ttlMs: CACHE_TTL_MS });
   }));
 }
 
