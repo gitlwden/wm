@@ -1,4 +1,5 @@
 import type { AppContext, AppModule } from '@/app/app-context';
+import { orderNewsCategoriesForLoad } from '@/app/news-category-order';
 import { getRpcBaseUrl } from '@/services/rpc-client';
 import { enqueuePanelCall } from '@/app/pending-panel-data';
 import type { NewsItem, MapLayers, SocialUnrestEvent, UcdpGeoEvent } from '@/types';
@@ -1087,6 +1088,8 @@ export class DataLoaderManager implements AppModule {
 
       return items;
     } catch (error) {
+      const panel = this.ctx.newsPanels[category];
+      if (panel) panel.showError(t('common.noNewsAvailable'));
       this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
         status: 'error',
         errorMessage: String(error),
@@ -1106,9 +1109,11 @@ export class DataLoaderManager implements AppModule {
     // Fire digest fetch early (non-blocking) — await before category loop
     const digestPromise = this.tryFetchDigest();
 
-    const categories = Object.entries(FEEDS)
-      .filter((entry): entry is [string, typeof FEEDS[keyof typeof FEEDS]] => Array.isArray(entry[1]) && entry[1].length > 0)
-      .map(([key, feeds]) => ({ key, feeds }));
+    const categories = orderNewsCategoriesForLoad(
+      Object.entries(FEEDS)
+        .filter((entry): entry is [string, typeof FEEDS[keyof typeof FEEDS]] => Array.isArray(entry[1]) && entry[1].length > 0)
+        .map(([key, feeds]) => ({ key, feeds })),
+    );
 
     const digest = await digestPromise;
 
