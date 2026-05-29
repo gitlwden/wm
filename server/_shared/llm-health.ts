@@ -45,6 +45,14 @@ function getAuthHeaders(url: string): Record<string, string> {
     const key = process.env.NVIDIA_NIM_API_KEY;
     if (key) return { Authorization: `Bearer ${key}` };
   }
+  if (origin === 'https://api.cerebras.ai') {
+    const key = process.env.CEREBRAS_API_KEY;
+    if (key) return { Authorization: `Bearer ${key}` };
+  }
+  if (origin === 'https://api.sambanova.ai') {
+    const key = process.env.SAMBANOVA_API_KEY;
+    if (key) return { Authorization: `Bearer ${key}` };
+  }
   return {};
 }
 
@@ -124,6 +132,12 @@ export function warmHealthCache(): void {
   }
   if (typeof process !== 'undefined' && process.env?.NVIDIA_NIM_API_KEY) {
     providerUrls.push('https://integrate.api.nvidia.com/v1/chat/completions');
+  }
+  if (typeof process !== 'undefined' && process.env?.CEREBRAS_API_KEY) {
+    providerUrls.push('https://api.cerebras.ai/v1/chat/completions');
+  }
+  if (typeof process !== 'undefined' && process.env?.SAMBANOVA_API_KEY) {
+    providerUrls.push('https://api.sambanova.ai/v1/chat/completions');
   }
 
   for (const url of providerUrls) {

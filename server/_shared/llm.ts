@@ -1,6 +1,7 @@
 import { CHROME_UA } from './constants';
 import { isProviderAvailable } from './llm-health';
 import { sanitizeForPrompt } from './llm-sanitize.js';
+import { getAvailableModels } from './llm-models';
 
 export interface ProviderCredentials {
   apiUrl: string;
@@ -9,25 +10,13 @@ export interface ProviderCredentials {
   extraBody?: Record<string, unknown>;
 }
 
-export type LlmProviderName = 'groq' | 'nvidia';
-
-/** Candidate models per provider. First is default, rest are fallbacks tried in order. */
-const PROVIDER_MODELS: Record<LlmProviderName, string[]> = {
-  groq: [
-    'llama-3.3-70b-versatile',
-    'llama-3.1-8b-instant',
-    'gemma2-9b-it',
-  ],
-  nvidia: [
-    'meta/llama-3.3-70b-instruct',
-    'meta/llama-3.1-8b-instruct',
-    'mistralai/mixtral-8x22b-instruct',
-  ],
-};
+export type LlmProviderName = 'groq' | 'nvidia' | 'cerebras' | 'sambanova';
 
 const PROVIDER_APIS: Record<LlmProviderName, { url: string; envKey: string }> = {
-  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', envKey: 'GROQ_API_KEY' },
-  nvidia: { url: 'https://integrate.api.nvidia.com/v1/chat/completions', envKey: 'NVIDIA_NIM_API_KEY' },
+  groq:      { url: 'https://api.groq.com/openai/v1/chat/completions',       envKey: 'GROQ_API_KEY' },
+  nvidia:    { url: 'https://integrate.api.nvidia.com/v1/chat/completions',   envKey: 'NVIDIA_NIM_API_KEY' },
+  cerebras:  { url: 'https://api.cerebras.ai/v1/chat/completions',            envKey: 'CEREBRAS_API_KEY' },
+  sambanova: { url: 'https://api.sambanova.ai/v1/chat/completions',           envKey: 'SAMBANOVA_API_KEY' },
 };
 
 export function getProviderCredentials(
@@ -40,7 +29,16 @@ export function getProviderCredentials(
   const apiKey = process.env[meta.envKey];
   if (!apiKey) return null;
 
-  const model = overrides.model || process.env[`${meta.envKey.replace('_API_KEY', '')}_MODEL`] || PROVIDER_MODELS[provider as LlmProviderName][0];
+  // Use override model, or env-configured model, or first from discovered list, or fallback
+  const fallbackModels: Record<LlmProviderName, string> = {
+    groq: 'llama-3.3-70b-versatile',
+    nvidia: 'meta/llama-3.3-70b-instruct',
+    cerebras: 'llama3.1-8b',
+    sambanova: 'Meta-Llama-3.1-8B-Instruct',
+  };
+  const model = overrides.model
+    || process.env[`${meta.envKey.replace('_API_KEY', '')}_MODEL`]
+    || fallbackModels[provider as LlmProviderName];
 
   const headers: Record<string, string> = {
     'Authorization': `Bearer ${apiKey}`,
@@ -72,7 +70,7 @@ export function stripThinkingTags(text: string): string {
 }
 
 
-const PROVIDER_CHAIN: LlmProviderName[] = ['groq', 'nvidia'];
+const PROVIDER_CHAIN: LlmProviderName[] = ['groq', 'nvidia', 'cerebras', 'sambanova'];
 const PROVIDER_SET = new Set<string>(PROVIDER_CHAIN);
 
 export interface LlmCallOptions {
@@ -210,7 +208,7 @@ export function callLlmReasoningStream(opts: LlmStreamOptions): ReadableStream<U
 
         const models = modelOverride
           ? [modelOverride]
-          : PROVIDER_MODELS[providerName as LlmProviderName] || [];
+          : await getAvailableModels(providerName as LlmProviderName);
 
         for (const model of models) {
           if (streamClosed) break;
@@ -351,7 +349,7 @@ export async function callLlm(opts: LlmCallOptions): Promise<LlmCallResult | nul
     const overrideModel = modelOverrides?.[providerName];
     const models = overrideModel
       ? [overrideModel]
-      : PROVIDER_MODELS[providerName];
+      : await getAvailableModels(providerName);
 
     for (const model of models) {
       const creds = getProviderCredentials(providerName, { model });
