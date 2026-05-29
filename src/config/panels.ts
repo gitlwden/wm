@@ -55,6 +55,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'supply-chain': { name: 'Supply Chain', enabled: true, priority: 1, ...(_desktop && { premium: 'enhanced' as const }) },
   finance: { name: 'Financial', enabled: true, priority: 1 },
   tech: { name: 'Technology', enabled: true, priority: 2 },
+  hardware: { name: 'Semiconductors & Hardware', enabled: true, priority: 2 },
   crypto: { name: 'Crypto', enabled: true, priority: 2 },
   heatmap: { name: 'Sector Heatmap', enabled: true, priority: 2 },
   ai: { name: 'AI/ML', enabled: true, priority: 2 },
