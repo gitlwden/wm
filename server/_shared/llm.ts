@@ -9,7 +9,7 @@ export interface ProviderCredentials {
   extraBody?: Record<string, unknown>;
 }
 
-export type LlmProviderName = 'ollama' | 'groq' | 'openrouter' | 'generic';
+export type LlmProviderName = 'ollama' | 'groq' | 'openrouter' | 'nvidia' | 'generic';
 
 export interface ProviderCredentialOverrides {
   model?: string;
@@ -84,6 +84,19 @@ export function getProviderCredentials(
     };
   }
 
+  if (provider === 'nvidia') {
+    const apiKey = process.env.NVIDIA_NIM_API_KEY;
+    if (!apiKey) return null;
+    return {
+      apiUrl: 'https://integrate.api.nvidia.com/v1/chat/completions',
+      model: overrides.model || process.env.NVIDIA_NIM_MODEL || 'meta/llama-3.3-70b-instruct',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    };
+  }
+
   // Generic OpenAI-compatible endpoint via LLM_API_URL/LLM_API_KEY/LLM_MODEL
   if (provider === 'generic') {
     const apiUrl = process.env.LLM_API_URL;
@@ -124,7 +137,7 @@ export function stripThinkingTags(text: string): string {
 }
 
 
-const PROVIDER_CHAIN = ['ollama', 'groq', 'openrouter', 'generic'] as const;
+const PROVIDER_CHAIN = ['ollama', 'groq', 'openrouter', 'nvidia', 'generic'] as const;
 const PROVIDER_SET = new Set<string>(PROVIDER_CHAIN);
 
 export interface LlmCallOptions {
