@@ -294,6 +294,11 @@ const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'The Verge', url: rss('https://www.theverge.com/rss/index.xml') },
     { name: 'MIT Tech Review', url: rss('https://www.technologyreview.com/feed/') },
   ],
+  hardware: [
+    { name: "Tom's Hardware", url: rss('https://www.tomshardware.com/feeds/all') },
+    { name: 'SemiAnalysis', url: rss('https://news.google.com/rss/search?q=site:semianalysis.com+when:7d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Semiconductor News', url: rss('https://news.google.com/rss/search?q=semiconductor+OR+chip+OR+TSMC+OR+NVIDIA+OR+Intel+when:3d&hl=en-US&gl=US&ceid=US:en') },
+  ],
   ai: [
     { name: 'AI News', url: rss('https://news.google.com/rss/search?q=(OpenAI+OR+Anthropic+OR+Google+AI+OR+"large+language+model"+OR+ChatGPT)+when:2d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'VentureBeat AI', url: rss('https://venturebeat.com/category/ai/feed/') },
