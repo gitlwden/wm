@@ -41,10 +41,6 @@ function getAuthHeaders(url: string): Record<string, string> {
     const key = process.env.GROQ_API_KEY;
     if (key) return { Authorization: `Bearer ${key}` };
   }
-  if (origin === 'https://openrouter.ai') {
-    const key = process.env.OPENROUTER_API_KEY;
-    if (key) return { Authorization: `Bearer ${key}` };
-  }
   if (origin === 'https://integrate.api.nvidia.com') {
     const key = process.env.NVIDIA_NIM_API_KEY;
     if (key) return { Authorization: `Bearer ${key}` };
@@ -125,9 +121,6 @@ export function warmHealthCache(): void {
 
   if (typeof process !== 'undefined' && process.env?.GROQ_API_KEY) {
     providerUrls.push('https://api.groq.com/openai/v1/chat/completions');
-  }
-  if (typeof process !== 'undefined' && process.env?.OPENROUTER_API_KEY) {
-    providerUrls.push('https://openrouter.ai/api/v1/chat/completions');
   }
   if (typeof process !== 'undefined' && process.env?.NVIDIA_NIM_API_KEY) {
     providerUrls.push('https://integrate.api.nvidia.com/v1/chat/completions');

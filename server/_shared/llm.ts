@@ -9,20 +9,14 @@ export interface ProviderCredentials {
   extraBody?: Record<string, unknown>;
 }
 
-export type LlmProviderName = 'groq' | 'openrouter' | 'nvidia';
+export type LlmProviderName = 'groq' | 'nvidia';
 
 /** Candidate models per provider. First is default, rest are fallbacks tried in order. */
 const PROVIDER_MODELS: Record<LlmProviderName, string[]> = {
   groq: [
     'llama-3.3-70b-versatile',
     'llama-3.1-8b-instant',
-    'mixtral-8x7b-32768',
     'gemma2-9b-it',
-  ],
-  openrouter: [
-    'google/gemini-2.5-flash',
-    'meta-llama/llama-3.3-70b-instruct',
-    'mistralai/mistral-small-3.1-24b-instruct',
   ],
   nvidia: [
     'meta/llama-3.3-70b-instruct',
@@ -33,7 +27,6 @@ const PROVIDER_MODELS: Record<LlmProviderName, string[]> = {
 
 const PROVIDER_APIS: Record<LlmProviderName, { url: string; envKey: string }> = {
   groq: { url: 'https://api.groq.com/openai/v1/chat/completions', envKey: 'GROQ_API_KEY' },
-  openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions', envKey: 'OPENROUTER_API_KEY' },
   nvidia: { url: 'https://integrate.api.nvidia.com/v1/chat/completions', envKey: 'NVIDIA_NIM_API_KEY' },
 };
 
@@ -53,10 +46,6 @@ export function getProviderCredentials(
     'Authorization': `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
   };
-  if (provider === 'openrouter') {
-    headers['HTTP-Referer'] = 'https://worldmonitor.app';
-    headers['X-Title'] = 'World Monitor';
-  }
 
   return { apiUrl: meta.url, model, headers };
 }
@@ -83,7 +72,7 @@ export function stripThinkingTags(text: string): string {
 }
 
 
-const PROVIDER_CHAIN: LlmProviderName[] = ['groq', 'openrouter', 'nvidia'];
+const PROVIDER_CHAIN: LlmProviderName[] = ['groq', 'nvidia'];
 const PROVIDER_SET = new Set<string>(PROVIDER_CHAIN);
 
 export interface LlmCallOptions {

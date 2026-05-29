@@ -18,12 +18,14 @@ api/\[\[...path\]\].js
 .agent/
 .factory/
 .windsurf/
+.clinerules
 skills/
 !api/skills/
 ideas/
 docs/internal/
 docs/ideation/
 internal/
+tmp_health.json
 # Exception: api/internal/ hosts Vercel edge endpoints that must be tracked
 # (e.g. api/internal/brief-why-matters.ts — RELAY_SHARED_SECRET-auth'd
 # endpoints for internal callers like the Railway digest cron).
