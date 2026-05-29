@@ -3,7 +3,7 @@ retailer:
   name: Kroger USA
   marketCode: us
   currencyCode: USD
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.kroger.com
   enabled: true
 

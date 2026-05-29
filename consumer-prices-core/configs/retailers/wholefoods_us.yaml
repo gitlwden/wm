@@ -3,7 +3,7 @@ retailer:
   name: Whole Foods Market USA
   marketCode: us
   currencyCode: USD
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.wholefoodsmarket.com
   # disabled 2026-03: WFM product pages require Amazon login. Without a session cookie,
   # Firecrawl sees the auth modal (img-login-tomato.png / img-login-cheese.png) and

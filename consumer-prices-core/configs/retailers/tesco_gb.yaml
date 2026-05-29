@@ -3,7 +3,7 @@ retailer:
   name: Tesco UK
   marketCode: gb
   currencyCode: GBP
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.tesco.com
   enabled: true
 

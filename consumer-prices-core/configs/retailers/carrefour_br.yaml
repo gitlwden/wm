@@ -3,7 +3,7 @@ retailer:
   name: Carrefour Brasil
   marketCode: br
   currencyCode: BRL
-  adapter: search
+  adapter: exa-search
   baseUrl: https://mercado.carrefour.com.br
   enabled: true
 

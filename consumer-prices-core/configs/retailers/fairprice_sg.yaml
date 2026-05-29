@@ -3,7 +3,7 @@ retailer:
   name: FairPrice Singapore
   marketCode: sg
   currencyCode: SGD
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.fairprice.com.sg
   enabled: true
 

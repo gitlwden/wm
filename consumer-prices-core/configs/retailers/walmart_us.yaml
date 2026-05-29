@@ -3,7 +3,7 @@ retailer:
   name: Walmart USA
   marketCode: us
   currencyCode: USD
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.walmart.com
   enabled: true
 

@@ -3,7 +3,7 @@ retailer:
   name: Carrefour Saudi Arabia
   marketCode: sa
   currencyCode: SAR
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.carrefourksa.com/mafsau/en
   enabled: true # re-enabled 2026-03-23: #2148 fixed OOS prompt (returns null price instead of carousel fallback); may have low coverage if most products still OOS
 

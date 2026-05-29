@@ -3,7 +3,7 @@ retailer:
   name: Panda Saudi Arabia
   marketCode: sa
   currencyCode: SAR
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.panda.sa/en
   enabled: false # disabled 2026-03-23: panda.sa not indexed by Exa (0 domain matches for 10/12 items)
 

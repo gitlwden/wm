@@ -3,7 +3,7 @@ retailer:
   name: Tamimi Markets Saudi Arabia
   marketCode: sa
   currencyCode: SAR
-  adapter: search
+  adapter: exa-search
   baseUrl: https://tamimimarkets.com
   enabled: false # disabled 2026-03-23: 0/12 products after query tweak, Firecrawl can't extract tamimimarkets.com
 

@@ -3,7 +3,7 @@ retailer:
   name: Ocado UK
   marketCode: gb
   currencyCode: GBP
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.ocado.com
   enabled: true
 

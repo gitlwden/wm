@@ -3,7 +3,7 @@ retailer:
   name: Pão de Açúcar Brazil
   marketCode: br
   currencyCode: BRL
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.paodeacucar.com
   enabled: true
 

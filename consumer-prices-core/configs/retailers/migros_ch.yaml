@@ -3,7 +3,7 @@ retailer:
   name: Migros Switzerland
   marketCode: ch
   currencyCode: CHF
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.migros.ch
   # disabled 2026-03: Exa returns competitor domain URLs (domain bleed) for all CH queries; 0/12 every run.
   enabled: false

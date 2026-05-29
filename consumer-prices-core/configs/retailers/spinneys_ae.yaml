@@ -3,7 +3,7 @@ retailer:
   name: Spinneys UAE
   marketCode: ae
   currencyCode: AED
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.spinneys.com
   enabled: true
 

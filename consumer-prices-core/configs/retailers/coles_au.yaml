@@ -3,7 +3,7 @@ retailer:
   name: Coles Australia
   marketCode: au
   currencyCode: AUD
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.coles.com.au
   enabled: true
 

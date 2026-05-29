@@ -3,7 +3,7 @@ retailer:
   name: Sainsbury's UK
   marketCode: gb
   currencyCode: GBP
-  adapter: search
+  adapter: exa-search
   baseUrl: https://groceries.sainsburys.co.uk
   # disabled 2026-03: Exa returns "no pages found" for all GB grocery queries; 0/12 every run.
   enabled: false

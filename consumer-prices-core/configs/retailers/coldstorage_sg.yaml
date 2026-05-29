@@ -3,7 +3,7 @@ retailer:
   name: Cold Storage Singapore
   marketCode: sg
   currencyCode: SGD
-  adapter: search
+  adapter: exa-search
   baseUrl: https://coldstorage.com.sg
   enabled: true
 

@@ -3,7 +3,7 @@ retailer:
   name: JioMart India
   marketCode: in
   currencyCode: INR
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.jiomart.com
   enabled: true
 

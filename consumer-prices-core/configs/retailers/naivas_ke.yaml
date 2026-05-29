@@ -3,7 +3,7 @@ retailer:
   name: Naivas Supermarket Kenya
   marketCode: ke
   currencyCode: KES
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.naivas.online
   enabled: false
 

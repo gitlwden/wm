@@ -3,7 +3,7 @@ retailer:
   name: AnaNinja Saudi Arabia
   marketCode: sa
   currencyCode: SAR
-  adapter: search
+  adapter: exa-search
   baseUrl: https://ananinja.com/sa/en
   enabled: true
 

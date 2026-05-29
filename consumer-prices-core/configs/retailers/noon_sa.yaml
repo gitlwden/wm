@@ -3,7 +3,7 @@ retailer:
   name: Noon Saudi Arabia
   marketCode: sa
   currencyCode: SAR
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.noon.com/saudi-en
   enabled: true
 

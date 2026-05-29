@@ -3,7 +3,7 @@ retailer:
   name: Woolworths Australia
   marketCode: au
   currencyCode: AUD
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.woolworths.com.au
   enabled: true
 

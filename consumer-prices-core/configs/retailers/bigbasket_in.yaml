@@ -3,7 +3,7 @@ retailer:
   name: BigBasket India
   marketCode: in
   currencyCode: INR
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.bigbasket.com
   enabled: true
 

@@ -3,7 +3,7 @@ retailer:
   name: Coop Switzerland
   marketCode: ch
   currencyCode: CHF
-  adapter: search
+  adapter: exa-search
   baseUrl: https://www.coop.ch
   # disabled 2026-03: Exa returns competitor domain URLs (domain bleed) for CH queries; 0/12 every run.
   enabled: false
