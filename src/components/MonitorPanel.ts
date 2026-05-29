@@ -9,6 +9,9 @@ import { h, replaceChildren, clearChildren } from '@/utils/dom-utils';
 export class MonitorPanel extends Panel {
   private monitors: Monitor[] = [];
   private onMonitorsChange?: (monitors: Monitor[]) => void;
+  private inputEl: HTMLInputElement | null = null;
+  private monitorsListEl: HTMLDivElement | null = null;
+  private monitorsResultsEl: HTMLDivElement | null = null;
 
   constructor(initialMonitors: Monitor[] = []) {
     super({ id: 'monitors', title: t('panels.monitors'), infoTooltip: t('components.monitors.infoTooltip') });
@@ -19,33 +22,35 @@ export class MonitorPanel extends Panel {
   private renderInput(): void {
     clearChildren(this.content);
 
-    const input = h('input', {
+    this.inputEl = h('input', {
       type: 'text',
       className: 'monitor-input',
       id: 'monitorKeywords',
       placeholder: t('components.monitor.placeholder'),
-      onKeypress: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') this.addMonitor(); },
-    });
+      onKeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') this.addMonitor(); },
+    }) as HTMLInputElement;
 
     const inputContainer = h('div', { className: 'monitor-input-container' },
-      input,
+      this.inputEl,
       h('button', { className: 'monitor-add-btn', id: 'addMonitorBtn', onClick: () => this.addMonitor() },
         t('components.monitor.add'),
       ),
     );
 
-    const monitorsList = h('div', { id: 'monitorsList' });
-    const monitorsResults = h('div', { id: 'monitorsResults' });
+    this.monitorsListEl = h('div', { id: 'monitorsList' }) as HTMLDivElement;
+    this.monitorsResultsEl = h('div', { id: 'monitorsResults' }) as HTMLDivElement;
 
     this.content.appendChild(inputContainer);
-    this.content.appendChild(monitorsList);
-    this.content.appendChild(monitorsResults);
+    this.content.appendChild(this.monitorsListEl);
+    this.content.appendChild(this.monitorsResultsEl);
 
     this.renderMonitorsList();
   }
 
   private addMonitor(): void {
-    const input = document.getElementById('monitorKeywords') as HTMLInputElement;
+    const input = this.inputEl ?? document.getElementById('monitorKeywords') as HTMLInputElement | null;
+    if (!input) return;
+
     const keywords = input.value.trim();
 
     if (!keywords) return;
@@ -69,7 +74,7 @@ export class MonitorPanel extends Panel {
   }
 
   private renderMonitorsList(): void {
-    const list = document.getElementById('monitorsList');
+    const list = this.monitorsListEl ?? document.getElementById('monitorsList');
     if (!list) return;
 
     replaceChildren(list,
@@ -87,7 +92,7 @@ export class MonitorPanel extends Panel {
   }
 
   public renderResults(news: NewsItem[]): void {
-    const results = document.getElementById('monitorsResults');
+    const results = this.monitorsResultsEl ?? document.getElementById('monitorsResults');
     if (!results) return;
 
     if (this.monitors.length === 0) {

@@ -1141,6 +1141,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: true,   // 监听 0.0.0.0，允许局域网/外网访问（PM2 场景下 CLI --host 可能无法透传）
       port: 3000,
       open: !isE2E,
       hmr: isE2E ? false : undefined,
