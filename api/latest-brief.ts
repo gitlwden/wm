@@ -50,6 +50,9 @@ type BriefPreview = {
   dateLong: string;
   greeting: string;
   threadCount: number;
+  stories?: unknown[];
+  threads?: unknown[];
+  lead?: string;
 };
 
 async function readBriefPreview(
@@ -82,6 +85,10 @@ async function readBriefPreview(
     dateLong: data.dateLong,
     greeting: data.digest.greeting,
     threadCount: data.stories.length,
+    // Pass through stories + digest threads for inline rendering
+    stories: Array.isArray(data.stories) ? data.stories : [],
+    threads: Array.isArray(data.digest?.threads) ? data.digest.threads : [],
+    lead: data.digest?.lead ?? '',
   };
 }
 
@@ -265,6 +272,10 @@ export default async function handler(
       greeting: preview.greeting,
       threadCount: preview.threadCount,
       magazineUrl,
+      // Inline data for panel rendering
+      lead: preview.lead,
+      threads: preview.threads,
+      stories: preview.stories,
     },
     200,
     cors,

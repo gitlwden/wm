@@ -10,3 +10,12 @@ git push origin main（推送到内网 Ubuntu 自动触发 Docker 部署）。
 ---------------------------------------------
 
 git push origin main -f（同步到自己的云端备份）。
+
+
+---------------------------------------------
+gh auth logout
+gh auth login
+
+---------------------------------------------
+
+git remote set-url origin https://github.com/gitlwden/mw.git

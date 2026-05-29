@@ -26,6 +26,20 @@ import { getAuthState, subscribeAuthState } from '@/services/auth-state';
 import { hasTier, getEntitlementState } from '@/services/entitlements';
 import { h, rawHtml, replaceChildren, clearChildren } from '@/utils/dom-utils';
 
+interface BriefStory {
+  category?: string;
+  headline?: string;
+  country?: string;
+  threatLevel?: string;
+  source?: string;
+  link?: string;
+}
+
+interface BriefThread {
+  tag?: string;
+  teaser?: string;
+}
+
 interface LatestBriefReady {
   status: 'ready';
   issueDate: string;
@@ -33,6 +47,9 @@ interface LatestBriefReady {
   greeting: string;
   threadCount: number;
   magazineUrl: string;
+  lead?: string;
+  stories?: BriefStory[];
+  threads?: BriefThread[];
 }
 
 interface LatestBriefComposing {
@@ -373,27 +390,53 @@ export class LatestBriefPanel extends Panel {
   private renderReady(data: LatestBriefReady): void {
     const threadLabel = data.threadCount === 1 ? '1 thread' : `${data.threadCount} threads`;
 
-    const coverLogo = h('div', { className: 'latest-brief-cover-logo' });
-    coverLogo.appendChild(rawHtml(WM_LOGO_SVG));
+    // Header
+    const header = h('div', { className: 'latest-brief-inline-header' },
+      h('div', { className: 'latest-brief-inline-date' }, `${data.dateLong} — ${threadLabel}`),
+      h('div', { className: 'latest-brief-inline-greeting' }, data.greeting),
+    );
 
-    const coverCard = h('a', {
-      className: 'latest-brief-card latest-brief-card--ready',
+    // Lead paragraph
+    const leadEl = data.lead
+      ? h('div', { className: 'latest-brief-inline-lead' }, data.lead)
+      : null;
+
+    // Stories list
+    const storyEls: HTMLElement[] = [];
+    if (data.stories?.length) {
+      for (const s of data.stories) {
+        const levelClass = `brief-level-${s.threatLevel ?? 'info'}`;
+        const tags: string[] = [];
+        if (s.category) tags.push(s.category);
+        if (s.country && s.country !== 'Global') tags.push(s.country);
+        const tagStr = tags.join(' · ');
+        const headlineEl = s.link
+          ? h('a', { className: 'brief-story-headline', href: s.link, target: '_blank', rel: 'noopener' }, s.headline ?? '')
+          : h('div', { className: 'brief-story-headline' }, s.headline ?? '');
+        storyEls.push(
+          h('div', { className: `brief-story ${levelClass}` },
+            h('div', { className: 'brief-story-level' }, s.threatLevel ?? ''),
+            headlineEl,
+            tagStr ? h('div', { className: 'brief-story-tags' }, tagStr) : null!,
+          ),
+        );
+      }
+    }
+
+    const storiesList = storyEls.length
+      ? h('div', { className: 'latest-brief-inline-stories' }, ...storyEls)
+      : null;
+
+    // Link to full magazine (if URL works)
+    const readMore = h('a', {
+      className: 'latest-brief-inline-readmore',
       href: data.magazineUrl,
       target: '_blank',
       rel: 'noopener noreferrer',
-      'aria-label': `Open today's brief — ${threadLabel}`,
-    },
-      h('div', { className: 'latest-brief-cover' },
-        coverLogo,
-        h('div', { className: 'latest-brief-cover-issue' }, data.dateLong),
-        h('div', { className: 'latest-brief-cover-title' }, 'WorldMonitor'),
-        h('div', { className: 'latest-brief-cover-title' }, 'Brief.'),
-        h('div', { className: 'latest-brief-cover-kicker' }, threadLabel),
-      ),
-      h('div', { className: 'latest-brief-meta' },
-        h('div', { className: 'latest-brief-greeting' }, data.greeting),
-        h('div', { className: 'latest-brief-cta' }, 'Read brief →'),
-      ),
+    }, 'Open full magazine →');
+
+    const container = h('div', { className: 'latest-brief-inline' },
+      header, leadEl, storiesList, readMore,
     );
 
     // Share button: referral plumbing is server-side (GET /api/referral/me).
@@ -416,7 +459,7 @@ export class LatestBriefPanel extends Panel {
       shareStatus,
     );
 
-    replaceChildren(this.content, coverCard, shareRow);
+    replaceChildren(this.content, container, shareRow);
 
     // Lazy-load the referral module so the share wiring doesn't pull
     // into every dashboard bundle the panel lives in.

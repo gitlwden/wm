@@ -3004,3 +3004,79 @@ a.hub-top-story {
   color: var(--text-muted, #888);
   font-size: 12px;
 }
+/* Inline brief content */
+.latest-brief-inline {
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.latest-brief-inline-header {
+  margin-bottom: 8px;
+}
+.latest-brief-inline-date {
+  color: var(--text-muted, #888);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.latest-brief-inline-greeting {
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.latest-brief-inline-lead {
+  color: var(--text-secondary, #aaa);
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.latest-brief-inline-stories {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.brief-story {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border, #222);
+}
+.brief-story:last-child {
+  border-bottom: none;
+}
+.brief-story-level {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  min-width: 52px;
+}
+.brief-level-critical .brief-story-level { color: #ff4444; }
+.brief-level-high .brief-story-level { color: #ff8844; }
+.brief-level-medium .brief-story-level { color: #ffcc44; }
+.brief-level-low .brief-story-level { color: #88cc44; }
+.brief-level-info .brief-story-level { color: #888; }
+.brief-story-headline {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text, #e8e8e8);
+  text-decoration: none;
+}
+a.brief-story-headline:hover {
+  text-decoration: underline;
+}
+.brief-story-tags {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-muted, #888);
+}
+.latest-brief-inline-readmore {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--accent, #44ff88);
+  text-decoration: none;
+}
+.latest-brief-inline-readmore:hover {
+  text-decoration: underline;
+}
