@@ -20,15 +20,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Seed consumer prices
-        run: node scripts/seed-consumer-prices.mjs
-        continue-on-error: true
-        env:
-          CONSUMER_PRICES_CORE_API_KEY: ${{ secrets.CONSUMER_PRICES_CORE_API_KEY }}
-          CONSUMER_PRICES_CORE_BASE_URL: ${{ secrets.CONSUMER_PRICES_CORE_BASE_URL }}
-          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
-          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
-
       - name: Seed BigMac prices
         run: node scripts/seed-bigmac.mjs
         continue-on-error: true

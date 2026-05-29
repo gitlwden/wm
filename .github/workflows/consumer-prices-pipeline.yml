@@ -1,0 +1,79 @@
+name: Consumer Prices Pipeline
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+env:
+  DATABASE_URL: ${{ secrets.CONSUMER_PRICES_DATABASE_URL }}
+  EXA_API_KEY: ${{ secrets.EXA_API_KEY }}
+  UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+  UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: consumer-prices-core/package-lock.json
+
+      - name: Install dependencies
+        working-directory: consumer-prices-core
+        run: npm ci
+
+      - name: Run migrations
+        working-directory: consumer-prices-core
+        run: npm run migrate
+
+      - name: Scrape retailer prices
+        working-directory: consumer-prices-core
+        run: npm run jobs:scrape
+
+  aggregate:
+    needs: scrape
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: consumer-prices-core/package-lock.json
+
+      - name: Install dependencies
+        working-directory: consumer-prices-core
+        run: npm ci
+
+      - name: Aggregate indices
+        working-directory: consumer-prices-core
+        run: npm run jobs:aggregate
+
+  publish:
+    needs: aggregate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: consumer-prices-core/package-lock.json
+
+      - name: Install dependencies
+        working-directory: consumer-prices-core
+        run: npm ci
+
+      - name: Publish to Redis
+        working-directory: consumer-prices-core
+        run: npm run jobs:publish
