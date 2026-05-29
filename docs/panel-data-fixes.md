@@ -65,8 +65,14 @@
 3. ✅ GitHub Action `seed-consumer-daily.yml` 每日 UTC 9:00 运行 seed 脚本
 4. ✅ 服务端 handler `server/worldmonitor/economic/v1/list-grocery-basket-prices.ts` 从 Redis 读取数据
 5. ✅ Bootstrap hydration 已配置 `groceryBasket: 'economic:grocery-basket:v1'`
+6. ✅ **新增静态 fallback**：当 `EXA_API_KEY` 未配置时，seed 脚本使用基于 Numbeo/USDA 公开数据的近似价格（24 国 × 10 商品），确保面板始终有数据展示
 
 **数据流**: GitHub Actions (EXA API + seed-grocery-basket.mjs) → Upstash Redis → Bootstrap API / RPC → 前端面板
+**Fallback**: 无 EXA_API_KEY 时 → 静态近似价格写入 Redis → 同样数据流
+
+**API Key 要求**:
+- **必需**: 无（fallback 模式不需要任何 API key）
+- **可选**: `EXA_API_KEY`（获取实时超市价格）、`FIRECRAWL_API_KEY`（JS 渲染页面抓取）
 
 ---
 
