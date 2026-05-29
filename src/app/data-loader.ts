@@ -1408,6 +1408,10 @@ export class DataLoaderManager implements AppModule {
   }
 
   async loadMarkets(): Promise<void> {
+    // Track stock fetch result so downstream sections (heatmap, commodities)
+    // can reference it even when wrapped in separate try-catch blocks.
+    let stocksResult: { data: MarketData[]; skipped?: boolean; rateLimited?: boolean } | undefined;
+
     try {
       const customEntries = getMarketWatchlistEntries();
       const hasWatchlist = customEntries.length > 0;
@@ -1427,7 +1431,6 @@ export class DataLoaderManager implements AppModule {
       const hydratedMarkets = getHydratedData('marketQuotes') as ListMarketQuotesResponse | undefined;
       const marketsPanel = this.ctx.panels['markets'] as MarketPanel | undefined;
 
-      let stocksResult: Awaited<ReturnType<typeof fetchMultipleStocks>>;
       const symbolsToFetch = hasWatchlist ? watchlistSymbols : MARKET_SYMBOLS;
 
       if (!hasWatchlist && hydratedMarkets?.quotes?.length) {
@@ -1446,25 +1449,26 @@ export class DataLoaderManager implements AppModule {
         stocksResult = { data, skipped: hydratedMarkets.finnhubSkipped || undefined, rateLimited: hydratedMarkets.rateLimited || undefined };
       } else {
         // Watchlist set or no hydration: fetch from API
-        stocksResult = await fetchMultipleStocks(symbolsToFetch, {
+        const result = await fetchMultipleStocks(symbolsToFetch, {
           onBatch: (partialStocks) => {
             this.ctx.latestMarkets = partialStocks;
             marketsPanel?.renderMarkets(partialStocks);
           },
         });
-        this.ctx.latestMarkets = stocksResult.data;
+        stocksResult = result;
+        this.ctx.latestMarkets = result.data;
         // When rate-limited with empty data, don't overwrite previous render — panel keeps stale data
-        if (stocksResult.data.length > 0 || !stocksResult.rateLimited) {
-          marketsPanel?.renderMarkets(stocksResult.data, stocksResult.rateLimited);
+        if (result.data.length > 0 || !result.rateLimited) {
+          marketsPanel?.renderMarkets(result.data, result.rateLimited);
         }
       }
 
       const finnhubConfigMsg = 'FINNHUB_API_KEY not configured — add in Settings';
 
-      if (stocksResult.rateLimited && stocksResult.data.length === 0) {
+      if (stocksResult?.rateLimited && stocksResult.data.length === 0) {
         const rlMsg = 'Market data temporarily unavailable (rate limited) — retrying shortly';
         this.ctx.panels['commodities']?.showError(rlMsg);
-      } else if (stocksResult.skipped) {
+      } else if (stocksResult?.skipped) {
         this.ctx.statusPanel?.updateApi('Finnhub', { status: 'error' });
         if (stocksResult.data.length === 0) {
           this.ctx.panels['markets']?.showConfigError(finnhubConfigMsg);
@@ -1472,8 +1476,13 @@ export class DataLoaderManager implements AppModule {
       } else {
         this.ctx.statusPanel?.updateApi('Finnhub', { status: 'ok' });
       }
+    } catch {
+      this.ctx.statusPanel?.updateApi('Finnhub', { status: 'error' });
+    }
 
-      // Sector heatmap: always attempt loading regardless of market rate-limit status
+    // Sector heatmap: isolated try-catch so stock-market failures above
+    // never prevent the heatmap from loading.
+    try {
       const hydratedSectors = getHydratedData('sectors') as (GetSectorSummaryResponse & { valuations?: Record<string, SectorValuation> }) | undefined;
       const heatmapPanel = this.ctx.panels['heatmap'] as HeatmapPanel | undefined;
       const sectorNameMap = new Map(SECTORS.map((s) => [s.symbol, s.name]));
@@ -1484,26 +1493,27 @@ export class DataLoaderManager implements AppModule {
       });
       const toSectorBar = (s: { symbol?: string; name: string; change: number | null }) =>
         s.symbol && Number.isFinite(s.change) ? { symbol: s.symbol, name: s.name, change1d: s.change as number } : null;
-      // Defensive: a pre-PR bootstrap payload may have `sectors` but lack the
-      // new `valuations` field entirely. Treat that shape as a cache miss and
-      // fall through to a live fetch so the valuations tab can populate.
-      const hydratedHasValuationsField = hydratedSectors
-        ? Object.prototype.hasOwnProperty.call(hydratedSectors, 'valuations')
-        : false;
-      if (hydratedSectors?.sectors?.length && hydratedHasValuationsField) {
+
+      // Always render from hydration immediately when sectors are available,
+      // regardless of whether the `valuations` field is present.  This gives
+      // users instant heatmap tiles while a live fetch (below) can
+      // asynchronously supply valuations if the bootstrap payload lacked them.
+      if (hydratedSectors?.sectors?.length) {
         warmSectorCache(hydratedSectors);
         const items = hydratedSectors.sectors.map(toHeatmapItem);
         const sectorBars = items.map(toSectorBar).filter((s): s is NonNullable<typeof s> => s !== null);
         heatmapPanel?.renderHeatmap(items, sectorBars.length ? sectorBars : undefined);
-        heatmapPanel?.updateValuations(hydratedSectors.valuations);
-      } else {
-        // If hydrated had sectors but no valuations field, render performance
-        // tiles immediately so users see heatmap data while the live fetch runs.
-        if (hydratedSectors?.sectors?.length) {
-          const items = hydratedSectors.sectors.map(toHeatmapItem);
-          const sectorBars = items.map(toSectorBar).filter((s): s is NonNullable<typeof s> => s !== null);
-          heatmapPanel?.renderHeatmap(items, sectorBars.length ? sectorBars : undefined);
+        if (Object.prototype.hasOwnProperty.call(hydratedSectors, 'valuations')) {
+          heatmapPanel?.updateValuations(hydratedSectors.valuations);
         }
+      }
+
+      // When hydration lacked the `valuations` field, do a live fetch so the
+      // Valuations tab can populate.  Also fetch when hydration had no sectors
+      // at all (e.g. cold start with no bootstrap).
+      const needsLiveFetch = !hydratedSectors?.sectors?.length
+        || !Object.prototype.hasOwnProperty.call(hydratedSectors, 'valuations');
+      if (needsLiveFetch) {
         const sectorsResp = await fetchSectors() as GetSectorSummaryResponse & { valuations?: Record<string, SectorValuation> };
         if (sectorsResp.sectors.length > 0) {
           const items = sectorsResp.sectors.map(toHeatmapItem);
@@ -1515,11 +1525,21 @@ export class DataLoaderManager implements AppModule {
           if (Object.prototype.hasOwnProperty.call(sectorsResp, 'valuations')) {
             heatmapPanel?.updateValuations(sectorsResp.valuations);
           }
-        } else if (stocksResult.skipped) {
-          this.ctx.panels['heatmap']?.showConfigError(finnhubConfigMsg);
+        } else if (stocksResult?.skipped) {
+          this.ctx.panels['heatmap']?.showConfigError('FINNHUB_API_KEY not configured — add in Settings');
+        } else if (!hydratedSectors?.sectors?.length) {
+          // Both hydration and live fetch returned empty — show error so the
+          // panel doesn't stay stuck in the "retrying" spinner forever.
+          this.ctx.panels['heatmap']?.showError(t('common.failedSectorData'));
         }
       }
+    } catch (e) {
+      // Heatmap load failure is non-fatal — log and continue with remaining panels
+      console.warn('[DataLoader] Sector heatmap load failed:', e);
+      this.ctx.panels['heatmap']?.showError(t('common.failedSectorData'));
+    }
 
+    try {
       const commoditiesPanel = this.ctx.panels['commodities'] as CommoditiesPanel | undefined;
       const energyPanel = this.ctx.panels['energy-complex'] as EnergyComplexPanel | undefined;
       const mapCommodity = (c: MarketData) => ({ symbol: c.symbol, display: c.display, price: c.price, change: c.change, sparkline: c.sparkline });
@@ -1530,7 +1550,7 @@ export class DataLoaderManager implements AppModule {
       if (commoditiesPanel || energyPanel) {
         // Hydrate commodities from bootstrap (same pattern as sectors/markets)
         const hydratedCommodities = getHydratedData('commodityQuotes') as ListCommodityQuotesResponse | undefined;
-        const skipFetch = stocksResult.rateLimited && stocksResult.data.length === 0;
+        const skipFetch = !!stocksResult?.rateLimited && stocksResult.data.length === 0;
         let metalsLoaded = skipFetch;
         let energyLoaded = skipFetch;
 

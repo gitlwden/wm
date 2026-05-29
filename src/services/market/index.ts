@@ -232,15 +232,12 @@ export async function fetchSectors(): Promise<GetSectorSummaryResponse> {
   return sectorBreaker.execute(async () => {
     return client.getSectorSummary({ period: '' });
   }, emptySectorFallback, {
-    // Require sectors AND the valuations field to be present (not missing) so
-    // pre-PR payloads that lack the valuations key are never cached/replayed
-    // as stale data for the session. Empty object {} is OK (API may legitimately
-    // return zero valuations after Yahoo failures) but the key must exist.
-    shouldCache: (r: GetSectorSummaryResponse) => {
-      if (r.sectors.length === 0) return false;
-      const withValuations = r as GetSectorSummaryResponse & { valuations?: unknown };
-      return Object.prototype.hasOwnProperty.call(withValuations, 'valuations');
-    },
+    // Cache when we have sector performance data.  The `valuations` field is
+    // desirable but not required — a payload with sectors but without
+    // valuations (e.g. after Yahoo valuation fetch failures in the seed
+    // script) is still useful for the performance heatmap tab and should be
+    // cached so the panel doesn't flicker empty on subsequent visits.
+    shouldCache: (r: GetSectorSummaryResponse) => r.sectors.length > 0,
   });
 }
 

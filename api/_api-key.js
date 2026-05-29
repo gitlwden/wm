@@ -90,6 +90,9 @@ export async function validateApiKey(req, options = {}) {
     return { valid: false, required: true, error: 'Invalid API key' };
   }
 
-  // No credentials at all.
-  return { valid: false, required: true, error: 'API key required' };
+  // No credentials at all. When forceKey is false (non-premium, non-tier-gated
+  // endpoints like supply-chain display routes), allow the request through the
+  // auth gate so the handler can serve cached data to anonymous browser users.
+  // Premium / tier-gated callers always set forceKey=true so required stays true.
+  return { valid: false, required: forceKey, error: 'API key required' };
 }
