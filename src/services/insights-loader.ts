@@ -43,6 +43,12 @@ function normalizeGeneratedAtMs(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeGeneratedAtValue(value: unknown): string | number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) return value;
+  return null;
+}
+
 function isFresh(data: ServerInsights): boolean {
   const generatedAtMs = normalizeGeneratedAtMs(data.generatedAt);
   if (!generatedAtMs) return false;
@@ -104,8 +110,8 @@ function normalizeServerInsights(raw: unknown): ServerInsights | null {
   const payloadGeneratedAtMs = normalizeGeneratedAtMs(payloadGeneratedAt);
   const seedFetchedAtMs = normalizeGeneratedAtMs(unwrapped.seedFetchedAt);
   const generatedAt = seedFetchedAtMs && (!payloadGeneratedAtMs || Date.now() - payloadGeneratedAtMs >= MAX_AGE_MS)
-    ? unwrapped.seedFetchedAt
-    : payloadGeneratedAt || unwrapped.seedFetchedAt || Date.now();
+    ? normalizeGeneratedAtValue(unwrapped.seedFetchedAt) ?? Date.now()
+    : normalizeGeneratedAtValue(payloadGeneratedAt) ?? normalizeGeneratedAtValue(unwrapped.seedFetchedAt) ?? Date.now();
   const worldBrief = String(data.worldBrief || data.brief || data.summary || '').trim();
   const rawStories = Array.isArray(data.topStories)
     ? data.topStories
