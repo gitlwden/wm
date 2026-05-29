@@ -1,7 +1,7 @@
 /**
  * Summarization Service with Fallback Chain
  * Server-side Redis caching handles cross-user deduplication
- * Fallback: Groq -> NVIDIA NIM -> Cerebras -> SambaNova -> Browser T5
+ * Fallback: NVIDIA NIM -> Cerebras -> SambaNova -> Browser T5
  *
  * Uses NewsServiceClient.summarizeArticle() RPC instead of legacy
  * per-provider fetch endpoints.
@@ -18,7 +18,7 @@ import { NewsServiceClient, type SummarizeArticleResponse } from '@/generated/cl
 import { createCircuitBreaker } from '@/utils';
 import { buildSummaryCacheKey } from '@/utils/summary-cache-key';
 
-export type SummarizationProvider = 'groq' | 'nvidia' | 'cerebras' | 'sambanova' | 'browser' | 'cache';
+export type SummarizationProvider = 'nvidia' | 'cerebras' | 'sambanova' | 'browser' | 'cache';
 
 export interface SummarizationResult {
   summary: string;
@@ -64,7 +64,6 @@ interface ApiProviderDef {
 }
 
 const API_PROVIDERS: ApiProviderDef[] = [
-  { featureId: 'aiGroq',        provider: 'groq',       label: 'Groq AI' },
   { featureId: 'aiOpenRouter',  provider: 'nvidia',     label: 'NVIDIA NIM' },
   { featureId: 'aiOpenRouter',  provider: 'cerebras',   label: 'Cerebras' },
   { featureId: 'aiOpenRouter',  provider: 'sambanova',  label: 'SambaNova' },
@@ -263,8 +262,8 @@ async function generateSummaryInternal(
         onProgress?.(1, totalSteps, 'Running local AI model (beta)...');
         const browserResult = await tryBrowserT5(headlines, 'summarization-beta', bodies);
         if (browserResult) {
-          const groqProvider = API_PROVIDERS.find(p => p.provider === 'groq');
-          if (groqProvider && !options?.skipCloudProviders) tryApiProvider(groqProvider, headlines, geoContext, undefined, bodies).catch(() => {});
+          const firstProvider = API_PROVIDERS.find(p => p.provider !== 'browser');
+          if (firstProvider && !options?.skipCloudProviders) tryApiProvider(firstProvider, headlines, geoContext, undefined, bodies).catch(() => {});
 
           return browserResult;
         }
