@@ -59,6 +59,11 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'MIT Tech Review', url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed' },
       { name: 'ArXiv AI', url: 'https://export.arxiv.org/rss/cs.AI' },
     ],
+    hardware: [
+      { name: "Tom's Hardware", url: 'https://www.tomshardware.com/feeds/all' },
+      { name: 'SemiAnalysis', url: 'https://www.semianalysis.com/feed' },
+      { name: 'Semiconductor News', url: gn('semiconductor OR chip OR TSMC OR NVIDIA OR Intel when:3d') },
+    ],
     finance: [
       { name: 'CNBC', url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' },
       { name: 'MarketWatch', url: gn('site:marketwatch.com markets when:1d') },

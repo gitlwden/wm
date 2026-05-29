@@ -56,6 +56,12 @@ const VARIANTS: Array<{ clientConst: string; serverKey: string; knownGapsClientO
   // time this test was written. Add them as the server catches up.
 ];
 
+const REQUIRED_FULL_DIGEST_KEYS = [
+  // The full-variant homepage creates this panel and the browser-side
+  // per-feed fallback is normally off, so the server digest must emit it.
+  'hardware',
+];
+
 // Strip line + block comments so natural-language words in JSDoc/inline
 // notes can't masquerade as property keys.
 function stripComments(src: string): string {
@@ -207,4 +213,21 @@ describe('news feed key parity (client FEEDS ⇔ server VARIANT_FEEDS)', () => {
       );
     });
   }
+});
+
+describe('full-variant digest required keys', () => {
+  const serverSrc = readFileSync(SERVER_FEEDS_PATH, 'utf-8');
+
+  test('full emits the Semiconductors & Hardware digest bucket', () => {
+    const serverBody = extractVariantBlock(serverSrc, 'full');
+    assert.ok(serverBody, 'failed to locate VARIANT_FEEDS.full in server _feeds.ts');
+
+    const serverKeys = new Set(extractCategoryKeys(serverBody));
+    const missing = REQUIRED_FULL_DIGEST_KEYS.filter(k => !serverKeys.has(k));
+    assert.deepStrictEqual(
+      missing,
+      [],
+      `Full variant server digest is missing required client panel key(s): ${missing.join(', ')}`,
+    );
+  });
 });
