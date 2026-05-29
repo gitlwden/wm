@@ -225,3 +225,8 @@ npm run test:feeds
 
 
 *最后更新: 2026-05-20*
+
+## ⚡ 自动提交与 Token 节约
+
+1. **代码修改完成后自动提交推送**：每次代码修改完成并确认无误后，必须自动执行 `git add -A && git commit -m "<message>" && git push origin main`，将变更推送到 GitHub origin。
+2. **始终使用 `rtk` 前缀执行命令**：运行任何终端命令时，必须使用 `rtk` 前缀（如 `rtk git status`、`rtk npm run build`），以利用 RTK 的输出压缩功能节省 token 消耗。详见 `.clinerules` 中的 RTK 规则。*最后更新: 2026-05-29*
