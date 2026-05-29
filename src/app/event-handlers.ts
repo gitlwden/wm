@@ -1103,11 +1103,6 @@ export class EventHandlerManager implements AppModule {
       },
     });
 
-    const mount = document.getElementById('unifiedSettingsMount');
-    if (mount) {
-      mount.appendChild(this.ctx.unifiedSettings.getButton());
-    }
-
     const mobileBtn = document.getElementById('mobileSettingsBtn');
     if (mobileBtn) {
       mobileBtn.addEventListener('click', () => this.ctx.unifiedSettings?.open());
