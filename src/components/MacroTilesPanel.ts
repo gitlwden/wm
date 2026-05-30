@@ -4,6 +4,7 @@ import { t } from '@/services/i18n';
 import { escapeHtml } from '@/utils/sanitize';
 import { getEurostatCountryData } from '@/services/economic';
 import type { GetEurostatCountryDataResponse } from '@/services/economic';
+import { getHydratedData } from '@/services/bootstrap';
 
 let _client: EconomicServiceClient | null = null;
 async function getEconomicClient(): Promise<EconomicServiceClient> {
@@ -78,6 +79,13 @@ function tileHtml(tile: MacroTile): string {
   </div>`;
 }
 
+type FredObservations = { date: string; value: number }[];
+
+function getBootstrapFredObs(bootstrapKey: string): FredObservations {
+  const entry = getHydratedData(bootstrapKey) as { series?: { observations?: FredObservations } } | undefined;
+  return entry?.series?.observations ?? [];
+}
+
 const EU_CORE = ['DE', 'FR', 'IT', 'ES'];
 
 function fmtEuDate(d: string): string {
@@ -139,26 +147,49 @@ export class MacroTilesPanel extends Panel {
   public async fetchData(): Promise<boolean> {
     this.showLoading();
     try {
+      // Bootstrap hydration for series available in bootstrap cache
+      const bootCpi = getBootstrapFredObs('fredCpi');
+      const bootUnrate = getBootstrapFredObs('fredUnrate');
+      const bootFed = getBootstrapFredObs('fredFedFunds');
+      const bootGdp = getBootstrapFredObs('fredGdp');
+
+      let rpcResults: Record<string, { observations?: FredObservations }> = {};
+      let eurostat: GetEurostatCountryDataResponse | null = null;
+
+      // Determine which series still need RPC (ESTR always; fill gaps)
+      const needRpc: string[] = [];
+      if (bootCpi.length === 0) needRpc.push('CPIAUCSL');
+      if (bootUnrate.length === 0) needRpc.push('UNRATE');
+      if (bootFed.length === 0) needRpc.push('FEDFUNDS');
+      if (bootGdp.length === 0) needRpc.push('GDP');
+      needRpc.push('ESTR');
+
       const client = await getEconomicClient();
       const [fredResp, eurostatResp] = await Promise.allSettled([
-        client.getFredSeriesBatch({
-          seriesIds: ['CPIAUCSL', 'UNRATE', 'GDP', 'FEDFUNDS', 'ESTR'],
-          limit: 14,
-        }),
+        client.getFredSeriesBatch({ seriesIds: needRpc, limit: 14 }),
         getEurostatCountryData(),
       ]);
 
-      const results = fredResp.status === 'fulfilled' ? (fredResp.value.results ?? {}) : {};
-      this._estrObs = results['ESTR']?.observations ?? [];
-
+      if (fredResp.status === 'fulfilled') {
+        rpcResults = fredResp.value.results ?? {};
+      }
       if (eurostatResp.status === 'fulfilled' && !eurostatResp.value.unavailable) {
-        this._eurostat = eurostatResp.value;
+        eurostat = eurostatResp.value;
       }
 
-      const cpi = cpiYoY(results['CPIAUCSL']?.observations ?? []);
-      const unrate = lastTwo(results['UNRATE']?.observations ?? []);
-      const gdp = lastTwo(results['GDP']?.observations ?? []);
-      const fed = lastTwo(results['FEDFUNDS']?.observations ?? []);
+      this._estrObs = rpcResults['ESTR']?.observations ?? [];
+      this._eurostat = eurostat;
+
+      // Merge: bootstrap takes priority when available
+      const cpiObs = bootCpi.length > 0 ? bootCpi : (rpcResults['CPIAUCSL']?.observations ?? []);
+      const unrateObs = bootUnrate.length > 0 ? bootUnrate : (rpcResults['UNRATE']?.observations ?? []);
+      const fedObs = bootFed.length > 0 ? bootFed : (rpcResults['FEDFUNDS']?.observations ?? []);
+      const gdpObs = bootGdp.length > 0 ? bootGdp : (rpcResults['GDP']?.observations ?? []);
+
+      const cpi = cpiYoY(cpiObs);
+      const unrate = lastTwo(unrateObs);
+      const gdp = lastTwo(gdpObs);
+      const fed = lastTwo(fedObs);
 
       this._usTiles = [
         { id: 'cpi', label: 'CPI (YoY)', ...cpi, lowerIsBetter: true, format: pctFmt, deltaFormat: (v) => v.toFixed(2) },
