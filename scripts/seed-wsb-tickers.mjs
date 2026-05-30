@@ -4,12 +4,14 @@
  * Scrapes r/wallstreetbets, r/stocks, r/investing for ticker mentions.
  * Writes to Redis key: intelligence:wsb-tickers:v1
  */
+import { loadEnvFile, CHROME_UA, runSeed } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
+
+loadEnvFile(import.meta.url);
 
 const REDIS_KEY = 'intelligence:wsb-tickers:v1';
 const CACHE_TTL = 10800; // 3h
 const WSB_SUBREDDITS = ['wallstreetbets', 'stocks', 'investing'];
-const CHROME_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36';
 
 const DOLLAR_TICKER_REGEX = /\$([a-zA-Z]{1,5}(?:[.\-][a-zA-Z]{1,2})?)\b/g;
 const BARE_TICKER_REGEX = /\b([A-Z]{1,5}(?:[.\-][A-Z]{1,2})?)\b/g;
