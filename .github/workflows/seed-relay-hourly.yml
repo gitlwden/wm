@@ -1,11 +1,11 @@
 name: Seed Relay (Hourly)
 
-# Replaces Railway cron for hourly seeds.
+# Replaces Railway cron for 6h interval seeds.
 # Bundled into one workflow to reduce Upstash connection overhead.
 
 on:
   schedule:
-    - cron: '5 * * * *'
+    - cron: '5 */6 * * *'
   workflow_dispatch:
 
 jobs:

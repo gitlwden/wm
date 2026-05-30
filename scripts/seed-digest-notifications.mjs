@@ -79,8 +79,8 @@ import { emitCooldownShadowLog } from './lib/digest-cooldown-shadow-log.mjs';
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL ?? '';
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? '';
 const CONVEX_SITE_URL =
-  process.env.CONVEX_SITE_URL ??
-  (process.env.CONVEX_URL ?? '').replace('.convex.cloud', '.convex.site');
+  (process.env.CONVEX_SITE_URL ??
+  (process.env.CONVEX_URL ?? '').replace('.convex.cloud', '.convex.site')).replace(/\/+$/, '');
 const RELAY_SECRET = process.env.RELAY_SHARED_SECRET ?? '';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? '';
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? '';
