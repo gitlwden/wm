@@ -401,35 +401,6 @@ function toHeaders(nodeHeaders, options = {}) {
   return headers;
 }
 
-async function proxyToCloud(requestUrl, req, remoteBase) {
-  const target = `${remoteBase}${requestUrl.pathname}${requestUrl.search}`;
-  const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req);
-  const headers = toHeaders(req.headers, { stripOrigin: true });
-  // Strip sidecar auth token — meaningless to cloud API.
-  headers.delete('Authorization');
-  // Strip conditional headers so cloud always returns fresh 200, not 304.
-  // The browser may have stale ETags from previous sessions with empty data.
-  headers.delete('If-None-Match');
-  headers.delete('If-Modified-Since');
-  // Identify sidecar as trusted origin so the cloud API key validator
-  // doesn't reject the request (no origin + no key = 401).
-  headers.set('Origin', 'https://worldmonitor.app');
-  // Inject WORLDMONITOR_API_KEY from the sidecar's env (populated from the
-  // Tauri keychain at spawn). The renderer's premiumFetch may have already
-  // set X-WorldMonitor-Key if the user configured it in Settings, but when
-  // the vault is empty the header is absent and the cloud gateway returns
-  // 401. Falling back to the sidecar's own env ensures cloud auth works
-  // regardless of the renderer's vault state.
-  if (!headers.has('X-WorldMonitor-Key') && process.env.WORLDMONITOR_API_KEY) {
-    headers.set('X-WorldMonitor-Key', process.env.WORLDMONITOR_API_KEY);
-  }
-  return fetch(target, {
-    method: req.method,
-    headers,
-    body,
-  });
-}
-
 function pickModule(pathname, routes) {
   const apiPath = pathname.startsWith('/api') ? pathname.slice(4) || '/' : pathname;
 
@@ -445,29 +416,6 @@ function pickModule(pathname, routes) {
 const moduleCache = new Map();
 const failedImports = new Set();
 const fallbackCounts = new Map();
-const cloudPreferred = new Set();
-
-// Routes/prefixes that should always proxy to cloud. The sidecar lacks
-// WS_RELAY_URL (Yahoo/Finnhub relay) and seeded Redis data. These routes
-// return 200-with-empty-data locally, so normal cloudFallback won't trigger.
-const cloudPreferredPrefixes = !process.env.WS_RELAY_URL
-  ? [
-    '/api/market/v1/',
-    '/api/economic/v1/',
-    '/api/infrastructure/v1/',
-    '/api/news/v1/',
-    '/api/research/v1/',
-  ]
-  : [];
-const cloudPreferredExact = !process.env.WS_RELAY_URL
-  ? new Set(['/api/bootstrap'])
-  : new Set();
-
-function isCloudPreferred(pathname) {
-  if (cloudPreferred.has(pathname)) return true;
-  if (cloudPreferredExact.has(pathname)) return true;
-  return cloudPreferredPrefixes.some(p => pathname.startsWith(p));
-}
 
 const TRAFFIC_LOG_MAX = 200;
 const trafficLog = [];
@@ -529,7 +477,6 @@ async function importHandler(modulePath) {
 
 function resolveConfig(options = {}) {
   const port = Number(options.port ?? process.env.LOCAL_API_PORT ?? 46123);
-  const remoteBase = String(options.remoteBase ?? process.env.LOCAL_API_REMOTE_BASE ?? 'https://api.worldmonitor.app').replace(/\/$/, '');
   const resourceDir = String(options.resourceDir ?? process.env.LOCAL_API_RESOURCE_DIR ?? process.cwd());
   const apiDir = options.apiDir
     ? String(options.apiDir)
@@ -539,21 +486,14 @@ function resolveConfig(options = {}) {
     ].find((candidate) => existsSync(candidate)) ?? path.join(resourceDir, 'api');
   const dataDir = String(options.dataDir ?? process.env.LOCAL_API_DATA_DIR ?? resourceDir);
   const mode = String(options.mode ?? process.env.LOCAL_API_MODE ?? 'desktop-sidecar');
-  const requestedFallback = String(options.cloudFallback ?? process.env.LOCAL_API_CLOUD_FALLBACK ?? '') === 'true';
-  const cloudFallback = mode === 'docker' ? false : requestedFallback;
-  if (mode === 'docker' && requestedFallback) {
-    (options.logger ?? console).warn('[local-api] Cloud fallback disabled in Docker mode (self-hosted instances must not proxy to api.worldmonitor.app)');
-  }
   const logger = options.logger ?? console;
 
   return {
     port,
-    remoteBase,
     resourceDir,
     dataDir,
     apiDir,
     mode,
-    cloudFallback,
     logger,
   };
 }
@@ -567,39 +507,12 @@ async function handleLocalServiceStatus(context) {
   return json({
     success: true,
     timestamp: new Date().toISOString(),
-    summary: { operational: 2, degraded: 0, outage: 0, unknown: 0 },
+    summary: { operational: 1, degraded: 0, outage: 0, unknown: 0 },
     services: [
       { id: 'local-api', name: 'Local Desktop API', category: 'dev', status: 'operational', description: `Running on 127.0.0.1:${context.port}` },
-      { id: 'cloud-pass-through', name: 'Cloud pass-through', category: 'cloud', status: 'operational', description: `Fallback target ${context.remoteBase}` },
     ],
-    local: { enabled: true, mode: context.mode, port: context.port, remoteBase: context.remoteBase },
+    local: { enabled: true, mode: context.mode, port: context.port },
   });
-}
-
-async function tryCloudFallback(requestUrl, req, context, reason) {
-  if (reason) {
-    const route = requestUrl.pathname;
-    const count = (fallbackCounts.get(route) || 0) + 1;
-    fallbackCounts.set(route, count);
-    if (count === 1) {
-      const brief = reason instanceof Error
-        ? (reason.code === 'ERR_MODULE_NOT_FOUND' ? 'missing npm dependency' : reason.message)
-        : reason;
-      context.logger.warn(`[local-api] ${route} → cloud (${brief})`);
-    } else if (count === 5 || count % 100 === 0) {
-      context.logger.warn(`[local-api] ${route} → cloud x${count}`);
-    }
-  }
-  try {
-    const resp = await proxyToCloud(requestUrl, req, context.remoteBase);
-    if (!resp.ok) {
-      context.logger.warn(`[local-api] cloud returned ${resp.status} for ${requestUrl.pathname}`);
-    }
-    return resp;
-  } catch (error) {
-    context.logger.error('[local-api] cloud fallback failed', requestUrl.pathname, error);
-    return null;
-  }
 }
 
 const SIDECAR_ALLOWED_ORIGINS = [
@@ -1219,17 +1132,10 @@ async function dispatch(requestUrl, req, routes, context) {
     }
     return json({ verboseMode });
   }
-  // Registration — call Convex directly when CONVEX_URL is available (self-hosted),
-  // otherwise proxy to cloud (desktop sidecar never has CONVEX_URL).
-  // Keeps the legacy /api/register-interest local path so older desktop builds
-  // continue to work; cloud fallback rewrites to the new sebuf RPC path.
+  // Registration — call Convex directly when CONVEX_URL is available.
   if (requestUrl.pathname === '/api/register-interest' && req.method === 'POST') {
     const convexUrl = process.env.CONVEX_URL;
     if (!convexUrl) {
-      const cloudUrl = new URL(requestUrl);
-      cloudUrl.pathname = '/api/leads/v1/register-interest';
-      const cloudResponse = await tryCloudFallback(cloudUrl, req, context, 'no CONVEX_URL');
-      if (cloudResponse) return cloudResponse;
       return json({ error: 'Registration service unavailable' }, 503);
     }
     try {
@@ -1268,11 +1174,8 @@ async function dispatch(requestUrl, req, routes, context) {
 
   // YouTube live detection — requires residential proxy (Railway relay).
   // Direct fetch from sidecar fails (YouTube blocks datacenter IPs).
-  // Always proxy to cloud, bypassing the cloudFallback flag.
   if (requestUrl.pathname === '/api/youtube/live') {
-    const cloudResponse = await tryCloudFallback(requestUrl, req, context, 'youtube-live needs relay');
-    if (cloudResponse) return cloudResponse;
-    return json({ error: 'YouTube live detection unavailable' }, 503);
+    return json({ error: 'YouTube live detection unavailable — relay not configured' }, 503);
   }
 
   // RSS proxy — fetch public feeds with SSRF protection
@@ -1329,7 +1232,6 @@ async function dispatch(requestUrl, req, routes, context) {
             }
             moduleCache.clear();
             failedImports.clear();
-            cloudPreferred.clear();
             return json({ ok: true, key });
           }
           return json({ error: 'key not in allowlist' }, 403);
@@ -1366,7 +1268,6 @@ async function dispatch(requestUrl, req, routes, context) {
       if (results.some(r => r.ok)) {
         moduleCache.clear();
         failedImports.clear();
-        cloudPreferred.clear();
       }
       return json({ ok: true, results });
     } catch { /* bad JSON */ }
@@ -1392,17 +1293,8 @@ async function dispatch(requestUrl, req, routes, context) {
     }
   }
 
-  if (context.cloudFallback && isCloudPreferred(requestUrl.pathname)) {
-    const cloudResponse = await tryCloudFallback(requestUrl, req, context, 'cloud-preferred');
-    if (cloudResponse) return cloudResponse;
-  }
-
   const modulePath = pickModule(requestUrl.pathname, routes);
   if (!modulePath || !existsSync(modulePath)) {
-    if (context.cloudFallback) {
-      const cloudResponse = await tryCloudFallback(requestUrl, req, context, 'handler missing');
-      if (cloudResponse) return cloudResponse;
-    }
     logOnce(context.logger, requestUrl.pathname, 'no local handler');
     return json({ error: 'No local handler for this endpoint', endpoint: requestUrl.pathname }, 404);
   }
@@ -1411,10 +1303,6 @@ async function dispatch(requestUrl, req, routes, context) {
     const mod = await importHandler(modulePath);
     if (typeof mod.default !== 'function') {
       logOnce(context.logger, requestUrl.pathname, 'invalid handler module');
-      if (context.cloudFallback) {
-        const cloudResponse = await tryCloudFallback(requestUrl, req, context, `invalid handler module`);
-        if (cloudResponse) return cloudResponse;
-      }
       return json({ error: 'Invalid handler module', endpoint: requestUrl.pathname }, 500);
     }
 
@@ -1436,26 +1324,13 @@ async function dispatch(requestUrl, req, routes, context) {
     const response = await mod.default(request);
     if (!(response instanceof Response)) {
       logOnce(context.logger, requestUrl.pathname, 'handler returned non-Response');
-      if (context.cloudFallback) {
-        const cloudResponse = await tryCloudFallback(requestUrl, req, context, 'handler returned non-Response');
-        if (cloudResponse) return cloudResponse;
-      }
       return json({ error: 'Handler returned invalid response', endpoint: requestUrl.pathname }, 500);
-    }
-
-    if (!response.ok && context.cloudFallback) {
-      const cloudResponse = await tryCloudFallback(requestUrl, req, context, `local status ${response.status}`);
-      if (cloudResponse) { cloudPreferred.add(requestUrl.pathname); return cloudResponse; }
     }
 
     return response;
   } catch (error) {
     const reason = error.code === 'ERR_MODULE_NOT_FOUND' ? 'missing dependency' : error.message;
     logOnce(context.logger, requestUrl.pathname, reason);
-    if (context.cloudFallback) {
-      const cloudResponse = await tryCloudFallback(requestUrl, req, context, error);
-      if (cloudResponse) { cloudPreferred.add(requestUrl.pathname); return cloudResponse; }
-    }
     return json({ error: 'Local handler error', reason, endpoint: requestUrl.pathname }, 502);
   }
 }
