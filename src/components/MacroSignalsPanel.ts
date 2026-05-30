@@ -127,11 +127,29 @@ function formatNum(v: number | null, suffix = '%'): string {
   return `${sign}${v.toFixed(1)}${suffix}`;
 }
 
+/** Fast stable hash for signal data comparison — avoids re-rendering on identical data. */
+function dataHash(d: MacroSignalData): string {
+  return JSON.stringify({
+    v: d.verdict,
+    b: d.bullishCount,
+    t: d.totalCount,
+    li: d.signals.liquidity,
+    fl: d.signals.flowStructure,
+    mr: d.signals.macroRegime,
+    tt: { s: d.signals.technicalTrend.status, p: d.signals.technicalTrend.btcPrice, s5: d.signals.technicalTrend.sma50, v: d.signals.technicalTrend.vwap30d, m: d.signals.technicalTrend.mayerMultiple, k: d.signals.technicalTrend.sparkline },
+    hr: d.signals.hashRate,
+    pm: d.signals.priceMomentum,
+    fg: d.signals.fearGreed,
+    q: d.meta.qqqSparkline,
+  });
+}
+
 export class MacroSignalsPanel extends Panel {
   private data: MacroSignalData | null = null;
   private loading = true;
   private error: string | null = null;
   private lastTimestamp = '';
+  private lastDataHash = '';
 
   constructor() {
     super({ id: 'macro-signals', title: t('panels.macroSignals'), showCount: false, infoTooltip: t('components.macroSignals.infoTooltip') });
@@ -142,6 +160,7 @@ export class MacroSignalsPanel extends Panel {
     if (hydrated?.signals && hydrated.totalCount > 0) {
       this.data = mapProtoToData(hydrated);
       this.lastTimestamp = this.data.timestamp;
+      this.lastDataHash = dataHash(this.data);
       this.error = null;
       this.loading = false;
       this.renderPanel();
@@ -168,10 +187,18 @@ export class MacroSignalsPanel extends Panel {
       }
     }
     this.loading = false;
-    this.renderPanel();
+
     const ts = this.data?.timestamp ?? '';
     const changed = ts !== this.lastTimestamp;
     this.lastTimestamp = ts;
+
+    if (this.data) {
+      const hash = dataHash(this.data);
+      if (hash === this.lastDataHash) return changed;
+      this.lastDataHash = hash;
+    }
+
+    this.renderPanel();
     return changed;
   }
 
