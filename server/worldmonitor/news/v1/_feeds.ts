@@ -156,6 +156,13 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'Dev Events', url: gn('("developer conference" OR "tech summit" OR "devcon" OR "developer event") when:7d') },
       { name: 'Open Source News', url: gn('"open source" project release OR launch when:3d') },
     ],
+    vcblogs: [
+      { name: 'Y Combinator Blog', url: 'https://www.ycombinator.com/blog/rss/' },
+      { name: 'a16z Blog', url: 'https://www.a16z.news/feed' },
+      { name: 'First Round Review', url: 'https://review.firstround.com/articles/rss' },
+      { name: 'Sequoia Blog', url: 'https://www.sequoiacap.com/feed/' },
+      { name: 'Stratechery', url: 'https://stratechery.com/feed/' },
+    ],
   },
 
   tech: {
