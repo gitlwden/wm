@@ -15,7 +15,7 @@
 //      explicit user-key paths still take precedence.
 
 import { getCanonicalApiOrigin, toApiUrl } from './runtime';
-import { PREMIUM_FETCH_PATHS } from '@/shared/premium-paths';
+import { PREMIUM_RPC_PATHS } from '@/shared/premium-paths';
 
 const STORAGE_KEY = 'wm-session-token';
 // Refresh well before expiry so a half-loaded page doesn't fail mid-flight.
@@ -204,7 +204,7 @@ export function installWmSessionFetchInterceptor(): void {
         return url.split('?')[0] ?? url;
       }
     })();
-    if (PREMIUM_FETCH_PATHS.has(path)) return original(input, init);
+    if (PREMIUM_RPC_PATHS.has(path)) return original(input, init);
 
     const headers = new Headers(
       init?.headers ?? (input instanceof Request ? input.headers : undefined),

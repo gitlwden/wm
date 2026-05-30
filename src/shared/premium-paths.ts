@@ -1,9 +1,8 @@
 /**
  * Premium RPC paths that require either an API key or a Pro session.
  *
- * Consumed by the server gateway for auth enforcement (needsLegacyProBearerGate).
- * Adding a path here means the gateway rejects anonymous wms_ tokens and
- * requires a real API key or Clerk Pro session.
+ * Single source of truth consumed by both the server gateway (auth enforcement)
+ * and the web client runtime (token injection).
  */
 export const PREMIUM_RPC_PATHS = new Set<string>([
   '/api/latest-brief',
@@ -34,20 +33,4 @@ export const PREMIUM_RPC_PATHS = new Set<string>([
   '/api/scenario/v1/get-scenario-status',
   '/api/v2/shipping/route-intelligence',
   '/api/v2/shipping/webhooks',
-]);
-
-/**
- * Paths where the client should inject premium auth (Clerk Bearer, tester key,
- * or WORLDMONITOR_API_KEY) even if the gateway does not enforce it.
- *
- * Superset of PREMIUM_RPC_PATHS. Unlike PREMIUM_RPC_PATHS, adding a path here
- * does NOT cause the gateway to reject anonymous wms_ tokens — it only affects
- * client-side auth injection in premiumFetch and enrichInitForPremium.
- *
- * Use this for endpoints that benefit from caller identity (e.g. to honour a
- * framework/systemAppend parameter) but should still work for anonymous users.
- */
-export const PREMIUM_FETCH_PATHS = new Set<string>([
-  ...PREMIUM_RPC_PATHS,
-  '/api/intelligence/v1/deduct-situation',
 ]);
