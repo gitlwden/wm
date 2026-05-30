@@ -113,7 +113,6 @@
     "@deck.gl/layers": "^9.2.11",
     "@deck.gl/mapbox": "^9.2.11",
     "@dodopayments/convex": "^0.2.8",
-    "@esbuild/win32-x64": "^0.28.0",
     "@protomaps/basemaps": "^5.7.1",
     "@sentry/browser": "^10.39.0",
     "@upstash/ratelimit": "^2.0.8",
@@ -147,6 +146,9 @@
     "ws": "^8.19.0",
     "yaml": "^2.8.3",
     "youtubei.js": "^16.0.1"
+  },
+  "optionalDependencies": {
+    "@esbuild/win32-x64": "^0.28.0"
   },
   "overrides": {
     "fast-xml-parser": "^5.3.7",

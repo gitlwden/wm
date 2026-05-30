@@ -124,7 +124,8 @@ export class DefensePatentsPanel extends Panel {
 
   private getFiltered(): DefensePatentFiling[] {
     if (this.viewMode === 'all') return this.patents.slice(0, 50);
-    return this.patents.filter(p => p.cpcCode === this.viewMode).slice(0, 30);
+    const mode = this.viewMode.toUpperCase();
+    return this.patents.filter(p => p.cpcCode?.toUpperCase() === mode).slice(0, 30);
   }
 
   private buildRow(p: DefensePatentFiling): HTMLElement {

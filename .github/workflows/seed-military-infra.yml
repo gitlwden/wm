@@ -2,7 +2,7 @@ name: Seed Military & Infrastructure
 
 on:
   schedule:
-    # Every 6h — military flights, maritime, internet outages, cyber
+    # Every 6h — military flights, maritime, defense patents, internet outages, cyber
     - cron: '35 */6 * * *'
   workflow_dispatch:
 
@@ -27,6 +27,13 @@ jobs:
           OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
           OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
           WINGBITS_API_KEY: ${{ secrets.WINGBITS_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+
+      - name: Seed defense patents
+        run: node scripts/seed-defense-patents.mjs
+        continue-on-error: true
+        env:
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
 
