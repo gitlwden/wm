@@ -102,6 +102,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'population-exposure': { name: 'Population Exposure', enabled: true, priority: 2 },
   'security-advisories': { name: 'Security Advisories', enabled: true, priority: 2 },
   security: { name: 'Cybersecurity', enabled: true, priority: 2 },
+  policy: { name: 'AI Policy & Regulation', enabled: true, priority: 2 },
   'sanctions-pressure': { name: 'Sanctions Pressure', enabled: true, priority: 2 },
   'defense-patents': { name: 'R&D Signal', enabled: true, priority: 2 },
   'radiation-watch': { name: 'Radiation Watch', enabled: true, priority: 2 },
@@ -118,6 +119,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'deduction': { name: 'Deduct Situation', enabled: false, priority: 1, premium: 'locked' as const },
   'geo-hubs': { name: 'Geopolitical Hubs', enabled: false, priority: 2 },
   'tech-hubs': { name: 'Hot Tech Hubs', enabled: false, priority: 2 },
+  'ai-regulation': { name: 'AI Regulation Dashboard', enabled: false, priority: 2 },
 };
 
 const FULL_MAP_LAYERS: MapLayers = {
