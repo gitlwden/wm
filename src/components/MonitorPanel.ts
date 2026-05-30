@@ -35,15 +35,30 @@ export class MonitorPanel extends Panel {
     // (Linux/Tauri) where user-select:none on .panel-content can suppress clicks.
     this.inputEl.addEventListener('mousedown', (e) => e.stopPropagation());
 
+    let addMonitorPending = false;
+    const triggerAddMonitor = () => {
+      if (addMonitorPending) return;
+      addMonitorPending = true;
+      this.addMonitor();
+      // Guard against double-fire when both mouseup and click land (WebKitGTK)
+      setTimeout(() => { addMonitorPending = false; }, 200);
+    };
+
     const addBtn = h('button', {
       className: 'monitor-add-btn',
       id: 'addMonitorBtn',
       type: 'button',
-      onClick: () => this.addMonitor(),
+      onClick: triggerAddMonitor,
+      // WebKitGTK (Linux/Tauri): mousedown stopPropagation can suppress the
+      // click event when user-select:none is on a parent. Using mouseup as a
+      // primary trigger ensures the button works across all engines.
+      onMouseup: (e: Event) => { e.preventDefault(); triggerAddMonitor(); },
     },
       t('components.monitor.add'),
     );
-    addBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+    // Prevent the panel drag handler from activating — safe because
+    // makeDraggable already early-returns for button targets (panel-layout.ts:2030).
+    addBtn.addEventListener('mousedown', (e) => { e.stopPropagation(); });
 
     const inputContainer = h('div', { className: 'monitor-input-container' },
       this.inputEl,
