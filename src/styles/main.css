@@ -6492,6 +6492,11 @@ a.prediction-link:hover {
   margin-bottom: 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
+  /* WebKitGTK (Linux): user-select:none on .panel-content suppresses click
+     events on *children* even when they set user-select:auto themselves.
+     Override at the container level so interactive children work. */
+  -webkit-user-select: auto;
+  user-select: auto;
 }
 
 .monitor-input {
