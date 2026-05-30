@@ -2,6 +2,7 @@ import type { MarketServiceClient } from '@/generated/client/worldmonitor/market
 import { Panel } from './Panel';
 import { t, getLocale } from '@/services/i18n';
 import { escapeHtml } from '@/utils/sanitize';
+import { getHydratedData } from '@/services/bootstrap';
 
 let _client: MarketServiceClient | null = null;
 async function getMarketClient(): Promise<MarketServiceClient> {
@@ -135,6 +136,15 @@ export class EarningsCalendarPanel extends Panel {
 
   public async fetchData(): Promise<boolean> {
     this.showLoading();
+
+    // Bootstrap hydration: render immediately from pre-seeded cache
+    const hydrated = getHydratedData('earningsCalendar') as { earnings?: EarningsEntry[]; unavailable?: boolean } | undefined;
+    if (hydrated?.earnings?.length && !hydrated.unavailable) {
+      this.render(hydrated.earnings as EarningsEntry[]);
+      void this.refreshFromRpc();
+      return true;
+    }
+
     return this.refreshFromRpc();
   }
 

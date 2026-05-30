@@ -137,6 +137,8 @@ const BOOTSTRAP_CACHE_KEYS = {
   energyCrisisPolicies: 'energy:crisis-policies:v1',
   aaiiSentiment:        'market:aaii-sentiment:v1',
   breadthHistory:       'market:breadth-history:v1',
+  earningsCalendar:     'market:earnings-calendar:v1',
+  economicCalendar:     'economic:econ-calendar:v1',
 };
 
 const SLOW_KEYS = new Set([
@@ -192,6 +194,8 @@ const SLOW_KEYS = new Set([
   'energyCrisisPolicies',
   'aaiiSentiment',
   'breadthHistory',
+  'earningsCalendar',
+  'economicCalendar',
 ]);
 const FAST_KEYS = new Set([
   'earthquakes', 'outages', 'serviceStatuses', 'ddosAttacks', 'trafficAnomalies', 'macroSignals', 'chokepoints',

@@ -245,6 +245,8 @@ export const BOOTSTRAP_CACHE_KEYS: Record<string, string> = {
   energyCrisisPolicies: 'energy:crisis-policies:v1',
   aaiiSentiment:        'market:aaii-sentiment:v1',
   breadthHistory:       'market:breadth-history:v1',
+  earningsCalendar:     'market:earnings-calendar:v1',
+  economicCalendar:     'economic:econ-calendar:v1',
   consumerPricesOverview:   'consumer-prices:overview:ae',
   consumerPricesCategories: 'consumer-prices:categories:ae:30d',
   consumerPricesMovers:     'consumer-prices:movers:ae:30d',
@@ -323,6 +325,8 @@ export const BOOTSTRAP_TIERS: Record<string, 'slow' | 'fast'> = {
   energyCrisisPolicies: 'slow',
   aaiiSentiment: 'slow',
   breadthHistory: 'slow',
+  earningsCalendar: 'slow',
+  economicCalendar: 'slow',
 };
 
 export const PORTWATCH_CHOKEPOINTS_REF_KEY = 'portwatch:chokepoints:ref:v1';

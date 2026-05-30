@@ -2,6 +2,7 @@ import type { EconomicServiceClient } from '@/generated/client/worldmonitor/econ
 import { Panel } from './Panel';
 import { t } from '@/services/i18n';
 import { escapeHtml } from '@/utils/sanitize';
+import { getHydratedData } from '@/services/bootstrap';
 
 let _client: EconomicServiceClient | null = null;
 async function getEconomicClient(): Promise<EconomicServiceClient> {
@@ -104,6 +105,21 @@ export class EconomicCalendarPanel extends Panel {
 
   public async fetchData(): Promise<boolean> {
     this.showLoading('Loading economic calendar...');
+
+    // Bootstrap hydration: render immediately from pre-seeded cache
+    const hydrated = getHydratedData('economicCalendar') as { events?: EconomicEvent[]; unavailable?: boolean } | undefined;
+    if (hydrated?.events?.length && !hydrated.unavailable) {
+      this._events = hydrated.events as EconomicEvent[];
+      this._hasData = true;
+      this._render();
+      void this.refreshFromRpc();
+      return true;
+    }
+
+    return this.refreshFromRpc();
+  }
+
+  private async refreshFromRpc(): Promise<boolean> {
     try {
       const client = await getEconomicClient();
       const today = new Date();
