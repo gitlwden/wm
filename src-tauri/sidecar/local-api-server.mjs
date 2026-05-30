@@ -414,6 +414,15 @@ async function proxyToCloud(requestUrl, req, remoteBase) {
   // Identify sidecar as trusted origin so the cloud API key validator
   // doesn't reject the request (no origin + no key = 401).
   headers.set('Origin', 'https://worldmonitor.app');
+  // Inject WORLDMONITOR_API_KEY from the sidecar's env (populated from the
+  // Tauri keychain at spawn). The renderer's premiumFetch may have already
+  // set X-WorldMonitor-Key if the user configured it in Settings, but when
+  // the vault is empty the header is absent and the cloud gateway returns
+  // 401. Falling back to the sidecar's own env ensures cloud auth works
+  // regardless of the renderer's vault state.
+  if (!headers.has('X-WorldMonitor-Key') && process.env.WORLDMONITOR_API_KEY) {
+    headers.set('X-WorldMonitor-Key', process.env.WORLDMONITOR_API_KEY);
+  }
   return fetch(target, {
     method: req.method,
     headers,
@@ -1412,6 +1421,12 @@ async function dispatch(requestUrl, req, routes, context) {
     const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req);
     const hdrs = toHeaders(req.headers, { stripOrigin: true });
     hdrs.set('Origin', `http://127.0.0.1:${context.port}`);
+    // Inject WORLDMONITOR_API_KEY so the local gateway's validateApiKey
+    // accepts the request for desktop-origin calls. The renderer may have
+    // already set it via premiumFetch; only inject if absent.
+    if (!hdrs.has('X-WorldMonitor-Key') && process.env.WORLDMONITOR_API_KEY) {
+      hdrs.set('X-WorldMonitor-Key', process.env.WORLDMONITOR_API_KEY);
+    }
     const request = new Request(requestUrl.toString(), {
       method: req.method,
       headers: hdrs,
