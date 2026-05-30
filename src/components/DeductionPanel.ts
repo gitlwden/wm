@@ -262,8 +262,9 @@ export class DeductionPanel extends Panel {
             console.error('[DeductionPanel] Error:', err);
             this.resultContainer.className = 'deduction-result error';
             const status = (err as any)?.status ?? (err as any)?.statusCode;
+            const msg = (err as any)?.message ?? String(err);
       if (status === 401 || status === 403) {
-        this.resultContainer.textContent = 'Pro access required. Sign in or add an API key in Settings to use Deduct Situation.';
+        this.resultContainer.textContent = `Pro access required (${status}). Sign in or add an API key in Settings to use Deduct Situation. ${msg}`;
       } else if (status === 429) {
         this.resultContainer.textContent = 'Rate limited — please wait a moment and try again.';
       } else if (status === 503 || status === 502) {
