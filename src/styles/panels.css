@@ -3071,6 +3071,27 @@ a.brief-story-headline:hover {
   font-size: 10px;
   color: var(--text-muted, #888);
 }
+.latest-brief-inline-threads {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.brief-thread {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-secondary, #aaa);
+}
+.brief-thread-tag {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text, #e8e8e8);
+  min-width: 48px;
+}
+.brief-thread-teaser {
+  flex: 1;
+}
 .latest-brief-inline-readmore {
   display: inline-block;
   font-size: 11px;

@@ -33,6 +33,7 @@ interface BriefStory {
   threatLevel?: string;
   source?: string;
   link?: string;
+  sourceUrl?: string;
 }
 
 interface BriefThread {
@@ -410,8 +411,9 @@ export class LatestBriefPanel extends Panel {
         if (s.category) tags.push(s.category);
         if (s.country && s.country !== 'Global') tags.push(s.country);
         const tagStr = tags.join(' · ');
-        const headlineEl = s.link
-          ? h('a', { className: 'brief-story-headline', href: s.link, target: '_blank', rel: 'noopener' }, s.headline ?? '')
+        const link = s.link ?? s.sourceUrl;
+        const headlineEl = link
+          ? h('a', { className: 'brief-story-headline', href: link, target: '_blank', rel: 'noopener' }, s.headline ?? '')
           : h('div', { className: 'brief-story-headline' }, s.headline ?? '');
         storyEls.push(
           h('div', { className: `brief-story ${levelClass}` },
@@ -427,6 +429,23 @@ export class LatestBriefPanel extends Panel {
       ? h('div', { className: 'latest-brief-inline-stories' }, ...storyEls)
       : null;
 
+    // Threads list
+    const threadEls: HTMLElement[] = [];
+    if (data.threads?.length) {
+      for (const th of data.threads) {
+        threadEls.push(
+          h('div', { className: 'brief-thread' },
+            h('span', { className: 'brief-thread-tag' }, th.tag ?? ''),
+            h('span', { className: 'brief-thread-teaser' }, th.teaser ?? ''),
+          ),
+        );
+      }
+    }
+
+    const threadsList = threadEls.length
+      ? h('div', { className: 'latest-brief-inline-threads' }, ...threadEls)
+      : null;
+
     // Link to full magazine (if URL works)
     const readMore = h('a', {
       className: 'latest-brief-inline-readmore',
@@ -436,7 +455,7 @@ export class LatestBriefPanel extends Panel {
     }, 'Open full magazine →');
 
     const container = h('div', { className: 'latest-brief-inline' },
-      header, leadEl, storiesList, readMore,
+      header, leadEl, storiesList, threadsList, readMore,
     );
 
     // Share button: referral plumbing is server-side (GET /api/referral/me).
