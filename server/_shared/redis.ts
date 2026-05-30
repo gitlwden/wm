@@ -9,7 +9,7 @@ const REDIS_PIPELINE_TIMEOUT_MS = 180_000;
 // times within a short window (e.g. bootstrap burst, repeated RPC calls).
 // Entries are invalidated on setCachedJson writes.
 const _localCache = new Map<string, { value: unknown; expires: number }>();
-const LOCAL_CACHE_TTL_MS = 30_000;
+const LOCAL_CACHE_TTL_MS = 300_000; // 5 min — seed data changes every 6-24h, saves ~90% of reads
 const LOCAL_CACHE_MAX = 200;
 
 function localCacheGet(key: string): { hit: true; value: unknown } | { hit: false } {

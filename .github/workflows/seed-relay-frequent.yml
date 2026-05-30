@@ -1,11 +1,11 @@
 name: Seed Relay (Frequent)
 
-# Replaces Railway cron for high-frequency seeds (10-30min cadence).
+# Replaces Railway cron for high-frequency seeds (30min cadence).
 # Bundled into one workflow to reduce Upstash connection overhead.
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:

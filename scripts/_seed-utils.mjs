@@ -261,43 +261,22 @@ export async function atomicPublish(canonicalKey, data, validateFn, ttlSeconds, 
     throw new Error(`Payload too large: ${(payloadBytes / 1024 / 1024).toFixed(1)}MB > 5MB limit`);
   }
 
-  // Retry the entire 3-call publish unit on transient Upstash failures.
-  // Pre-fix: a single timeout on the canonical SET would crash the whole
-  // seeder run and Railway just waited for the next cron tick (1h for
-  // seed-forecasts). On 2026-05-10 this exact failure mode produced a
-  // ~3h gap on forecasts + marketImplications. Wrapping the body means
-  // a transient 5xx/timeout retries automatically with exponential
-  // backoff. Permanent 4xx (auth, payload-too-large) get the
-  // `nonRetryable: true` flag from redisCommand and abort immediately.
-  //
-  // Each attempt re-stages with a fresh runId so a previous attempt's
-  // staging key (if it landed server-side but the response was lost)
-  // doesn't shadow the retry. The 5-min staging TTL cleans up any
-  // orphaned stagings naturally.
+  // Direct SET to canonical key — no staging key needed.
+  // Upstash REST is transactional; if SET succeeds, data is durable.
+  // Staging key pattern (write staging → write canonical → delete staging)
+  // cost 3 Redis ops per publish for a crash-recovery path that never fires
+  // with a single-SET operation. Removed to save ~2/3 of write budget.
   return await withRetry(
     async () => {
-      const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const stagingKey = `${canonicalKey}:staging:${runId}`;
-
-      // Write to staging key
-      await redisSet(url, token, stagingKey, payloadValue, 300); // 5 min staging TTL
-
-      // Overwrite canonical key
       if (ttlSeconds) {
         await redisCommand(url, token, ['SET', canonicalKey, payload, 'EX', ttlSeconds]);
       } else {
         await redisCommand(url, token, ['SET', canonicalKey, payload]);
       }
-
-      // Cleanup staging
-      await redisDel(url, token, stagingKey).catch(() => {});
-
       return { payloadBytes, recordCount: Array.isArray(data) ? data.length : null };
     },
-    2,    // 2 retries (3 attempts total) — sufficient for transient blips
-    1000, // 1s base delay; exponential backoff → 1s + 2s = ~3s worst-case
-          // cumulative wait between attempts. Plus per-attempt fetch time
-          // (15s timeout each) means total worst-case before propagating ≈ 48s.
+    2,    // 2 retries (3 attempts total)
+    1000, // 1s base delay
   );
 }
 
@@ -1413,23 +1392,9 @@ export async function runSeed(domain, resource, canonicalKey, fetchFn, opts = {}
     const durationMs = Date.now() - startMs;
     logSeedResult(domain, recordCount, durationMs, { payloadBytes, contractMode, state: contractState || 'LEGACY' });
 
-    // Verify (best-effort: write already succeeded, don't fail the job on transient read issues)
-    let verified = false;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        verified = !!(await verifySeedKey(canonicalKey));
-        if (verified) break;
-        if (attempt === 0) await new Promise(r => setTimeout(r, 500));
-      } catch {
-        if (attempt === 0) await new Promise(r => setTimeout(r, 500));
-      }
-    }
-    if (verified) {
-      console.log(`  Verified: data present in Redis`);
-    } else {
-      console.warn(`  WARNING: verification read returned null for ${canonicalKey} (write succeeded, may be transient)`);
-    }
-
+    // Skip verification read — atomicPublish throws on failure, so success return
+    // already means the data is in Redis. The verify read cost 1-2 extra GETs
+    // per seed run for no actionable benefit.
     console.log(`\n=== Done (${Math.round(durationMs)}ms) ===`);
     await releaseLock(`${domain}:${resource}`, runId);
     process.exit(0);
