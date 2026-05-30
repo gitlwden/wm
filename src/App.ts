@@ -532,6 +532,14 @@ export class App {
         DEFAULT_PANELS
       );
 
+      // Merge newly-added panels from DEFAULT_PANELS into existing localStorage settings
+      // so users with saved prefs still see panels added after their last save.
+      for (const [key, config] of Object.entries(DEFAULT_PANELS)) {
+        if (!(key in panelSettings)) {
+          panelSettings[key] = { ...config };
+        }
+      }
+
       // One-time migration: preserve user preferences across panel key renames.
       const PANEL_KEY_RENAMES_MIGRATION_KEY = 'worldmonitor-panel-key-renames-v2.6.8';
       if (!localStorage.getItem(PANEL_KEY_RENAMES_MIGRATION_KEY)) {
