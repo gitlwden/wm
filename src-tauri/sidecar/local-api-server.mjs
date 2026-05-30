@@ -1309,12 +1309,6 @@ async function dispatch(requestUrl, req, routes, context) {
     const body = ['GET', 'HEAD'].includes(req.method) ? undefined : await readBody(req);
     const hdrs = toHeaders(req.headers, { stripOrigin: true });
     hdrs.set('Origin', `http://127.0.0.1:${context.port}`);
-    // Inject WORLDMONITOR_API_KEY so the local gateway's validateApiKey
-    // accepts the request for desktop-origin calls. The renderer may have
-    // already set it via premiumFetch; only inject if absent.
-    if (!hdrs.has('X-WorldMonitor-Key') && process.env.WORLDMONITOR_API_KEY) {
-      hdrs.set('X-WorldMonitor-Key', process.env.WORLDMONITOR_API_KEY);
-    }
     const request = new Request(requestUrl.toString(), {
       method: req.method,
       headers: hdrs,
