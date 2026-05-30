@@ -115,6 +115,17 @@ export async function premiumFetch(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
+  // On desktop, the sidecar runs handlers locally (like npm run dev's
+  // sebufApiPlugin). Injecting cloud auth headers (WORLDMONITOR_API_KEY,
+  // Clerk Bearer, tester keys) causes the sidecar's gateway to reject
+  // with 401 because WORLDMONITOR_VALID_KEYS is not set in the sidecar
+  // env. Skip all injection — just pass through to globalThis.fetch
+  // which routes to the sidecar via installRuntimeFetchPatch.
+  const { isDesktopRuntime } = await import('@/services/runtime');
+  if (isDesktopRuntime()) {
+    return globalThis.fetch(input, init);
+  }
+
   // Skip injection if the caller already set an auth header.
   const existing = new Headers(init?.headers);
   if (existing.has('Authorization') || existing.has('X-WorldMonitor-Key')) {
