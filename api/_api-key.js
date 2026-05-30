@@ -41,11 +41,16 @@ export async function validateApiKey(req, options = {}) {
   const key = req.headers.get('X-WorldMonitor-Key') || req.headers.get('X-Api-Key');
   const origin = req.headers.get('Origin') || '';
 
-  // Desktop app — always require an enterprise key.
+  // Desktop app — when a key is present, validate it as enterprise. When no key
+  // is present, fall through to the normal flow (same as npm run dev where the
+  // Origin is localhost, not a tauri.localhost pattern). The sidecar gateway
+  // runs locally and does not need cloud API key validation.
   if (isDesktopOrigin(origin)) {
-    if (!key) return { valid: false, required: true, error: 'API key required for desktop access' };
-    if (!isValidEnterpriseKey(key)) return { valid: false, required: true, error: 'Invalid API key' };
-    return { valid: true, required: true, kind: 'enterprise' };
+    if (key) {
+      if (isValidEnterpriseKey(key)) return { valid: true, required: true, kind: 'enterprise' };
+      return { valid: false, required: true, error: 'Invalid API key' };
+    }
+    // No key — fall through to normal flow below.
   }
 
   // Browser anonymous session: HMAC-signed token from /api/wm-session.
