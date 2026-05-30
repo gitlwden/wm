@@ -139,6 +139,7 @@ const BOOTSTRAP_CACHE_KEYS = {
   breadthHistory:       'market:breadth-history:v1',
   earningsCalendar:     'market:earnings-calendar:v1',
   economicCalendar:     'economic:econ-calendar:v1',
+  cotPositioning:       'market:cot:v1',
 };
 
 const SLOW_KEYS = new Set([
@@ -196,6 +197,7 @@ const SLOW_KEYS = new Set([
   'breadthHistory',
   'earningsCalendar',
   'economicCalendar',
+  'cotPositioning',
 ]);
 const FAST_KEYS = new Set([
   'earthquakes', 'outages', 'serviceStatuses', 'ddosAttacks', 'trafficAnomalies', 'macroSignals', 'chokepoints',
