@@ -6503,6 +6503,12 @@ a.prediction-link:hover {
   font-family: inherit;
   font-size: 11px;
   margin-bottom: 8px;
+  /* Override parent .panel-content user-select:none and .panel cursor:grab
+     so interactive elements remain fully functional on WebKitGTK (Linux). */
+  -webkit-user-select: auto;
+  user-select: auto;
+  cursor: text;
+  pointer-events: auto;
 }
 
 .monitor-input::placeholder {
@@ -6520,6 +6526,12 @@ a.prediction-link:hover {
   font-weight: bold;
   cursor: pointer;
   text-transform: uppercase;
+  /* Override parent .panel-content user-select:none and .panel cursor:grab
+     so the button remains fully clickable on WebKitGTK (Linux). */
+  -webkit-user-select: auto;
+  user-select: auto;
+  pointer-events: auto;
+  touch-action: manipulation;
 }
 
 .monitor-add-btn:hover {

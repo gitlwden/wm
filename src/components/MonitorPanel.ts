@@ -30,11 +30,24 @@ export class MonitorPanel extends Panel {
       onKeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') this.addMonitor(); },
     }) as HTMLInputElement;
 
+    // Stop mousedown propagation so the panel's drag handler (makeDraggable)
+    // never intercepts events on interactive controls — critical for WebKitGTK
+    // (Linux/Tauri) where user-select:none on .panel-content can suppress clicks.
+    this.inputEl.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    const addBtn = h('button', {
+      className: 'monitor-add-btn',
+      id: 'addMonitorBtn',
+      type: 'button',
+      onClick: () => this.addMonitor(),
+    },
+      t('components.monitor.add'),
+    );
+    addBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+
     const inputContainer = h('div', { className: 'monitor-input-container' },
       this.inputEl,
-      h('button', { className: 'monitor-add-btn', id: 'addMonitorBtn', onClick: () => this.addMonitor() },
-        t('components.monitor.add'),
-      ),
+      addBtn,
     );
 
     this.monitorsListEl = h('div', { id: 'monitorsList' }) as HTMLDivElement;
