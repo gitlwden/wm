@@ -442,6 +442,12 @@ const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'Dev Events', url: rss('https://news.google.com/rss/search?q=("developer+conference"+OR+"tech+summit"+OR+"devcon"+OR+"developer+event")+when:7d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'Open Source News', url: rss('https://news.google.com/rss/search?q="open+source"+project+release+OR+launch+when:3d&hl=en-US&gl=US&ceid=US:en') },
   ],
+  security: [
+    { name: 'Krebs Security', url: rss('https://krebsonsecurity.com/feed/') },
+    { name: 'The Hacker News', url: rss('https://feeds.feedburner.com/TheHackersNews') },
+    { name: 'Dark Reading', url: rss('https://www.darkreading.com/rss.xml') },
+    { name: 'Schneier', url: rss('https://www.schneier.com/feed/') },
+  ],
 };
 
 // Tech/AI variant feeds
