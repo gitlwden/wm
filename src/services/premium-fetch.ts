@@ -33,7 +33,7 @@
  * — those keys travel via X-WorldMonitor-Key which works on any path.
  */
 import * as Sentry from '@sentry/browser';
-import { PREMIUM_RPC_PATHS } from '@/shared/premium-paths';
+import { PREMIUM_FETCH_PATHS } from '@/shared/premium-paths';
 
 /**
  * Test seam — set in unit tests to inject key/token providers without needing
@@ -65,17 +65,17 @@ function reportServerError(res: Response, input: RequestInfo | URL): void {
 }
 
 /**
- * Whether `input` targets a path enumerated in PREMIUM_RPC_PATHS — the
- * canonical list of routes that REQUIRE per-user pro auth. Tier-gated
- * endpoints (`ENDPOINT_ENTITLEMENTS` in server/_shared/entitlement-check.ts)
- * are a strict subset of PREMIUM_RPC_PATHS at the time of writing, so this
+ * Whether `input` targets a path enumerated in PREMIUM_FETCH_PATHS — the
+ * canonical list of routes that should have premium auth injected client-side.
+ * Tier-gated endpoints (`ENDPOINT_ENTITLEMENTS` in server/_shared/entitlement-check.ts)
+ * are a strict subset of PREMIUM_FETCH_PATHS at the time of writing, so this
  * one check covers both.
  */
 function isPremiumRpcTarget(input: RequestInfo | URL): boolean {
   try {
     const href = input instanceof Request ? input.url : String(input);
     const path = new URL(href, globalThis.location?.href ?? 'https://worldmonitor.app').pathname;
-    return PREMIUM_RPC_PATHS.has(path);
+    return PREMIUM_FETCH_PATHS.has(path);
   } catch {
     // If we can't parse the URL, fall through to the strict path: keep
     // attaching Bearer so premium endpoints stay authenticated. This
