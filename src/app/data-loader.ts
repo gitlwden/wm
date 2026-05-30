@@ -911,6 +911,9 @@ export class DataLoaderManager implements AppModule {
   private async loadNewsCategory(category: string, feeds: typeof FEEDS.politics, digest?: ListFeedDigestResponse | null): Promise<NewsItem[]> {
     try {
       const panel = this.ctx.newsPanels[category];
+      if (category === 'vcblogs') {
+        console.warn(`[vcblogs] panel=${!!panel} feeds=${feeds?.length} digest=${!!digest} digestCats=${digest ? Object.keys(digest.categories ?? {}).join(',') : 'null'} hasCat=${digest ? category in (digest.categories ?? {}) : 'N/A'}`);
+      }
 
       const enabledFeeds = (feeds ?? []).filter(f => !this.ctx.disabledSources.has(f.name));
       if (enabledFeeds.length === 0) {
@@ -933,6 +936,9 @@ export class DataLoaderManager implements AppModule {
         const items = rawItems
           .map(protoItemToNewsItem)
           .filter(i => enabledNames.has(i.source));
+        if (category === 'vcblogs') {
+          console.warn(`[vcblogs] digest branch: rawItems=${rawItems.length} filtered=${items.length} enabledNames=[${[...enabledNames].join(',')}]`);
+        }
 
         if (items.length > 0) {
           // Enrich github items with repo metadata (stars, last push date) BEFORE rendering
@@ -1021,6 +1027,7 @@ export class DataLoaderManager implements AppModule {
       }
 
       if (!this.isPerFeedFallbackEnabled()) {
+        if (category === 'vcblogs') console.warn(`[vcblogs] per-feed fallback DISABLED`);
         console.warn(`[News] Digest missing for "${category}", limited per-feed fallback disabled`);
         this.renderNewsForCategory(category, []);
         this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
@@ -1031,6 +1038,7 @@ export class DataLoaderManager implements AppModule {
       }
 
       const fallbackFeeds = this.selectLimitedFeeds(enabledFeeds, this.perFeedFallbackCategoryFeedLimit);
+      if (category === 'vcblogs') console.warn(`[vcblogs] per-feed fallback: ${fallbackFeeds.length} feeds, names=[${fallbackFeeds.map(f => f.name).join(',')}]`);
       if (fallbackFeeds.length < enabledFeeds.length) {
         console.warn(`[News] Digest missing for "${category}", using limited per-feed fallback (${fallbackFeeds.length}/${enabledFeeds.length} feeds)`);
       } else {
@@ -1064,6 +1072,7 @@ export class DataLoaderManager implements AppModule {
       }
 
       this.renderNewsForCategory(category, items);
+      if (category === 'vcblogs') console.warn(`[vcblogs] per-feed result: ${items.length} items`);
       if (panel) {
         if (items.length === 0) {
           const failures = getFeedFailures();
@@ -1089,6 +1098,7 @@ export class DataLoaderManager implements AppModule {
 
       return items;
     } catch (error) {
+      if (category === 'vcblogs') console.error(`[vcblogs] ERROR:`, error);
       const panel = this.ctx.newsPanels[category];
       if (panel) panel.showError(t('common.noNewsAvailable'));
       this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
