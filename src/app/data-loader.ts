@@ -911,8 +911,10 @@ export class DataLoaderManager implements AppModule {
   private async loadNewsCategory(category: string, feeds: typeof FEEDS.politics, digest?: ListFeedDigestResponse | null): Promise<NewsItem[]> {
     try {
       const panel = this.ctx.newsPanels[category];
+      if (category === 'vcblogs') console.warn(`[vcblogs-debug] loadNewsCategory called, panel=${!!panel}, feeds=${feeds?.length}, digest.has=${!!(digest?.categories && category in digest.categories)}`);
 
       const enabledFeeds = (feeds ?? []).filter(f => !this.ctx.disabledSources.has(f.name));
+      if (category === 'vcblogs') console.warn(`[vcblogs-debug] enabledFeeds=${enabledFeeds.length}, disabledSources=${this.ctx.disabledSources.size}`);
       if (enabledFeeds.length === 0) {
         delete this.ctx.newsByCategory[category];
         if (panel) panel.showError(t('common.allSourcesDisabled'));
@@ -929,9 +931,11 @@ export class DataLoaderManager implements AppModule {
       // fall through to the per-feed RSS fallback so client-side feeds (GitHub Trending
       // RSS, Show HN, etc.) can still populate the panel.
       if (digest?.categories && category in digest.categories) {
-        const items = (digest.categories[category]?.items ?? [])
+        const rawItems = digest.categories[category]?.items ?? [];
+        const items = rawItems
           .map(protoItemToNewsItem)
           .filter(i => enabledNames.has(i.source));
+        if (category === 'vcblogs') console.warn(`[vcblogs-debug] digest branch: rawItems=${rawItems.length}, afterFilter=${items.length}, enabledNames=[${[...enabledNames].join(',')}]`);
 
         if (items.length > 0) {
           // Enrich github items with repo metadata (stars, last push date) BEFORE rendering
