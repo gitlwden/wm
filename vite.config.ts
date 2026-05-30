@@ -257,6 +257,7 @@ function sebufApiPlugin(): Plugin {
   let cachedBootstrapHandler: any = null;
   let cachedChatAnalystHandler: any = null;
   let cachedLatestBriefHandler: any = null;
+  let cachedMcpProxyHandler: any = null;
 
   async function buildRouter() {
     const [
@@ -515,6 +516,39 @@ if (req.url?.startsWith('/api/latest-brief')) {
     return;
   } catch (err) {
     console.error('[latest-brief] Error:', err);
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Internal server error' }));
+    return;
+  }
+}
+// Handle /api/mcp-proxy — MCP proxy for tool calls (POST) and tool listing (GET).
+if (req.url?.startsWith('/api/mcp-proxy')) {
+  if (!cachedMcpProxyHandler) {
+    cachedMcpProxyHandler = await import('./api/mcp-proxy.js');
+  }
+  try {
+    const port = server.config.server.port || 3000;
+    const url = new URL(req.url, `http://localhost:${port}`);
+    const bodyText = await new Promise<string>((resolve) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => resolve(Buffer.concat(chunks).toString()));
+    });
+    const webRequest = new Request(url.toString(), {
+      method: req.method || 'POST',
+      headers: req.headers as Record<string, string>,
+      body: bodyText || undefined,
+    });
+    const response = await cachedMcpProxyHandler.default(webRequest);
+    res.statusCode = response.status;
+    response.headers.forEach((value: string, key: string) => {
+      res.setHeader(key, value);
+    });
+    res.end(await response.text());
+    return;
+  } catch (err) {
+    console.error('[mcp-proxy] Error:', err);
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'Internal server error' }));
