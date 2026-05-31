@@ -165,6 +165,11 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: "Lenny's Newsletter", url: 'https://www.lennysnewsletter.com/feed' },
       { name: 'Stratechery', url: 'https://stratechery.com/feed/' },
     ],
+    startups: [
+      { name: 'TechCrunch Startups', url: 'https://techcrunch.com/category/startups/feed/' },
+      { name: 'VentureBeat', url: 'https://venturebeat.com/feed/' },
+      { name: 'Crunchbase News', url: 'https://news.crunchbase.com/feed/' },
+    ],
   },
 
   tech: {
