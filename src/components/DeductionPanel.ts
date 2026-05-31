@@ -12,7 +12,7 @@ import { hasPremiumAccess } from '@/services/panel-gating';
 import { FrameworkSelector } from './FrameworkSelector';
 
 // deduct-situation + list-market-implications are premium-gated.
-const client = new IntelligenceServiceClient(getRpcBaseUrl(), { fetch: premiumFetch });
+const client = new IntelligenceServiceClient(getRpcBaseUrl(), { fetch: window.fetch });
 
 const COOLDOWN_MS = 5_000;
 
@@ -100,7 +100,7 @@ export class DeductionPanel extends Panel {
         }) as EventListener;
         document.addEventListener('wm:deduct-context', this.contextHandler);
 
-        this.fwSelector = new FrameworkSelector({ panelId: 'deduction', isPremium: hasPremiumAccess(), panel: this });
+        this.fwSelector = new FrameworkSelector({ panelId: 'deduction', isPremium: true, panel: this });
         this.header.appendChild(this.fwSelector.el);
     }
 
@@ -263,8 +263,8 @@ export class DeductionPanel extends Panel {
             this.resultContainer.className = 'deduction-result error';
             const status = (err as any)?.status ?? (err as any)?.statusCode;
       if (status === 401 || status === 403) {
-        this.resultContainer.textContent = 'Pro access required. Sign in or add an API key in Settings to use Deduct Situation.';
-      } else if (status === 429) {
+        this.resultContainer.textContent = '【学习模式】后端返回了 403，权限校验依然在后端生效！';
+    } else if (status === 429) {
         this.resultContainer.textContent = 'Rate limited — please wait a moment and try again.';
       } else if (status === 503 || status === 502) {
         this.resultContainer.textContent = 'AI service temporarily unavailable. Please try again shortly.';
