@@ -234,7 +234,8 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'The New Stack', url: 'https://thenewstack.io/feed/' },
     ],
     ipo: [
-      { name: 'IPO News', url: gn('(IPO OR "initial public offering" OR SPAC) when:7d') },
+      { name: 'TechCrunch IPO', url: 'https://techcrunch.com/tag/ipo/feed/' },
+      { name: 'Renaissance Capital', url: 'https://www.renaissancecapital.com/IPOHome/Press/IPO%20News%20RSS.ashx' },
     ],
     producthunt: [
       { name: 'Product Hunt', url: 'https://www.producthunt.com/feed' },

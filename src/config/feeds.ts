@@ -532,7 +532,8 @@ const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'The New Stack', url: rss('https://thenewstack.io/feed/') },
   ],
   ipo: [
-    { name: 'IPO News', url: rss('https://news.google.com/rss/search?q=(IPO+OR+"initial+public+offering"+OR+SPAC)+when:7d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'TechCrunch IPO', url: rss('https://techcrunch.com/tag/ipo/feed/') },
+    { name: 'Renaissance Capital', url: rss('https://www.renaissancecapital.com/IPOHome/Press/IPO%20News%20RSS.ashx') },
   ],
   producthunt: [
     { name: 'Product Hunt', url: rss('https://www.producthunt.com/feed') },
