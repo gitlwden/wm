@@ -611,10 +611,11 @@ export async function writeExtraKey(key, data, ttl, envelopeMeta) {
   const token = getKvToken();
   const value = envelopeMeta && shouldEnvelopeKey(key) ? buildEnvelope({ ...envelopeMeta, data }) : data;
   const payload = JSON.stringify(value);
-  const resp = await fetch(url, {
-    method: 'POST',
+  const params = ttl ? `?expiration_ttl=${ttl}` : '';
+  const resp = await fetch(`${url}/values/${encodeURIComponent(key)}${params}`, {
+    method: 'PUT',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(['SET', key, payload, 'EX', ttl]),
+    body: payload,
     signal: AbortSignal.timeout(10_000),
   });
   if (!resp.ok) throw new Error(`Extra key ${key}: write failed (HTTP ${resp.status})`);
@@ -627,10 +628,10 @@ export async function writeSeedMeta(dataKey, recordCount, metaKeyOverride, metaT
   const metaKey = metaKeyOverride || `seed-meta:${dataKey.replace(/:v\d+$/, '')}`;
   const meta = { fetchedAt: Date.now(), recordCount: recordCount ?? 0 };
   const metaTtl = metaTtlSeconds ?? 86400 * 7;
-  const resp = await fetch(url, {
-    method: 'POST',
+  const resp = await fetch(`${url}/values/${encodeURIComponent(metaKey)}?expiration_ttl=${metaTtl}`, {
+    method: 'PUT',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(['SET', metaKey, JSON.stringify(meta), 'EX', metaTtl]),
+    body: JSON.stringify(meta),
     signal: AbortSignal.timeout(5_000),
   });
   if (!resp.ok) console.warn(`  seed-meta ${metaKey}: write failed`);
@@ -915,24 +916,22 @@ export function isAllowedRouteHost(url, allowedHosts) {
   }
 }
 
-// Batch-read all learned routes for a scope via single Upstash pipeline request.
+// Batch-read all learned routes for a scope via individual Cloudflare KV GETs.
 // Returns Map<key → routeData>. Non-fatal: throws on HTTP error (caller catches).
 export async function bulkReadLearnedRoutes(scope, keys) {
   if (!keys.length) return new Map();
-  const url = getKvBase();
-  const token = getKvToken();
-  const pipeline = keys.map(k => ['GET', `seed-routes:${scope}:${k}`]);
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(pipeline),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!resp.ok) throw new Error(`bulkReadLearnedRoutes HTTP ${resp.status}`);
-  const results = await resp.json();
+  const { accountId, namespaceId, token } = _cfCredentials();
+  const base = kvBase(accountId, namespaceId);
+  const headers = { Authorization: `Bearer ${token}` };
+  const results = await Promise.all(
+    keys.map(k => fetch(`${base}/values/${encodeURIComponent(`seed-routes:${scope}:${k}`)}`, {
+      headers,
+      signal: AbortSignal.timeout(5_000),
+    }).then(r => r.ok ? r.text() : null).catch(() => null))
+  );
   const map = new Map();
   for (let i = 0; i < keys.length; i++) {
-    const raw = results[i]?.result;
+    const raw = results[i];
     if (!raw) continue;
     try { map.set(keys[i], JSON.parse(raw)); }
     catch { console.warn(`  [routes] malformed JSON for ${keys[i]} — skipping`); }
