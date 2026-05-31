@@ -713,9 +713,11 @@ export function createDomainGateway(
     // already performed before flipping `internalMcpVerified = true`.
     let keyCheck: { valid: boolean; required: boolean; error?: string; kind?: 'enterprise' | 'session' | 'user' } = internalMcpVerified
       ? { valid: true, required: false }
-      : ((await validateApiKey(request, {
-          forceKey: (isTierGated && !sessionUserId) || needsLegacyProBearerGate,
-        })) as { valid: boolean; required: boolean; error?: string; kind?: 'enterprise' | 'session' | 'user' });
+      : isLocalDev
+        ? { valid: false, required: false }
+        : ((await validateApiKey(request, {
+            forceKey: (isTierGated && !sessionUserId) || needsLegacyProBearerGate,
+          })) as { valid: boolean; required: boolean; error?: string; kind?: 'enterprise' | 'session' | 'user' });
 
     // Clerk session is itself proof of authentication (validated at line 410).
     // validateApiKey is strict-no-trust-of-headers per #3541 and would 401 every
