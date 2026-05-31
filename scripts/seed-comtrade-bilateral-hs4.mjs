@@ -115,17 +115,38 @@ const COMTRADE_REPORTER_OVERRIDES = {
  */
 async function redisPipeline(commands) {
   const { url, token } = getRedisCredentials();
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(commands),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Redis pipeline failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
-  }
-  return resp.json();
+  const headers = { Authorization: `Bearer ${token}` };
+  return Promise.all(commands.map(async ([verb, key, value, exFlag, ttl]) => {
+    if (verb === 'GET') {
+      const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
+        headers,
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!resp.ok) return { result: null };
+      const text = await resp.text();
+      return { result: text || null };
+    }
+    if (verb === 'SET') {
+      const params = (exFlag === 'EX' && ttl) ? `?expiration_ttl=${ttl}` : '';
+      const resp = await fetch(`${url}/values/${encodeURIComponent(key)}${params}`, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: typeof value === 'string' ? value : JSON.stringify(value),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!resp.ok) throw new Error(`KV SET ${key}: HTTP ${resp.status}`);
+      return { result: 'OK' };
+    }
+    if (verb === 'DEL') {
+      const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers,
+        signal: AbortSignal.timeout(5_000),
+      });
+      return { result: resp.ok ? 1 : 0 };
+    }
+    return { result: null };
+  }));
 }
 
 /**
