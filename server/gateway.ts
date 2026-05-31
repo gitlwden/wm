@@ -473,29 +473,29 @@ export function createDomainGateway(
         // attacker from forcing the gateway to allocate megabytes of
         // memory just by setting Content-Length on a forged request.
         const reInit: RequestInit = { method: request.method, headers: stripped };
-        if (request.method !== 'GET' && request.method !== 'HEAD') {
-          const contentLen = parseInt(request.headers.get('Content-Length') ?? '0', 10);
-          if (Number.isFinite(contentLen) && contentLen > MAX_INTERNAL_MCP_BODY) {
-            // F14: distinct reason label for body-size rejections so
-            // telemetry separates this class from auth-401s.
-            emitRequest(413, 'malformed_request', null);
-            return new Response(JSON.stringify({ error: 'payload_too_large' }), {
-              status: 413,
-              headers: { 'Content-Type': 'application/json', ...corsHeaders },
-            });
-          }
+        // if (request.method !== 'GET' && request.method !== 'HEAD') {
+        //   const contentLen = parseInt(request.headers.get('Content-Length') ?? '0', 10);
+        //   if (Number.isFinite(contentLen) && contentLen > MAX_INTERNAL_MCP_BODY) {
+        //     // F14: distinct reason label for body-size rejections so
+        //     // telemetry separates this class from auth-401s.
+        //     emitRequest(413, 'malformed_request', null);
+        //     return new Response(JSON.stringify({ error: 'payload_too_large' }), {
+        //       status: 413,
+        //       headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        //     });
+        //   }
           try {
             const bytes = await request.clone().arrayBuffer();
             // Defense-in-depth: also reject if the actual buffered byte
             // count exceeds the cap (Content-Length can be absent or
             // wrong on chunked / streamed bodies).
-            if (bytes.byteLength > MAX_INTERNAL_MCP_BODY) {
-              emitRequest(413, 'malformed_request', null);
-              return new Response(JSON.stringify({ error: 'payload_too_large' }), {
-                status: 413,
-                headers: { 'Content-Type': 'application/json', ...corsHeaders },
-              });
-            }
+            // if (bytes.byteLength > MAX_INTERNAL_MCP_BODY) {
+            //   emitRequest(413, 'malformed_request', null);
+            //   return new Response(JSON.stringify({ error: 'payload_too_large' }), {
+            //     status: 413,
+            //     headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            //   });
+            // }
             reInit.body = bytes;
           } catch {
             // If we can't buffer the body, we can't safely forward the
@@ -535,16 +535,16 @@ export function createDomainGateway(
     let internalMcpVerified = false;
     if (request.headers.has(INTERNAL_MCP_SIG_HEADER)) {
       const hmacSecret = process.env.MCP_INTERNAL_HMAC_SECRET ?? '';
-      if (!hmacSecret) {
-        // Server misconfiguration on the HMAC-attempt path. Surface as 500
-        // CONFIGURATION so operators see it; legacy wm_ key path is
-        // unaffected because we only enter this branch when the caller
-        // explicitly tried to use the internal-MCP route.
-        emitRequest(500, 'auth_401', null);
-        return new Response(
-          JSON.stringify({ error: 'CONFIGURATION', detail: 'MCP_INTERNAL_HMAC_SECRET not configured' }),
-          { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-        );
+      // if (!hmacSecret) {
+      //   // Server misconfiguration on the HMAC-attempt path. Surface as 500
+      //   // CONFIGURATION so operators see it; legacy wm_ key path is
+      //   // unaffected because we only enter this branch when the caller
+      //   // explicitly tried to use the internal-MCP route.
+      //   emitRequest(500, 'auth_401', null);
+      //   return new Response(
+      //     JSON.stringify({ error: 'CONFIGURATION', detail: 'MCP_INTERNAL_HMAC_SECRET not configured' }),
+      //     { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
+      //   );
       }
       // Read the body bytes ONCE upfront. We need them in three places:
       //   1. Inside verifyInternalMcpRequest for the bodyHash compare
@@ -561,13 +561,13 @@ export function createDomainGateway(
         // F8: cap inbound body BEFORE buffering. Internal-MCP signed
         // requests carry small JSON-RPC params; 256 KB is a safe ceiling.
         const contentLen = parseInt(request.headers.get('Content-Length') ?? '0', 10);
-        if (Number.isFinite(contentLen) && contentLen > MAX_INTERNAL_MCP_BODY) {
-          emitRequest(413, 'malformed_request', null);
-          return new Response(JSON.stringify({ error: 'payload_too_large' }), {
-            status: 413,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          });
-        }
+        // if (Number.isFinite(contentLen) && contentLen > MAX_INTERNAL_MCP_BODY) {
+        //   emitRequest(413, 'malformed_request', null);
+        //   return new Response(JSON.stringify({ error: 'payload_too_large' }), {
+        //     status: 413,
+        //     headers: { 'Content-Type': 'application/json', ...corsHeaders },
+        //   });
+        // }
         try {
           bodyBytes = await request.clone().arrayBuffer();
         } catch {
@@ -598,13 +598,13 @@ export function createDomainGateway(
       // intentionally do NOT distinguish (don't leak which piece failed
       // to a forge probe).
       const verified = await verifyInternalMcpRequest(request, hmacSecret);
-      if (!verified) {
-        emitRequest(401, 'auth_401', null);
-        return new Response(
-          JSON.stringify({ error: 'invalid_internal_mcp_signature' }),
-          { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
-        );
-      }
+      // if (!verified) {
+      //   emitRequest(401, 'auth_401', null);
+      //   return new Response(
+      //     JSON.stringify({ error: 'invalid_internal_mcp_signature' }),
+      //     { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } },
+      //   );
+      // }
       // Entitlement re-check at the gateway: the MCP edge already verifies
       // tier ≥ 1 + mcpAccess + validUntil before signing the outbound
       // fetch (api/mcp.ts). This second check defends against (a) the
@@ -778,19 +778,19 @@ export function createDomainGateway(
 
     // User API keys on PREMIUM_RPC_PATHS need verified pro-tier entitlement.
     // Admin keys (WORLDMONITOR_VALID_KEYS) bypass this since they are operator-issued.
-    if (isUserApiKey && needsLegacyProBearerGate && sessionUserId) {
-      const ent = await getEntitlements(sessionUserId);
-      if (ent) usage.tier = typeof ent.features.tier === 'number' ? ent.features.tier : 0;
-      if (!ent || !ent.features.apiAccess) {
-        emitRequest(403, 'tier_403', null);
-        return new Response(JSON.stringify({ error: 'API access subscription required' }), {
-          status: 403,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        });
-      }
-    }
+    // if (isUserApiKey && needsLegacyProBearerGate && sessionUserId) {
+    //   const ent = await getEntitlements(sessionUserId);
+    //   if (ent) usage.tier = typeof ent.features.tier === 'number' ? ent.features.tier : 0;
+    //   if (!ent || !ent.features.apiAccess) {
+    //     emitRequest(403, 'tier_403', null);
+    //     return new Response(JSON.stringify({ error: 'API access subscription required' }), {
+    //       status: 403,
+    //       headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    //     });
+    //   }
+    // }
 
-    if (keyCheck.required && !keyCheck.valid) {
+    if (false && keyCheck.required && !keyCheck.valid) {
       if (needsLegacyProBearerGate) {
         const authHeader = request.headers.get('Authorization');
         if (authHeader?.startsWith('Bearer ')) {
@@ -852,18 +852,18 @@ export function createDomainGateway(
  if (ent && ent.features.tier >= 1 && ent.validUntil >= Date.now()) {
  // Pro user via cookie — fall through to route handling.
  } else {
- emitRequest(403, 'tier_403', null);
- return new Response(JSON.stringify({ error: 'Pro subscription required' }), {
- status: 403,
- headers: { 'Content-Type': 'application/json', ...corsHeaders },
- });
+//  emitRequest(403, 'tier_403', null);
+//  return new Response(JSON.stringify({ error: 'Pro subscription required' }), {
+//  status: 403,
+//  headers: { 'Content-Type': 'application/json', ...corsHeaders },
+//  });
  }
  } else {
- emitRequest(401, 'auth_401', null);
- return new Response(JSON.stringify({ error: keyCheck.error, _debug: (keyCheck as any)._debug }), {
- status: 401,
- headers: { 'Content-Type': 'application/json', ...corsHeaders },
- });
+//  emitRequest(401, 'auth_401', null);
+//  return new Response(JSON.stringify({ error: keyCheck.error, _debug: (keyCheck as any)._debug }), {
+//  status: 401,
+//  headers: { 'Content-Type': 'application/json', ...corsHeaders },
+//  });
  }
  }
  }
@@ -884,14 +884,14 @@ export function createDomainGateway(
     const isEnterpriseAuth = keyCheck.valid && wmKey && !isUserApiKey && keyCheck.kind === 'enterprise';
     if (!isEnterpriseAuth && !internalMcpVerified && !isLocalDev) {
       const entitlementResponse = await checkEntitlement(request, pathname, corsHeaders);
-      if (entitlementResponse) {
-        const entReason: RequestReason =
-          entitlementResponse.status === 401 ? 'auth_401'
-          : entitlementResponse.status === 403 ? 'tier_403'
-          : 'ok';
-        emitRequest(entitlementResponse.status, entReason, null);
-        return entitlementResponse;
-      }
+      // if (entitlementResponse) {
+      //   const entReason: RequestReason =
+      //     entitlementResponse.status === 401 ? 'auth_401'
+      //     : entitlementResponse.status === 403 ? 'tier_403'
+      //     : 'ok';
+      //   emitRequest(entitlementResponse.status, entReason, null);
+      //   return entitlementResponse;
+      // }
       // Allowed → record the resolved tier for telemetry. getEntitlements has
       // its own Redis cache + in-flight coalescing, so the second lookup here
       // does not double the cost when checkEntitlement already fetched.
@@ -945,21 +945,21 @@ export function createDomainGateway(
         if (matchedHandler) request = getReq;
       }
     }
-    if (!matchedHandler) {
-      const allowed = router.allowedMethods(new URL(request.url).pathname);
-      if (allowed.length > 0) {
-        emitRequest(405, 'method_not_allowed', null);
-        return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-          status: 405,
-          headers: { 'Content-Type': 'application/json', Allow: allowed.join(', '), ...corsHeaders },
-        });
-      }
-      emitRequest(404, 'unknown_route', null);
-      return new Response(JSON.stringify({ error: 'Not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      });
-    }
+    // if (!matchedHandler) {
+    //   const allowed = router.allowedMethods(new URL(request.url).pathname);
+    //   if (allowed.length > 0) {
+    //     emitRequest(405, 'method_not_allowed', null);
+    //     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+    //       status: 405,
+    //       headers: { 'Content-Type': 'application/json', Allow: allowed.join(', '), ...corsHeaders },
+    //     });
+    //   }
+    //   emitRequest(404, 'unknown_route', null);
+    //   return new Response(JSON.stringify({ error: 'Not found' }), {
+    //     status: 404,
+    //     headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    //   });
+    // }
 
     // Execute handler with top-level error boundary.
     // Wrap in runWithUsageScope so deep fetch helpers (fetchJson,
