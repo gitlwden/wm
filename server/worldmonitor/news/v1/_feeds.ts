@@ -176,6 +176,14 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'SaaStr', url: 'https://www.saastr.com/feed/' },
       { name: 'CB Insights', url: 'https://www.cbinsights.com/research/feed/' },
     ],
+    regionalStartups: [
+      { name: 'EU Startups', url: 'https://www.eu-startups.com/feed/' },
+      { name: 'Tech.eu', url: 'https://tech.eu/feed/' },
+      { name: 'Sifted (Europe)', url: 'https://sifted.eu/feed' },
+      { name: 'Tech in Asia', url: 'https://www.techinasia.com/feed' },
+      { name: 'TechCabal (Africa)', url: 'https://techcabal.com/feed/' },
+      { name: 'Inc42 (India)', url: 'https://inc42.com/feed/' },
+    ],
   },
 
   tech: {

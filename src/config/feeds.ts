@@ -482,6 +482,14 @@ const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'VC News', url: rss('https://news.google.com/rss/search?q=("Series+A"+OR+"Series+B"+OR+"Series+C"+OR+"funding+round"+OR+"venture+capital")+when:7d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'Seed & Pre-Seed', url: rss('https://news.google.com/rss/search?q=("seed+round"+OR+"pre-seed"+OR+"angel+round"+OR+"seed+funding")+when:7d&hl=en-US&gl=US&ceid=US:en') },
   ],
+  regionalStartups: [
+    { name: 'EU Startups', url: rss('https://www.eu-startups.com/feed/') },
+    { name: 'Tech.eu', url: rss('https://tech.eu/feed/') },
+    { name: 'Sifted (Europe)', url: rss('https://sifted.eu/feed') },
+    { name: 'Tech in Asia', url: rss('https://www.techinasia.com/feed') },
+    { name: 'TechCabal (Africa)', url: rss('https://techcabal.com/feed/') },
+    { name: 'Inc42 (India)', url: rss('https://inc42.com/feed/') },
+  ],
   unicorns: [
     { name: 'Unicorn News', url: rss('https://news.google.com/rss/search?q=("unicorn+startup"+OR+"unicorn+valuation"+OR+"$1+billion+valuation")+when:7d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'CB Insights Unicorn', url: rss('https://news.google.com/rss/search?q=site:cbinsights.com+unicorn+when:14d&hl=en-US&gl=US&ceid=US:en') },
