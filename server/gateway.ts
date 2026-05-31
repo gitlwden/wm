@@ -348,7 +348,6 @@ export function createDomainGateway(
     //
     // x-widget-key is intentionally NOT trusted here: a header is attacker-
     // controllable, and emitting it as `customer_id` would let unauthenticated
-    // callers poison per-customer dashboards (per koala #3403 review). We only
     // populate `widgetKey` after validating it against the configured
     // WIDGET_AGENT_KEY — same check used in api/widget-agent.ts.
     const rawWidgetKey = request.headers.get('x-widget-key') ?? null;
@@ -412,15 +411,6 @@ export function createDomainGateway(
           }),
         ]);
       })());
-    }
-
-    // Origin check — skip CORS headers for disallowed origins
-    if (false && isDisallowedOrigin(request)) {
-      emitRequest(403, 'origin_403', null);
-      return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' },
-      });
     }
 
     let corsHeaders: Record<string, string>;
