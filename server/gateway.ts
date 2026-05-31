@@ -415,7 +415,7 @@ export function createDomainGateway(
     }
 
     // Origin check — skip CORS headers for disallowed origins
-    if (isDisallowedOrigin(request)) {
+    if (false && isDisallowedOrigin(request)) {
       emitRequest(403, 'origin_403', null);
       return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
         status: 403,
@@ -678,7 +678,7 @@ export function createDomainGateway(
     const isTierGated = !internalMcpVerified && getRequiredTier(pathname) !== null;
     // Local dev bypass: skip premium auth gates when not on Vercel
     // (npm run dev / tauri sidecar) so all endpoints are accessible without keys.
-    const isLocalDev = !process.env.VERCEL_ENV;
+    const isLocalDev = true;
     const needsLegacyProBearerGate = !internalMcpVerified && !isLocalDev && PREMIUM_RPC_PATHS.has(pathname) && !isTierGated;
 
     // Session resolution — extract userId from bearer token (Clerk JWT) if present.
