@@ -1,36 +1,28 @@
 #!/usr/bin/env node
 
 // Standalone Dodo product prices seed — fetches live prices from Dodo Payments
-// API, builds tier view model, writes to Upstash Redis.
+// API, builds tier view model, writes to Cloudflare KV.
 // Extracted from ais-relay.cjs startDodoPriceSeedLoop / seedDodoPrices.
 
 import { buildEnvelope } from './_seed-envelope-source.mjs';
-import { loadEnvFile } from './_seed-utils.mjs';
+import { loadEnvFile, getKvBase, getKvToken } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
-// ── Redis helpers ─────────────────────────────────────────────────────────
+// ── KV helpers ─────────────────────────────────────────────────────────
 
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-if (!UPSTASH_URL || !UPSTASH_TOKEN) {
-  console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-  process.exit(1);
-}
+const kvBase = getKvBase();
+const kvToken = getKvToken();
 
 async function redisSet(key, value, ttlSeconds) {
   try {
-    const body = JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(ttlSeconds)]);
-    const resp = await fetch(UPSTASH_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-      body,
+    const resp = await fetch(`${kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(value),
       signal: AbortSignal.timeout(5_000),
     });
-    if (!resp.ok) return false;
-    const data = await resp.json();
-    return data?.result === 'OK';
+    return resp.ok;
   } catch { return false; }
 }
 
@@ -150,13 +142,13 @@ async function main() {
   const now = Date.now();
   const payload = { tiers, fetchedAt: now, cachedUntil: now + DODO_PRICE_SEED_TTL * 1000, priceSource };
 
-  // Only write to Redis when ALL prices came from Dodo (no fallback contamination).
+  // Only write to KV when ALL prices came from Dodo (no fallback contamination).
   if (priceSource === 'dodo') {
     const ok1 = await envelopeWrite(DODO_PRICE_REDIS_KEY, payload, DODO_PRICE_SEED_TTL, { recordCount: fetchedCount, sourceVersion: 'dodo-prices' });
     const ok2 = await redisSet('seed-meta:product-catalog', { fetchedAt: now, recordCount: fetchedCount, priceSource }, 604800);
-    console.log(`[DodoPrices] Seeded ${fetchedCount}/${DODO_PRODUCT_IDS.length} from Dodo (redis=${ok1 && ok2 ? 'OK' : 'PARTIAL'}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    console.log(`[DodoPrices] Seeded ${fetchedCount}/${DODO_PRODUCT_IDS.length} from Dodo (kv=${ok1 && ok2 ? 'OK' : 'PARTIAL'}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   } else {
-    console.warn(`[DodoPrices] NOT writing to Redis — source=${priceSource} (${fetchedCount} live, ${fallbackCount} fallback) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    console.warn(`[DodoPrices] NOT writing to KV — source=${priceSource} (${fetchedCount} live, ${fallbackCount} fallback) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   }
 }
 

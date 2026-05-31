@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, runSeed, sleep } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, sleep, getKvBase, getKvToken } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -21,29 +21,19 @@ const TECH_EVENTS_CURATED = [
   { id: 'web-summit-2026', title: 'Web Summit 2026', type: 'conference', location: 'Lisbon, Portugal', startDate: '2026-11-02', endDate: '2026-11-05', url: 'https://websummit.com', source: 'curated', description: "The world's premier tech conference" },
 ];
 
-// ─── Redis helpers (Upstash REST) ───
+// ─── KV helpers ───
 
-function getRedisCredentials() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
-    console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-    process.exit(1);
-  }
-  return { url, token };
-}
-
-async function redisSet(key, value, ttlSeconds) {
-  const { url, token } = getRedisCredentials();
-  const resp = await fetch(url, {
-    method: 'POST',
+function redisSet(key, value, ttlSeconds) {
+  const base = getKvBase();
+  const token = getKvToken();
+  return fetch(`${base}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+    method: 'PUT',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(ttlSeconds)]),
+    body: JSON.stringify(value),
     signal: AbortSignal.timeout(10_000),
-  });
-  if (!resp.ok) return false;
-  const data = await resp.json();
-  return data?.result === 'OK';
+  })
+    .then((r) => r.ok)
+    .catch(() => false);
 }
 
 async function envelopeWrite(key, data, ttlSeconds, meta) {

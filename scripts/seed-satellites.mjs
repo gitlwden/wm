@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, CHROME_UA } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, getKvBase, getKvToken } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -45,40 +45,37 @@ function satClassify(name) {
   return { type, country };
 }
 
-// ── Upstash Redis REST helpers ──────────────────────────────────
+// ── Cloudflare KV helpers ──────────────────────────────────
 
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || '';
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+const _kvBase = getKvBase();
+const _kvToken = getKvToken();
 
 function upstashSet(key, value, ttlSeconds) {
-  if (!UPSTASH_URL || !UPSTASH_TOKEN) return Promise.resolve(false);
-  return fetch(UPSTASH_URL, {
-    method: 'POST',
+  return fetch(`${_kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+    method: 'PUT',
     headers: {
-      Authorization: `Bearer ${UPSTASH_TOKEN}`,
+      Authorization: `Bearer ${_kvToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(ttlSeconds)]),
+    body: JSON.stringify(value),
     signal: AbortSignal.timeout(5000),
   })
-    .then((r) => r.json())
-    .then((j) => j?.result === 'OK')
+    .then((r) => r.ok)
     .catch(() => false);
 }
 
 function upstashExpire(key, ttlSeconds) {
-  if (!UPSTASH_URL || !UPSTASH_TOKEN) return Promise.resolve(false);
-  return fetch(UPSTASH_URL, {
-    method: 'POST',
+  // KV has no separate EXPIRE — re-write with new TTL to refresh
+  return fetch(`${_kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+    method: 'PUT',
     headers: {
-      Authorization: `Bearer ${UPSTASH_TOKEN}`,
-      'Content-Type': 'application/json',
+      Authorization: `Bearer ${_kvToken}`,
+      'Content-Type': 'text/plain',
     },
-    body: JSON.stringify(['EXPIRE', key, String(ttlSeconds)]),
+    body: '1',
     signal: AbortSignal.timeout(5000),
   })
-    .then((r) => r.json())
-    .then((j) => j?.result === 1)
+    .then((r) => r.ok)
     .catch(() => false);
 }
 
@@ -130,8 +127,8 @@ async function seedSatelliteTLEs() {
   const t0 = Date.now();
   console.log('[Satellites] Starting seed...');
 
-  if (!UPSTASH_URL || !UPSTASH_TOKEN) {
-    console.error('[Satellites] Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
+  if (!_kvBase || !_kvToken) {
+    console.error('[Satellites] Missing Cloudflare KV credentials');
     process.exit(1);
   }
 
@@ -183,7 +180,7 @@ async function seedSatelliteTLEs() {
   await upstashSet(SEED_META_KEY, { fetchedAt: Date.now(), recordCount: satellites.length }, META_TTL);
 
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`[Satellites] Seeded ${satellites.length} TLEs (redis: ${ok ? 'OK' : 'FAIL'}) in ${elapsed}s`);
+  console.log(`[Satellites] Seeded ${satellites.length} TLEs (kv: ${ok ? 'OK' : 'FAIL'}) in ${elapsed}s`);
 }
 
 seedSatelliteTLEs().catch((e) => {

@@ -1,36 +1,28 @@
 #!/usr/bin/env node
 
 // Standalone corridor risk seed — fetches shipping corridor risk scores from
-// corridorrisk.io, maps to canonical chokepoint IDs, writes to Upstash Redis.
+// corridorrisk.io, maps to canonical chokepoint IDs, writes to Cloudflare KV.
 // Extracted from ais-relay.cjs startCorridorRiskSeedLoop / seedCorridorRisk.
 
 import { buildEnvelope } from './_seed-envelope-source.mjs';
-import { loadEnvFile } from './_seed-utils.mjs';
+import { loadEnvFile, getKvBase, getKvToken } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
-// ── Redis helpers ─────────────────────────────────────────────────────────
+// ── KV helpers ─────────────────────────────────────────────────────────
 
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-if (!UPSTASH_URL || !UPSTASH_TOKEN) {
-  console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-  process.exit(1);
-}
+const kvBase = getKvBase();
+const kvToken = getKvToken();
 
 async function redisSet(key, value, ttlSeconds) {
   try {
-    const body = JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(ttlSeconds)]);
-    const resp = await fetch(UPSTASH_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-      body,
+    const resp = await fetch(`${kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(value),
       signal: AbortSignal.timeout(5_000),
     });
-    if (!resp.ok) return false;
-    const data = await resp.json();
-    return data?.result === 'OK';
+    return resp.ok;
   } catch { return false; }
 }
 
@@ -128,7 +120,7 @@ async function main() {
   });
   await redisSet('seed-meta:supply_chain:corridorrisk', { fetchedAt: Date.now(), recordCount: Object.keys(result).length }, 604800);
 
-  console.log(`[CorridorRisk] Seeded ${Object.keys(result).length} corridors (redis: ${ok ? 'OK' : 'FAIL'}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`[CorridorRisk] Seeded ${Object.keys(result).length} corridors (kv: ${ok ? 'OK' : 'FAIL'}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 
 main().catch((e) => {

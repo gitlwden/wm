@@ -3,14 +3,13 @@
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { getKvBase, getKvToken } from './_seed-utils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const BATCH_SIZE = 500;
 const R2_BUCKET_URL = 'https://api.cloudflare.com/client/v4/accounts/{acct}/r2/buckets/worldmonitor-data/objects/seed-data/military-bases-final.json';
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 1000;
-const PROGRESS_INTERVAL = 5000;
 const GRACE_PERIOD_MS = 5 * 60 * 1000;
 const VALIDATION_SAMPLE_SIZE = 10;
 
@@ -76,150 +75,103 @@ function loadEnvFile() {
   }
 }
 
-async function pipelineRequest(url, token, commands, attempt = 1) {
-  const body = JSON.stringify(commands);
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body,
+async function kvPut(base, token, key, value, ttlSeconds, attempt = 1) {
+  const params = ttlSeconds ? `?expiration_ttl=${ttlSeconds}` : '';
+  const resp = await fetch(`${base}/values/${encodeURIComponent(key)}${params}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(value),
     signal: AbortSignal.timeout(30_000),
   });
-
   if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
     if (attempt < MAX_RETRIES) {
       const delay = RETRY_BASE_MS * 2 ** (attempt - 1);
-      console.warn(`  Pipeline failed (HTTP ${resp.status}), retry ${attempt}/${MAX_RETRIES} in ${delay}ms...`);
+      console.warn(`  KV PUT failed (HTTP ${resp.status}), retry ${attempt}/${MAX_RETRIES} in ${delay}ms...`);
       await sleep(delay);
-      return pipelineRequest(url, token, commands, attempt + 1);
+      return kvPut(base, token, key, value, ttlSeconds, attempt + 1);
     }
-    throw new Error(`Pipeline failed after ${MAX_RETRIES} attempts: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+    throw new Error(`KV PUT failed after ${MAX_RETRIES} attempts: HTTP ${resp.status}`);
   }
+  return resp.ok;
+}
 
-  return resp.json();
+async function kvGet(base, token, key, attempt = 1) {
+  const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!resp.ok) return null;
+  const text = await resp.text();
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return text; }
+}
+
+async function kvDelete(base, token, key) {
+  const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  return resp.ok;
 }
 
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-async function seedGeo(url, token, geoKey, entries) {
-  let seeded = 0;
-  const total = entries.length;
-
-  for (let i = 0; i < total; i += BATCH_SIZE) {
-    const batch = entries.slice(i, i + BATCH_SIZE);
-    const commands = batch.map(e => ['GEOADD', geoKey, String(e.lon), String(e.lat), e.id]);
-    await pipelineRequest(url, token, commands);
-    seeded += batch.length;
-
-    if (seeded % PROGRESS_INTERVAL === 0 || seeded === total) {
-      console.log(`  GEO: ${seeded.toLocaleString()} / ${total.toLocaleString()}`);
-    }
-  }
-
-  return seeded;
+async function seedData(base, token, dataKey, entries) {
+  // Store all entries as a JSON array under a single KV key
+  await kvPut(base, token, dataKey, entries);
+  console.log(`  DATA: ${entries.length.toLocaleString()} entries written`);
+  return entries.length;
 }
 
-async function seedMeta(url, token, metaKey, entries) {
-  let seeded = 0;
-  const total = entries.length;
-
-  for (let i = 0; i < total; i += BATCH_SIZE) {
-    const batch = entries.slice(i, i + BATCH_SIZE);
-    const commands = batch.map(e => {
-      const meta = { ...e };
-      delete meta.id;
-      return ['HSET', metaKey, e.id, JSON.stringify(meta)];
-    });
-    await pipelineRequest(url, token, commands);
-    seeded += batch.length;
-
-    if (seeded % PROGRESS_INTERVAL === 0 || seeded === total) {
-      console.log(`  META: ${seeded.toLocaleString()} / ${total.toLocaleString()}`);
-    }
-  }
-
-  return seeded;
-}
-
-async function validate(url, token, prefix, version, expectedCount) {
-  const geoKey = `${prefix}military:bases:geo:${version}`;
-  const metaKey = `${prefix}military:bases:meta:${version}`;
+async function validate(base, token, prefix, version, expectedCount) {
+  const dataKey = `${prefix}military:bases:data:${version}`;
 
   console.log('\nValidating seeded data...');
 
-  const [zcardResult, hlenResult] = await pipelineRequest(url, token, [
-    ['ZCARD', geoKey],
-    ['HLEN', metaKey],
-  ]);
+  const data = await kvGet(base, token, dataKey);
+  const count = Array.isArray(data) ? data.length : 0;
 
-  const geoCount = zcardResult.result;
-  const metaCount = hlenResult.result;
+  console.log(`  ${dataKey} = ${count} entries (expected >= ${expectedCount})`);
 
-  console.log(`  ZCARD ${geoKey} = ${geoCount} (expected >= ${expectedCount})`);
-  console.log(`  HLEN  ${metaKey} = ${metaCount} (expected == ZCARD)`);
-
-  if (geoCount < expectedCount) {
-    throw new Error(`GEO count ${geoCount} < expected ${expectedCount}`);
+  if (count < expectedCount) {
+    throw new Error(`Entry count ${count} < expected ${expectedCount}`);
   }
 
-  if (metaCount !== geoCount) {
-    throw new Error(`META count ${metaCount} != GEO count ${geoCount}`);
-  }
-
-  const membersResult = await pipelineRequest(url, token, [
-    ['ZRANDMEMBER', geoKey, String(VALIDATION_SAMPLE_SIZE)],
-  ]);
-
-  const sampleIds = membersResult[0].result;
-  if (!sampleIds || sampleIds.length === 0) {
-    throw new Error('ZRANDMEMBER returned no members');
-  }
-
-  const hmgetResult = await pipelineRequest(url, token, [
-    ['HMGET', metaKey, ...sampleIds],
-  ]);
-
-  const values = hmgetResult[0].result;
+  // Sample validation
+  const sampleSize = Math.min(VALIDATION_SAMPLE_SIZE, count);
   let parseOk = 0;
-  for (let i = 0; i < values.length; i++) {
-    if (!values[i]) {
-      throw new Error(`Sample ID "${sampleIds[i]}" missing from META hash`);
+  for (let i = 0; i < sampleSize; i++) {
+    const idx = Math.floor(Math.random() * count);
+    const entry = data[idx];
+    if (!entry || !entry.id) {
+      throw new Error(`Sample entry at index ${idx} missing id`);
     }
-    try {
-      JSON.parse(values[i]);
-      parseOk++;
-    } catch {
-      throw new Error(`Sample ID "${sampleIds[i]}" has invalid JSON in META hash`);
-    }
+    parseOk++;
   }
 
-  console.log(`  Sampled ${parseOk}/${sampleIds.length} entries — all valid JSON`);
+  console.log(`  Sampled ${parseOk}/${sampleSize} entries — all valid`);
   console.log('  Validation passed.');
 }
 
-async function atomicSwitch(url, token, prefix, version) {
+async function atomicSwitch(base, token, prefix, version) {
   const activeKey = `${prefix}military:bases:active`;
-  await pipelineRequest(url, token, [['SET', activeKey, String(version)]]);
+  await kvPut(base, token, activeKey, String(version));
   console.log(`\nAtomic switch: SET ${activeKey} = ${version}`);
 }
 
-async function cleanupOldVersion(url, token, prefix, newVersion) {
+async function cleanupOldVersion(base, token, prefix, newVersion) {
   const activeKey = `${prefix}military:bases:active`;
-  const getResult = await pipelineRequest(url, token, [['GET', activeKey]]);
-  const currentActive = getResult[0].result;
+  const currentActive = await kvGet(base, token, activeKey);
 
   if (!currentActive || String(currentActive) === String(newVersion)) return null;
 
   const oldVersion = currentActive;
-  const oldGeoKey = `${prefix}military:bases:geo:${oldVersion}`;
-  const oldMetaKey = `${prefix}military:bases:meta:${oldVersion}`;
+  const oldDataKey = `${prefix}military:bases:data:${oldVersion}`;
 
-  return { oldVersion, oldGeoKey, oldMetaKey };
+  return { oldVersion, oldDataKey };
 }
 
 async function main() {
@@ -228,17 +180,8 @@ async function main() {
   const { env, sha } = parseArgs();
   const prefix = getKeyPrefix(env, sha);
 
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-  if (!redisUrl) {
-    console.error('Missing UPSTASH_REDIS_REST_URL. Set it in .env.local or as an env var.');
-    process.exit(1);
-  }
-  if (!redisToken) {
-    console.error('Missing UPSTASH_REDIS_REST_TOKEN. Set it in .env.local or as an env var.');
-    process.exit(1);
-  }
+  const redisUrl = getKvBase();
+  const redisToken = getKvToken();
 
   const volumePath = '/data/military-bases-final.json';
   const localPath = join(__dirname, 'data', 'military-bases-final.json');
@@ -274,13 +217,12 @@ async function main() {
 
   if (!dataPath) {
     const activeKey = `${prefix}military:bases:active`;
-    const check = await pipelineRequest(redisUrl, redisToken, [['GET', activeKey]]);
-    const existing = check[0]?.result;
+    const existing = await kvGet(redisUrl, redisToken, activeKey);
     if (existing) {
-      console.log(`No data file found — Redis already has active version ${existing}, skipping.`);
+      console.log(`No data file found — KV already has active version ${existing}, skipping.`);
       process.exit(0);
     }
-    console.error(`Data file not found locally or on R2, and no existing data in Redis.`);
+    console.error(`Data file not found locally or on R2, and no existing data in KV.`);
     process.exit(1);
   }
 
@@ -299,37 +241,31 @@ async function main() {
   }
 
   const version = Date.now();
-  const geoKey = `${prefix}military:bases:geo:${version}`;
-  const metaKey = `${prefix}military:bases:meta:${version}`;
+  const dataKey = `${prefix}military:bases:data:${version}`;
 
   console.log('=== Military Bases Seed ===');
   console.log(`  Environment:  ${env}`);
   console.log(`  Prefix:       ${prefix || '(none — production)'}`);
-  console.log(`  Redis URL:    ${redisUrl}`);
-  console.log(`  Redis Token:  ${maskToken(redisToken)}`);
+  console.log(`  KV Base:      ${redisUrl}`);
+  console.log(`  KV Token:     ${maskToken(redisToken)}`);
   console.log(`  Data file:    ${dataPath}`);
   console.log(`  Entries:      ${entries.length.toLocaleString()}`);
   console.log(`  Version:      ${version}`);
-  console.log(`  GEO key:      ${geoKey}`);
-  console.log(`  META key:     ${metaKey}`);
-  console.log(`  Batch size:   ${BATCH_SIZE}`);
+  console.log(`  Data key:     ${dataKey}`);
   console.log();
 
   const oldInfo = await cleanupOldVersion(redisUrl, redisToken, prefix, version);
   if (oldInfo) {
     console.log(`Previous version detected: ${oldInfo.oldVersion}`);
-    console.log(`  Will clean up after grace period: ${oldInfo.oldGeoKey}, ${oldInfo.oldMetaKey}`);
+    console.log(`  Will clean up after grace period: ${oldInfo.oldDataKey}`);
   }
 
-  console.log('Seeding GEO entries...');
+  console.log('Seeding entries...');
   const t0 = Date.now();
-  const geoSeeded = await seedGeo(redisUrl, redisToken, geoKey, entries);
-
-  console.log('\nSeeding META entries...');
-  const metaSeeded = await seedMeta(redisUrl, redisToken, metaKey, entries);
+  const seeded = await seedData(redisUrl, redisToken, dataKey, entries);
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
 
-  console.log(`\nSeeding complete in ${elapsed}s — GEO: ${geoSeeded.toLocaleString()}, META: ${metaSeeded.toLocaleString()}`);
+  console.log(`\nSeeding complete in ${elapsed}s — ${seeded.toLocaleString()} entries`);
 
   await validate(redisUrl, redisToken, prefix, version, entries.length);
 
@@ -338,18 +274,14 @@ async function main() {
   if (oldInfo) {
     console.log(`\nScheduling cleanup of old version ${oldInfo.oldVersion} in ${GRACE_PERIOD_MS / 1000}s...`);
     await sleep(GRACE_PERIOD_MS);
-    console.log(`Cleaning up old keys: ${oldInfo.oldGeoKey}, ${oldInfo.oldMetaKey}`);
-    await pipelineRequest(redisUrl, redisToken, [
-      ['DEL', oldInfo.oldGeoKey],
-      ['DEL', oldInfo.oldMetaKey],
-    ]);
+    console.log(`Cleaning up old key: ${oldInfo.oldDataKey}`);
+    await kvDelete(redisUrl, redisToken, oldInfo.oldDataKey);
     console.log('Old version cleaned up.');
   }
 
   console.log('\n=== Done ===');
   console.log(`  Active version: ${version}`);
-  console.log(`  GEO key:        ${geoKey}`);
-  console.log(`  META key:       ${metaKey}`);
+  console.log(`  Data key:       ${dataKey}`);
   console.log(`  Total entries:  ${entries.length.toLocaleString()}`);
 }
 

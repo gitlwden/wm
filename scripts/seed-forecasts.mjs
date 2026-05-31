@@ -4,7 +4,7 @@
 
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { loadEnvFile, runSeed, CHROME_UA, withRetry } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, CHROME_UA, withRetry, getKvBase, getKvToken } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 import { tagRegions } from './_prediction-scoring.mjs';
 import { resolveR2StorageConfig, putR2JsonObject, getR2JsonObject } from './_r2-storage.mjs';
@@ -577,10 +577,7 @@ const IMPACT_VARIABLE_CHANNELS = Object.fromEntries(
 
 function getRedisCredentials() {
   if (_testRedisStore) return { url: 'http://test', token: 'test' };
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) throw new Error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-  return { url, token };
+  return { url: getKvBase(), token: getKvToken() };
 }
 
 function getDeployRevision() {
@@ -591,17 +588,38 @@ function getDeployRevision() {
 }
 
 async function redisCommand(url, token, command) {
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(command),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Redis command failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+  const verb = String(command[0]).toUpperCase();
+  if (verb === 'GET') {
+    const resp = await fetch(`${url}/values/${encodeURIComponent(command[1])}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!resp.ok) return { result: null };
+    const text = await resp.text();
+    return { result: text || null };
+  } else if (verb === 'SET') {
+    const key = command[1];
+    const value = command[2];
+    const exIdx = command.indexOf('EX');
+    const ttl = exIdx >= 0 ? Number(command[exIdx + 1]) : 0;
+    const params = ttl > 0 ? `?expiration_ttl=${ttl}` : '';
+    const resp = await fetch(`${url}/values/${encodeURIComponent(key)}${params}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: typeof value === 'string' ? value : JSON.stringify(value),
+      signal: AbortSignal.timeout(10_000),
+    });
+    return { result: resp.ok ? 'OK' : null };
+  } else if (verb === 'DEL') {
+    const resp = await fetch(`${url}/values/${encodeURIComponent(command[1])}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    return { result: resp.ok ? 1 : 0 };
+  } else {
+    return { result: null };
   }
-  return resp.json();
 }
 
 /** In-memory Redis store injected by tests. When set, redisGet/redisSet skip network calls. */
@@ -610,18 +628,23 @@ function __setRedisStoreForTests(store) { _testRedisStore = store; }
 
 async function redisGet(url, token, key) {
   if (_testRedisStore) return _testRedisStore[key] ?? null;
-  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+  const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(10_000),
   });
   if (!resp.ok) return null;
-  const data = await resp.json();
-  if (!data?.result) return null;
-  try { return unwrapEnvelope(JSON.parse(data.result)).data; } catch { return null; }
+  const text = await resp.text();
+  if (!text) return null;
+  try { return unwrapEnvelope(JSON.parse(text)).data; } catch { return null; }
 }
 
 async function redisDel(url, token, key) {
-  return redisCommand(url, token, ['DEL', key]);
+  const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+  return { result: resp.ok ? 1 : 0 };
 }
 
 // ── Phase 4: Input normalizers ──────────────────────────────
@@ -694,42 +717,21 @@ async function readInputKeys() {
     'conflict:ema-windows:v1',
     ...fredKeys,
   ];
-  // Sized for Upstash REST /pipeline payload limits.
-  //
-  // STRLEN audit 2026-04-14: 40 input keys total ~2.27 MB; top 5 keys
-  // (ucdp 657KB + chokepoints 500KB + cyber 390KB + commodities 192KB +
-  // gpsjam 174KB) = 90% of payload. Because BATCH_SIZE divides the keys
-  // array deterministically by index, the worst batch is fixed by array
-  // order — currently batch 2 (indices 5-9: chokepoints + iran + ucdp +
-  // unrest + outages) at **1.17 MB** verified live. Not random
-  // co-location — deterministic.
-  //
-  // The original 10s timeout deterministically failed every retry on this
-  // batch at Upstash REST's observed slow-spike floor of ~100 KB/s
-  // (Railway log 2026-04-14 10:01 UTC: 12 consecutive abort-timeouts).
-  // At 100 KB/s, 1.17 MB takes ~12s. 45s gives ~3.7× headroom.
-  //
-  // Future improvement: interleave heavy keys (chokepoints + ucdp) with
-  // smalls in the keys array above. Would split the deterministic
-  // worst-case across two batches, halving the per-request payload.
-  // Tracked as follow-up; not in scope for this hotfix.
-  const BATCH_SIZE = 5;
-  const results = [];
-  for (let i = 0; i < keys.length; i += BATCH_SIZE) {
-    const batchNum = i / BATCH_SIZE + 1;
-    const batch = keys.slice(i, i + BATCH_SIZE).map(k => ['GET', k]);
-    const batchResults = await withRetry(async () => {
-      const resp = await fetch(`${url}/pipeline`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(batch),
-        signal: AbortSignal.timeout(45_000),
+  // Read keys individually via KV GET calls (KV has no pipeline/batch API).
+  // Parallel reads for efficiency — each key is an independent GET.
+  const results = await Promise.all(keys.map(async (key) => {
+    try {
+      const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(15_000),
       });
-      if (!resp.ok) throw new Error(`Redis pipeline batch ${batchNum} failed: ${resp.status}`);
-      return resp.json();
-    }, 2, 1000);
-    results.push(...batchResults);
-  }
+      if (!resp.ok) return { result: null };
+      const text = await resp.text();
+      return { result: text || null };
+    } catch {
+      return { result: null };
+    }
+  }));
 
   const parse = (i) => {
     try {

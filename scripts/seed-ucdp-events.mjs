@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
+import { getKvBase, getKvToken } from './_seed-utils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -100,18 +101,13 @@ function getMaxDateMs(events) {
 async function main() {
   loadEnvFile();
 
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const redisUrl = getKvBase();
+  const redisToken = getKvToken();
   const ucdpToken = (process.env.UCDP_ACCESS_TOKEN || process.env.UC_DP_KEY || '').trim();
 
-  if (!redisUrl || !redisToken) {
-    console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-    process.exit(1);
-  }
-
   console.log('=== UCDP Events Seed ===');
-  console.log(`  Redis:      ${redisUrl}`);
-  console.log(`  Redis Token: ${maskToken(redisToken)}`);
+  console.log(`  KV Base:      ${redisUrl}`);
+  console.log(`  KV Token:     ${maskToken(redisToken)}`);
   console.log(`  UCDP Token: ${ucdpToken ? maskToken(ucdpToken) : '(none — unauthenticated)'}`);
   console.log();
 
@@ -185,20 +181,21 @@ async function main() {
   if (capped.length === 0) {
     console.warn(`  0 events after processing — extending existing key TTL (preserving last good data)`);
     try {
-      const r1 = await fetch(redisUrl, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(['EXPIRE', REDIS_KEY, 86400]),
+      // KV has no separate EXPIRE — re-write to refresh TTL
+      const r1 = await fetch(`${redisUrl}/values/${encodeURIComponent(REDIS_KEY)}?expiration_ttl=86400`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'text/plain' },
+        body: '1',
         signal: AbortSignal.timeout(5_000),
       });
-      if (!r1.ok) console.warn(`  EXPIRE ${REDIS_KEY} failed: HTTP ${r1.status}`);
-      const r2 = await fetch(redisUrl, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(['EXPIRE', 'seed-meta:conflict:ucdp-events', 604800]),
+      if (!r1.ok) console.warn(`  TTL refresh ${REDIS_KEY} failed: HTTP ${r1.status}`);
+      const r2 = await fetch(`${redisUrl}/values/${encodeURIComponent('seed-meta:conflict:ucdp-events')}?expiration_ttl=604800`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'text/plain' },
+        body: '1',
         signal: AbortSignal.timeout(5_000),
       });
-      if (!r2.ok) console.warn(`  EXPIRE seed-meta failed: HTTP ${r2.status}`);
+      if (!r2.ok) console.warn(`  TTL refresh seed-meta failed: HTTP ${r2.status}`);
       if (r1.ok && r2.ok) console.log(`  Extended TTL on ${REDIS_KEY} and seed-meta`);
     } catch (e) { console.warn(`  TTL extension failed: ${e.message}`); }
     process.exit(0);
@@ -218,47 +215,44 @@ async function main() {
   }
   console.log();
 
-  const body = JSON.stringify(['SET', REDIS_KEY, JSON.stringify(payload), 'EX', 86400]);
-  const resp = await fetch(redisUrl, {
-    method: 'POST',
+  const resp = await fetch(`${redisUrl}/values/${encodeURIComponent(REDIS_KEY)}?expiration_ttl=86400`, {
+    method: 'PUT',
     headers: {
       Authorization: `Bearer ${redisToken}`,
       'Content-Type': 'application/json',
     },
-    body,
+    body: JSON.stringify(payload),
     signal: AbortSignal.timeout(15_000),
   });
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    console.error(`Redis SET failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+    console.error(`KV SET failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
     process.exit(1);
   }
 
-  const result = await resp.json();
-  console.log('  Redis SET result:', result);
+  console.log('  KV SET result: OK');
 
   // Write seed-meta for health endpoint freshness tracking
   const metaKey = 'seed-meta:conflict:ucdp-events';
   const meta = { fetchedAt: Date.now(), recordCount: capped.length };
-  const metaBody = JSON.stringify(['SET', metaKey, JSON.stringify(meta), 'EX', 604800]);
-  await fetch(redisUrl, {
-    method: 'POST',
+  await fetch(`${redisUrl}/values/${encodeURIComponent(metaKey)}?expiration_ttl=604800`, {
+    method: 'PUT',
     headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
-    body: metaBody,
+    body: JSON.stringify(meta),
     signal: AbortSignal.timeout(5_000),
   }).catch(() => console.error('  seed-meta write failed'));
   console.log(`  Wrote seed-meta: ${metaKey}`);
 
-  const getResp = await fetch(`${redisUrl}/get/${encodeURIComponent(REDIS_KEY)}`, {
+  const getResp = await fetch(`${redisUrl}/values/${encodeURIComponent(REDIS_KEY)}`, {
     headers: { Authorization: `Bearer ${redisToken}` },
     signal: AbortSignal.timeout(5_000),
   });
   if (getResp.ok) {
-    const getData = await getResp.json();
-    if (getData.result) {
-      const parsed = unwrapEnvelope(JSON.parse(getData.result)).data;
-      console.log(`\n  Verified: ${parsed.events?.length} events in Redis`);
+    const text = await getResp.text();
+    if (text) {
+      const parsed = unwrapEnvelope(JSON.parse(text)).data;
+      console.log(`\n  Verified: ${parsed.events?.length} events in KV`);
       console.log(`  Version: ${parsed.version} | fetchedAt: ${new Date(parsed.fetchedAt).toISOString()}`);
     }
   }

@@ -13,7 +13,7 @@
  * Meta key:  seed-meta:economic:gscpi
  */
 
-import { loadEnvFile, runSeed, CHROME_UA } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, CHROME_UA, getKvBase, getKvToken } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -113,16 +113,15 @@ runSeed('economic', 'gscpi', CANONICAL_KEY, fetchGscpi, {
 
   afterPublish: async (_data, { recordCount }) => {
     // Write seed-meta key that seed-economy.mjs reads for freshness display
-    const url = process.env.UPSTASH_REDIS_REST_URL;
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!url || !token) return;
+    const base = getKvBase();
+    const token = getKvToken();
     const metaKey = 'seed-meta:economic:gscpi';
     const meta = { fetchedAt: Date.now(), recordCount };
     try {
-      await fetch(url, {
-        method: 'POST',
+      await fetch(`${base}/values/${encodeURIComponent(metaKey)}?expiration_ttl=${META_TTL_SECONDS}`, {
+        method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(['SET', metaKey, JSON.stringify(meta), 'EX', META_TTL_SECONDS]),
+        body: JSON.stringify(meta),
         signal: AbortSignal.timeout(5_000),
       });
     } catch (e) {

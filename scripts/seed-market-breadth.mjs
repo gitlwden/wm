@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, CHROME_UA, runSeed, sleep } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, sleep, getKvBase, getKvToken } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 loadEnvFile(import.meta.url);
 
@@ -40,17 +40,16 @@ async function fetchBarchartPrice(encodedSymbol, label) {
 }
 
 async function readExistingHistory() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  const base = getKvBase();
+  const token = getKvToken();
   try {
-    const resp = await fetch(`${url}/get/${encodeURIComponent(BREADTH_KEY)}`, {
+    const resp = await fetch(`${base}/values/${encodeURIComponent(BREADTH_KEY)}`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(5_000),
     });
     if (!resp.ok) return null;
-    const { result } = await resp.json();
-    return result ? unwrapEnvelope(JSON.parse(result)).data : null;
+    const text = await resp.text();
+    return text ? unwrapEnvelope(JSON.parse(text)).data : null;
   } catch {
     return null;
   }

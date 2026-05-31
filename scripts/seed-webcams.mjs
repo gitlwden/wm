@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 /**
  * Seed webcam camera metadata from Windy Webcams API v3.
- * Writes versioned geo+meta keys to Redis for spatial queries.
+ * Writes versioned geo+meta keys to Cloudflare KV for spatial queries.
  *
  * Usage: node scripts/seed-webcams.mjs
- * Env:   WINDY_API_KEY, UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN
+ * Env:   WINDY_API_KEY, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_KV_NAMESPACE_ID, CLOUDFLARE_API_TOKEN
  */
+
+import { getKvBase, getKvToken } from './_seed-utils.mjs';
 
 const WINDY_API_KEY = process.env.WINDY_API_KEY;
 if (!WINDY_API_KEY) {
@@ -13,12 +15,8 @@ if (!WINDY_API_KEY) {
   process.exit(0);
 }
 
-const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-if (!REDIS_URL || !REDIS_TOKEN) {
-  console.error('Redis credentials not set');
-  process.exit(1);
-}
+const REDIS_URL = getKvBase();
+const REDIS_TOKEN = getKvToken();
 
 const PREFIX = process.env.KEY_PREFIX || '';
 const WINDY_BASE = 'https://api.windy.com/webcams/api/v3/webcams';
@@ -40,16 +38,85 @@ const REGIONS = [
 ];
 
 async function pipelineRequest(commands) {
-  const resp = await fetch(`${REDIS_URL}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${REDIS_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(commands),
+  // Convert pipeline to individual KV calls
+  const results = [];
+  for (const cmd of commands) {
+    const verb = String(cmd[0]).toUpperCase();
+    try {
+      if (verb === 'GEOADD') {
+        // KV has no GEOADD — store geo data as JSON under a companion key
+        const key = cmd[1];
+        const lon = Number(cmd[2]);
+        const lat = Number(cmd[3]);
+        const id = cmd[4];
+        // Read existing, append, write back
+        const existing = await kvGet(`${key}:geo`) || [];
+        existing.push({ lon, lat, id });
+        await kvPut(`${key}:geo`, existing);
+        results.push({ result: 1 });
+      } else if (verb === 'HSET') {
+        // KV has no HSET — store hash data as JSON under a companion key
+        const key = cmd[1];
+        const field = cmd[2];
+        const value = cmd[3];
+        const existing = await kvGet(`${key}:hash`) || {};
+        existing[field] = typeof value === 'string' ? JSON.parse(value) : value;
+        await kvPut(`${key}:hash`, existing);
+        results.push({ result: 1 });
+      } else if (verb === 'SET') {
+        const key = cmd[1];
+        const value = cmd[2];
+        const exIdx = cmd.indexOf('EX');
+        const ttl = exIdx >= 0 ? Number(cmd[exIdx + 1]) : 0;
+        await kvPut(key, value, ttl);
+        results.push({ result: 'OK' });
+      } else if (verb === 'GET') {
+        const val = await kvGet(cmd[1]);
+        results.push({ result: val ?? null });
+      } else if (verb === 'EXPIRE') {
+        // KV has no separate EXPIRE — TTL is set at write time
+        results.push({ result: 1 });
+      } else if (verb === 'DEL') {
+        await kvDelete(cmd[1]);
+        results.push({ result: 1 });
+      } else {
+        results.push({ result: null });
+      }
+    } catch (e) {
+      results.push({ result: null });
+    }
+  }
+  return results;
+}
+
+async function kvGet(key) {
+  const resp = await fetch(`${REDIS_URL}/values/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+    signal: AbortSignal.timeout(15_000),
   });
-  if (!resp.ok) throw new Error(`Redis pipeline failed: ${resp.status}`);
-  return resp.json();
+  if (!resp.ok) return null;
+  const text = await resp.text();
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return text; }
+}
+
+async function kvPut(key, value, ttlSeconds) {
+  const params = ttlSeconds ? `?expiration_ttl=${ttlSeconds}` : '';
+  const resp = await fetch(`${REDIS_URL}/values/${encodeURIComponent(key)}${params}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${REDIS_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(value),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!resp.ok) throw new Error(`KV PUT failed: HTTP ${resp.status}`);
+}
+
+async function kvDelete(key) {
+  await fetch(`${REDIS_URL}/values/${encodeURIComponent(key)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+    signal: AbortSignal.timeout(15_000),
+  });
 }
 
 const MAX_SPLIT_DEPTH = 3;

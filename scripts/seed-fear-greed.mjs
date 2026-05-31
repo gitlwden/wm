@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, CHROME_UA, runSeed, readSeedSnapshot, sleep, resolveProxyForConnect } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, readSeedSnapshot, sleep, resolveProxyForConnect, getKvBase, getKvToken } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 loadEnvFile(import.meta.url);
 
@@ -126,20 +126,19 @@ async function fetchAAII() {
   }
 }
 
-// --- FRED Redis reads ---
+// --- FRED KV reads ---
 async function readFred(seriesId) {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  const base = getKvBase();
+  const token = getKvToken();
   try {
-    const resp = await fetch(`${url}/get/${encodeURIComponent(`${FRED_PREFIX}:${seriesId}:0`)}`, {
+    const resp = await fetch(`${base}/values/${encodeURIComponent(`${FRED_PREFIX}:${seriesId}:0`)}`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(5_000),
     });
     if (!resp.ok) return null;
-    const { result } = await resp.json();
-    if (!result) return null;
-    const parsed = unwrapEnvelope(JSON.parse(result)).data;
+    const text = await resp.text();
+    if (!text) return null;
+    const parsed = unwrapEnvelope(JSON.parse(text)).data;
     const obs = parsed?.series?.observations;
     if (!obs?.length) return null;
     return obs;
@@ -147,17 +146,16 @@ async function readFred(seriesId) {
 }
 
 async function readMacroSignals() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  const base = getKvBase();
+  const token = getKvToken();
   try {
-    const resp = await fetch(`${url}/get/${encodeURIComponent('economic:macro-signals:v1')}`, {
+    const resp = await fetch(`${base}/values/${encodeURIComponent('economic:macro-signals:v1')}`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(5_000),
     });
     if (!resp.ok) return null;
-    const { result } = await resp.json();
-    return result ? unwrapEnvelope(JSON.parse(result)).data : null;
+    const text = await resp.text();
+    return text ? unwrapEnvelope(JSON.parse(text)).data : null;
   } catch { return null; }
 }
 

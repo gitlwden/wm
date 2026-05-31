@@ -1,11 +1,36 @@
 import { unwrapEnvelope } from './seed-envelope';
 import { buildUpstreamEvent, getUsageScope, sendToAxiom } from './usage';
 
-const REDIS_OP_TIMEOUT_MS = 180_000;
-const REDIS_PIPELINE_TIMEOUT_MS = 180_000;
+const KV_OP_TIMEOUT_MS = 180_000;
+
+// ── Cloudflare KV helpers ───────────────────────────────────────────
+
+interface KvCredentials {
+  accountId: string;
+  namespaceId: string;
+  token: string;
+}
+
+function getKvCredentials(): KvCredentials | null {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const namespaceId = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !namespaceId || !token) return null;
+  return { accountId, namespaceId, token };
+}
+
+function kvBase(creds: KvCredentials): string {
+  return `https://api.cloudflare.com/client/v4/accounts/${creds.accountId}/storage/kv/namespaces/${creds.namespaceId}`;
+}
+
+function kvHeaders(token: string, contentType?: string): Record<string, string> {
+  const h: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (contentType) h['Content-Type'] = contentType;
+  return h;
+}
 
 // ── In-process TTL cache ─────────────────────────────────────────────
-// Avoids redundant Redis round-trips when the same key is read multiple
+// Avoids redundant KV round-trips when the same key is read multiple
 // times within a short window (e.g. bootstrap burst, repeated RPC calls).
 // Entries are invalidated on setCachedJson writes.
 const _localCache = new Map<string, { value: unknown; expires: number }>();
@@ -37,7 +62,7 @@ function errMsg(err: unknown): string {
 
 /**
  * Environment-based key prefix to avoid collisions when multiple deployments
- * share the same Upstash Redis instance (M-6 fix).
+ * share the same KV namespace (M-6 fix).
  */
 function getKeyPrefix(): string {
   const env = process.env.VERCEL_ENV; // 'production' | 'preview' | 'development'
@@ -61,7 +86,7 @@ export function __resetKeyPrefixCacheForTests(): void {
 }
 
 /**
- * Like getCachedJson but throws on Redis/network failures instead of returning null.
+ * Like getCachedJson but throws on KV/network failures instead of returning null.
  * Always uses the raw (unprefixed) key — callers that write via seed scripts (which bypass
  * the prefix system) must use this to read the same key they wrote.
  */
@@ -70,27 +95,26 @@ export async function getRawJson(key: string): Promise<unknown | null> {
     const { sidecarCacheGet } = await import('./sidecar-cache');
     return sidecarCacheGet(key);
   }
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) throw new Error('Redis credentials not configured');
-  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(REDIS_OP_TIMEOUT_MS),
+  const creds = getKvCredentials();
+  if (!creds) throw new Error('Cloudflare KV credentials not configured');
+  const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(key)}`, {
+    headers: kvHeaders(creds.token),
+    signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
   });
-  if (!resp.ok) throw new Error(`Redis HTTP ${resp.status}`);
-  const data = (await resp.json()) as { result?: string };
-  if (!data.result) return null;
+  if (!resp.ok) throw new Error(`KV HTTP ${resp.status}`);
+  const text = await resp.text();
+  if (!text) return null;
   // Envelope-aware: contract-mode canonical keys are stored as {_seed, data}.
   // unwrapEnvelope is a no-op on legacy (non-envelope) shapes.
-  return unwrapEnvelope(JSON.parse(data.result)).data;
+  return unwrapEnvelope(JSON.parse(text)).data;
 }
 
 /**
- * Read a key's value as a raw Upstash string — no JSON.parse, no envelope unwrap.
+ * Read a key's value as a raw string — no JSON.parse, no envelope unwrap.
  * Use when a seeder stores a bare scalar (e.g., a snapshot_id pointer) via
- * `['SET', key, bareString]` without JSON.stringify. getCachedJson() on these
- * keys silently returns null because JSON.parse throws on unquoted strings,
- * and the try/catch swallows the error.
+ * PUT without JSON.stringify. getCachedJson() on these keys silently returns
+ * null because JSON.parse throws on unquoted strings, and the try/catch
+ * swallows the error.
  *
  * Always uses the raw (unprefixed) key — matches the seed-script write path
  * (seeders don't know about the Vercel env-prefix scheme).
@@ -101,24 +125,20 @@ export async function getCachedRawString(key: string): Promise<string | null> {
     const v = sidecarCacheGet(key);
     return typeof v === 'string' ? v : null;
   }
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  const creds = getKvCredentials();
+  if (!creds) return null;
   try {
-    const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(REDIS_OP_TIMEOUT_MS),
+    const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(key)}`, {
+      headers: kvHeaders(creds.token),
+      signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
     });
     if (!resp.ok) return null;
-    const data = (await resp.json()) as { result?: string | null };
-    return typeof data.result === 'string' && data.result.length > 0 ? data.result : null;
+    const text = await resp.text();
+    return text.length > 0 ? text : null;
   } catch (err) {
-    // AbortSignal.timeout() throws DOMException name='TimeoutError' (on V8
-    // runtimes incl. Vercel Edge); manual controller.abort() throws 'AbortError'.
-    // Match both so the [REDIS-TIMEOUT] structured log actually fires.
     const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
-    if (isTimeout) console.error(`[REDIS-TIMEOUT] getCachedRawString key=${key} timeoutMs=${REDIS_OP_TIMEOUT_MS}`);
-    else console.warn('[redis] getCachedRawString failed:', errMsg(err));
+    if (isTimeout) console.error(`[KV-TIMEOUT] getCachedRawString key=${key} timeoutMs=${KV_OP_TIMEOUT_MS}`);
+    else console.warn('[kv] getCachedRawString failed:', errMsg(err));
     return null;
   }
 }
@@ -129,45 +149,35 @@ export async function getCachedJson(key: string, raw = false): Promise<unknown |
     return sidecarCacheGet(key);
   }
 
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
+  const creds = getKvCredentials();
+  if (!creds) return null;
 
-  // In-process cache — skip Redis for recently-fetched keys
+  // In-process cache — skip KV for recently-fetched keys
   const cacheKey = raw ? `raw:${key}` : key;
   const localHit = localCacheGet(cacheKey);
   if (localHit.hit) return localHit.value;
 
   try {
     const finalKey = raw ? key : prefixKey(key);
-    const resp = await fetch(`${url}/get/${encodeURIComponent(finalKey)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(REDIS_OP_TIMEOUT_MS),
+    const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}`, {
+      headers: kvHeaders(creds.token),
+      signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
     });
     if (!resp.ok) return null;
-    const data = (await resp.json()) as { result?: string };
-    if (!data.result) return null;
+    const text = await resp.text();
+    if (!text) return null;
     // Envelope-aware by default — RPC consumers get the bare payload regardless
     // of whether the writer has migrated to contract mode. Legacy shapes pass
     // through unchanged (unwrapEnvelope returns {_seed: null, data: raw}).
-    const parsed = unwrapEnvelope(JSON.parse(data.result)).data;
+    const parsed = unwrapEnvelope(JSON.parse(text)).data;
     localCacheSet(cacheKey, parsed);
     return parsed;
   } catch (err) {
-    // Structured timeout log goes to Sentry via Vercel integration. Large-
-    // payload timeouts used to silently return null and let downstream callers
-    // cache zero-state — see docs/plans/chokepoint-rpc-payload-split.md for
-    // the incident that added this tag.
-    //
-    // AbortSignal.timeout() throws DOMException name='TimeoutError' (on V8
-    // runtimes incl. Vercel Edge); manual controller.abort() throws
-    // 'AbortError'. Checking only 'AbortError' meant the [REDIS-TIMEOUT] log
-    // never fired — every timeout fell through to the generic console.warn.
     const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
     if (isTimeout) {
-      console.error(`[REDIS-TIMEOUT] getCachedJson key=${key} timeoutMs=${REDIS_OP_TIMEOUT_MS}`);
+      console.error(`[KV-TIMEOUT] getCachedJson key=${key} timeoutMs=${KV_OP_TIMEOUT_MS}`);
     } else {
-      console.warn('[redis] getCachedJson failed:', errMsg(err));
+      console.warn('[kv] getCachedJson failed:', errMsg(err));
     }
     return null;
   }
@@ -180,79 +190,69 @@ export async function setCachedJson(key: string, value: unknown, ttlSeconds: num
     return;
   }
 
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return;
+  const creds = getKvCredentials();
+  if (!creds) return;
 
-  // Invalidate local cache so next getCachedJson hits Redis
+  // Invalidate local cache so next getCachedJson hits KV
   const cacheKey = raw ? `raw:${key}` : key;
   localCacheInvalidate(cacheKey);
 
   try {
     const finalKey = raw ? key : prefixKey(key);
-    // Atomic SET with EX — single call avoids race between SET and EXPIRE (C-3 fix)
-    await fetch(`${url}/set/${encodeURIComponent(finalKey)}/${encodeURIComponent(JSON.stringify(value))}/EX/${ttlSeconds}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(REDIS_OP_TIMEOUT_MS),
+    await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}?expiration_ttl=${ttlSeconds}`, {
+      method: 'PUT',
+      headers: kvHeaders(creds.token, 'application/json'),
+      body: JSON.stringify(value),
+      signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
     });
   } catch (err) {
-    console.warn('[redis] setCachedJson failed:', errMsg(err));
+    console.warn('[kv] setCachedJson failed:', errMsg(err));
   }
 }
 
 const NEG_SENTINEL = '__WM_NEG__';
 
 /**
- * Batch GET using Upstash pipeline API — single HTTP round-trip for N keys.
+ * Batch GET — individual KV reads per key. In-process cache absorbs
+ * repeated hits within the same request window.
  * Returns a Map of key → parsed JSON value (missing/failed/sentinel keys omitted).
  */
 export async function getCachedJsonBatch(keys: string[], raw = false): Promise<Map<string, unknown>> {
   const result = new Map<string, unknown>();
   if (keys.length === 0) return result;
 
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return result;
+  const creds = getKvCredentials();
+  if (!creds) return result;
 
   try {
-    const pipeline = keys.map((k) => ['GET', raw ? k : prefixKey(k)]);
-    const resp = await fetch(`${url}/pipeline`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(pipeline),
-      signal: AbortSignal.timeout(REDIS_PIPELINE_TIMEOUT_MS),
+    const reads = keys.map(async (k) => {
+      const finalKey = raw ? k : prefixKey(k);
+      try {
+        const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}`, {
+          headers: kvHeaders(creds.token),
+          signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
+        });
+        if (!resp.ok) return;
+        const text = await resp.text();
+        if (!text) return;
+        const parsed = JSON.parse(text);
+        if (parsed === NEG_SENTINEL) return;
+        result.set(k, unwrapEnvelope(parsed).data);
+      } catch { /* skip malformed */ }
     });
-    if (!resp.ok) return result;
-
-    const data = (await resp.json()) as Array<{ result?: string }>;
-    for (let i = 0; i < keys.length; i++) {
-      const raw = data[i]?.result;
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (parsed === NEG_SENTINEL) continue;
-          // Envelope-aware: unwrap contract-mode canonical keys; legacy values
-          // pass through.
-          result.set(keys[i]!, unwrapEnvelope(parsed).data);
-        } catch { /* skip malformed */ }
-      }
-    }
+    await Promise.all(reads);
   } catch (err) {
-    console.warn('[redis] getCachedJsonBatch failed:', errMsg(err));
+    console.warn('[kv] getCachedJsonBatch failed:', errMsg(err));
   }
   return result;
 }
 
 export type RedisPipelineCommand = Array<string | number>;
 
-function normalizePipelineCommand(command: RedisPipelineCommand, raw: boolean): RedisPipelineCommand {
-  if (raw || command.length < 2) return [...command];
-  const [verb, key, ...rest] = command;
-  if (typeof verb !== 'string' || typeof key !== 'string') return [...command];
-  return [verb, prefixKey(key), ...rest];
-}
-
+/**
+ * Pipeline adapter — runs each command as an individual KV operation.
+ * Only GET and SET are supported; other commands are silently skipped.
+ */
 export async function runRedisPipeline(
   commands: RedisPipelineCommand[],
   raw = false,
@@ -260,25 +260,87 @@ export async function runRedisPipeline(
   if (process.env.LOCAL_API_MODE === 'tauri-sidecar') return [];
   if (commands.length === 0) return [];
 
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return [];
+  const creds = getKvCredentials();
+  if (!creds) return [];
+
+  const results: Array<{ result?: unknown }> = [];
+
+  for (const cmd of commands) {
+    const [verb, key, ...rest] = cmd;
+    if (typeof verb !== 'string' || typeof key !== 'string') {
+      results.push({});
+      continue;
+    }
+    const finalKey = raw ? key : prefixKey(key);
+    try {
+      if (verb.toUpperCase() === 'GET') {
+        const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}`, {
+          headers: kvHeaders(creds.token),
+          signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
+        });
+        results.push({ result: resp.ok ? await resp.text() : null });
+      } else if (verb.toUpperCase() === 'SET') {
+        const value = rest[0];
+        const ttlIdx = rest.indexOf('EX');
+        const ttl = ttlIdx >= 0 ? rest[ttlIdx + 1] : 3600;
+        const params = typeof ttl === 'number' ? `?expiration_ttl=${ttl}` : '';
+        await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}${params}`, {
+          method: 'PUT',
+          headers: kvHeaders(creds.token, 'application/json'),
+          body: typeof value === 'string' ? value : JSON.stringify(value),
+          signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
+        });
+        results.push({ result: 'OK' });
+      } else {
+        results.push({});
+      }
+    } catch (err) {
+      console.warn(`[kv] runRedisPipeline ${verb} failed:`, errMsg(err));
+      results.push({});
+    }
+  }
+  return results;
+}
+
+/**
+ * GEOSEARCH — not supported in Cloudflare KV.
+ * Returns empty array. Geo data should be stored as pre-computed JSON blobs.
+ */
+export async function geoSearchByBox(
+  _key: string, _lon: number, _lat: number,
+  _widthKm: number, _heightKm: number, _count: number, _raw = false,
+): Promise<string[]> {
+  console.warn('[kv] geoSearchByBox not supported in Cloudflare KV — returning empty');
+  return [];
+}
+
+/**
+ * HMGET (hash fields) — not supported in Cloudflare KV.
+ * Hash data should be stored as JSON blobs and parsed client-side.
+ */
+export async function getHashFieldsBatch(
+  _key: string, _fields: string[], _raw = false,
+): Promise<Map<string, string>> {
+  console.warn('[kv] getHashFieldsBatch not supported in Cloudflare KV — returning empty');
+  return new Map();
+}
+
+/**
+ * Deletes a single key from Cloudflare KV.
+ */
+export async function deleteRedisKey(key: string, raw = false): Promise<void> {
+  const creds = getKvCredentials();
+  if (!creds) return;
 
   try {
-    const response = await fetch(`${url}/pipeline`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(commands.map((command) => normalizePipelineCommand(command, raw))),
-      signal: AbortSignal.timeout(REDIS_PIPELINE_TIMEOUT_MS),
+    const finalKey = raw ? key : prefixKey(key);
+    await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}`, {
+      method: 'DELETE',
+      headers: kvHeaders(creds.token),
+      signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
     });
-    if (!response.ok) {
-      console.warn(`[redis] runRedisPipeline HTTP ${response.status}`);
-      return [];
-    }
-    return await response.json() as Array<{ result?: unknown }>;
   } catch (err) {
-    console.warn('[redis] runRedisPipeline failed:', errMsg(err));
-    return [];
+    console.warn('[kv] deleteRedisKey failed:', errMsg(err));
   }
 }
 
@@ -292,7 +354,7 @@ const inflight = new Map<string, Promise<unknown>>();
 
 /**
  * Check cache, then fetch with coalescing on miss.
- * Concurrent callers for the same key share a single upstream fetch + Redis write.
+ * Concurrent callers for the same key share a single upstream fetch + KV write.
  * When fetcher returns null, a sentinel is cached for negativeTtlSeconds to prevent request storms.
  */
 export async function cachedFetchJson<T extends object>(
@@ -318,7 +380,7 @@ export async function cachedFetchJson<T extends object>(
       return result;
     })
     .catch((err: unknown) => {
-      console.warn(`[redis] cachedFetchJson fetcher failed for "${key}":`, errMsg(err));
+      console.warn(`[kv] cachedFetchJson fetcher failed for "${key}":`, errMsg(err));
       throw err;
     })
     .finally(() => {
@@ -331,22 +393,11 @@ export async function cachedFetchJson<T extends object>(
 
 /**
  * Per-call usage-telemetry hook for upstream event emission (issue #3381).
- *
- * The only required field is `provider` — its presence is what tells the
- * helper "emit an upstream event for this call." Everything else is filled
- * in by the gateway-set UsageScope (request_id, customer_id, route, tier,
- * ctx) via AsyncLocalStorage. Pass overrides explicitly if you need to.
- *
- * Use this when calling fetchJson / cachedFetchJsonWithMeta from a code
- * path that runs inside a gateway-handled request. For helpers used
- * outside any request (cron, scripts), no scope exists and emission is
- * skipped silently.
  */
 export interface UsageHook {
   provider: string;
   operation?: string;
   host?: string;
-  // Overrides — leave unset to inherit from gateway-set UsageScope.
   ctx?: { waitUntil: (p: Promise<unknown>) => void };
   requestId?: string;
   customerId?: string | null;
@@ -356,16 +407,9 @@ export interface UsageHook {
 
 /**
  * Like cachedFetchJson but reports the data source.
- * Use when callers need to distinguish cache hits from fresh fetches
- * (e.g. to set provider/cached metadata on responses).
- *
  * Returns { data, source } where source is:
- *   'cache'  — served from Redis
+ *   'cache'  — served from KV
  *   'fresh'  — fetcher ran (leader) or joined an in-flight fetch (follower)
- *
- * If `opts.usage` is supplied, an upstream event is emitted on the fresh
- * path (issue #3381). Pass-through for callers that don't care about
- * telemetry — backwards-compatible.
  */
 export async function cachedFetchJsonWithMeta<T extends object>(
   key: string,
@@ -390,12 +434,6 @@ export async function cachedFetchJsonWithMeta<T extends object>(
 
   const promise = fetcher()
     .then(async (result) => {
-      // Only count an upstream call as a 200 when it actually returned data.
-      // A null result triggers the neg-sentinel branch below — these are
-      // empty/failed upstream calls and must NOT show up as `status=200` in
-      // dashboards (would poison the cache-hit-ratio recipe and per-provider
-      // error rates). Use status=0 for the empty branch; cache_status carries
-      // the structural detail.
       if (result != null) {
         upstreamStatus = 200;
         await setCachedJson(key, result, ttlSeconds);
@@ -408,7 +446,7 @@ export async function cachedFetchJsonWithMeta<T extends object>(
     })
     .catch((err: unknown) => {
       upstreamStatus = 0;
-      console.warn(`[redis] cachedFetchJsonWithMeta fetcher failed for "${key}":`, errMsg(err));
+      console.warn(`[kv] cachedFetchJsonWithMeta fetcher failed for "${key}":`, errMsg(err));
       throw err;
     })
     .finally(() => {
@@ -431,11 +469,7 @@ function emitUpstreamFromHook(
   durationMs: number,
   cacheStatus: 'miss' | 'fresh' | 'stale-while-revalidate' | 'neg-sentinel',
 ): void {
-  // Emit only when caller labels the provider — avoids "unknown" pollution.
   if (!usage?.provider) return;
-  // Single waitUntil() registered synchronously here — no nested
-  // ctx.waitUntil() inside Axiom delivery. Static import keeps the call
-  // synchronous so the runtime registers it during the request phase.
   const scope = getUsageScope();
   const ctx = usage.ctx ?? scope?.ctx;
   if (!ctx) return;
@@ -457,87 +491,5 @@ function emitUpstreamFromHook(
     ctx.waitUntil(sendToAxiom([event]));
   } catch {
     /* telemetry must never throw */
-  }
-}
-
-export async function geoSearchByBox(
-  key: string, lon: number, lat: number,
-  widthKm: number, heightKm: number, count: number, raw = false,
-): Promise<string[]> {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return [];
-  try {
-    const finalKey = raw ? key : prefixKey(key);
-    const pipeline = [
-      ['GEOSEARCH', finalKey, 'FROMLONLAT', String(lon), String(lat),
-       'BYBOX', String(widthKm), String(heightKm), 'km', 'ASC', 'COUNT', String(count)],
-    ];
-    const resp = await fetch(`${url}/pipeline`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(pipeline),
-      signal: AbortSignal.timeout(REDIS_PIPELINE_TIMEOUT_MS),
-    });
-    if (!resp.ok) return [];
-    const data = (await resp.json()) as Array<{ result?: string[] }>;
-    return data[0]?.result ?? [];
-  } catch (err) {
-    console.warn('[redis] geoSearchByBox failed:', errMsg(err));
-    return [];
-  }
-}
-
-export async function getHashFieldsBatch(
-  key: string, fields: string[], raw = false,
-): Promise<Map<string, string>> {
-  const result = new Map<string, string>();
-  if (fields.length === 0) return result;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return result;
-  try {
-    const finalKey = raw ? key : prefixKey(key);
-    const pipeline = [['HMGET', finalKey, ...fields]];
-    const resp = await fetch(`${url}/pipeline`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(pipeline),
-      signal: AbortSignal.timeout(REDIS_PIPELINE_TIMEOUT_MS),
-    });
-    if (!resp.ok) return result;
-    const data = (await resp.json()) as Array<{ result?: (string | null)[] }>;
-    const values = data[0]?.result;
-    if (values) {
-      for (let i = 0; i < fields.length; i++) {
-        if (values[i]) result.set(fields[i]!, values[i]!);
-      }
-    }
-  } catch (err) {
-    console.warn('[redis] getHashFieldsBatch failed:', errMsg(err));
-  }
-  return result;
-}
-
-/**
- * Deletes a single Redis key via Upstash REST API.
- *
- * @param key - The key to delete
- * @param raw - When true, skips the environment prefix (use for global keys like entitlements)
- */
-export async function deleteRedisKey(key: string, raw = false): Promise<void> {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return;
-
-  try {
-    const finalKey = raw ? key : prefixKey(key);
-    await fetch(`${url}/del/${encodeURIComponent(finalKey)}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(REDIS_OP_TIMEOUT_MS),
-    });
-  } catch (err) {
-    console.warn('[redis] deleteRedisKey failed:', errMsg(err));
   }
 }

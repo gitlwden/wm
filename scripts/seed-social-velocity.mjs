@@ -3,7 +3,7 @@
  * Seed Social Velocity data from Google Trends
  * Fetches trending topics related to geopolitics, conflicts, and global events.
  */
-import { loadEnvFile, CHROME_UA } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, getKvBase, getKvToken } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 import { resolveRecordCount } from './_seed-contract.mjs';
 
@@ -74,8 +74,9 @@ async function seedSocialVelocity() {
     const top = allPosts.slice(0, 30);
     const payload = { posts: top, fetchedAt: Date.now() };
 
-    // Write to Redis using envelope format
-    const { url, token } = getRedisCredentials();
+    // Write to KV using envelope format
+    const url = getKvBase();
+    const token = getKvToken();
     const envelope = buildEnvelope({
       fetchedAt: Date.now(),
       recordCount: top.length,
@@ -84,26 +85,28 @@ async function seedSocialVelocity() {
       state: 'OK',
       data: payload,
     });
-    
-    const setResp = await fetch(`${url}/set/${encodeURIComponent(CANONICAL_KEY)}/${encodeURIComponent(JSON.stringify(envelope))}/EX/${CACHE_TTL}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+
+    const setResp = await fetch(`${url}/values/${encodeURIComponent(CANONICAL_KEY)}?expiration_ttl=${CACHE_TTL}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(envelope),
       signal: AbortSignal.timeout(15000),
     });
     if (!setResp.ok) {
-      throw new Error(`Redis SET failed: HTTP ${setResp.status}`);
+      throw new Error(`KV SET failed: HTTP ${setResp.status}`);
     }
 
     // Write seed metadata
     const metaPayload = { fetchedAt: Date.now(), recordCount: top.length };
-    const metaResp = await fetch(`${url}/set/${encodeURIComponent(SEED_META_KEY)}/${encodeURIComponent(JSON.stringify(metaPayload))}/EX/604800`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+    await fetch(`${url}/values/${encodeURIComponent(SEED_META_KEY)}?expiration_ttl=604800`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(metaPayload),
       signal: AbortSignal.timeout(5000),
     });
 
-    console.log(`[SocialVelocity] Seeded ${top.length} posts in ${((Date.now() - t0) / 1000).toFixed(1)}s (redis: ${setResp.ok ? 'OK' : 'FAIL'})`);
-    
+    console.log(`[SocialVelocity] Seeded ${top.length} posts in ${((Date.now() - t0) / 1000).toFixed(1)}s (kv: ${setResp.ok ? 'OK' : 'FAIL'})`);
+
     if (!validate(payload)) {
       throw new Error('Validation failed');
     }
@@ -111,16 +114,6 @@ async function seedSocialVelocity() {
     console.error('[SocialVelocity] Seed error:', err?.message || err);
     process.exit(1);
   }
-}
-
-function getRedisCredentials() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
-    console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-    process.exit(1);
-  }
-  return { url, token };
 }
 
 // Run the seed

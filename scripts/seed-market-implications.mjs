@@ -4,7 +4,7 @@
  * Fetches market data, sends to LLM, stores analysis.
  * Writes to Redis key: intelligence:market-implications:v1
  */
-import { loadEnvFile, CHROME_UA, runSeed } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, getKvBase, getKvToken } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -18,17 +18,10 @@ const AI_PROVIDERS = [
   { name: 'sambanova', envKey: 'SAMBANOVA_API_KEY', apiUrl: 'https://api.sambanova.ai/v1/chat/completions', model: 'Meta-Llama-3.1-8B-Instruct', timeout: 20_000 },
 ];
 
-function getRedisCredentials() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) { console.error('Missing Redis creds'); process.exit(1); }
-  return { url, token };
-}
-
-async function redisSet(url, token, key, value, ttlSeconds) {
-  const resp = await fetch(`${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(JSON.stringify(value))}/EX/${ttlSeconds}`,
-    { method: 'POST', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
-  return resp.ok;
+function redisSet(url, token, key, value, ttlSeconds) {
+  return fetch(`${url}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`,
+    { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(value), signal: AbortSignal.timeout(15000) })
+    .then(r => r.ok);
 }
 
 async function fetchMarketData() {

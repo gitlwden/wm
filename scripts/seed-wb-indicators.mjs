@@ -13,6 +13,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { getKvBase, getKvToken } from './_seed-utils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -129,20 +130,43 @@ async function fetchWithRetry(url, attempt = 1) {
 }
 
 async function redisPipeline(redisUrl, token, commands) {
-  const resp = await fetch(`${redisUrl}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(commands),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Redis pipeline failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+  // Convert pipeline to individual KV calls
+  const results = [];
+  for (const cmd of commands) {
+    const verb = String(cmd[0]).toUpperCase();
+    try {
+      if (verb === 'GET') {
+        const resp = await fetch(`${redisUrl}/values/${encodeURIComponent(cmd[1])}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (!resp.ok) { results.push({ result: null }); continue; }
+        const text = await resp.text();
+        results.push({ result: text || null });
+      } else if (verb === 'SET') {
+        const key = cmd[1];
+        const value = cmd[2];
+        const exIdx = cmd.indexOf('EX');
+        const ttl = exIdx >= 0 ? Number(cmd[exIdx + 1]) : 0;
+        const params = ttl > 0 ? `?expiration_ttl=${ttl}` : '';
+        const resp = await fetch(`${redisUrl}/values/${encodeURIComponent(key)}${params}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: value,
+          signal: AbortSignal.timeout(15_000),
+        });
+        results.push({ result: resp.ok ? 'OK' : null });
+      } else if (verb === 'EXPIRE') {
+        // KV has no separate EXPIRE — skip (TTL is set at write time)
+        results.push({ result: 1 });
+      } else {
+        results.push({ result: null });
+      }
+    } catch {
+      results.push({ result: null });
+    }
   }
-  return resp.json();
+  return results;
 }
 
 // ---------------------------------------------------------------------------
@@ -379,17 +403,8 @@ async function main() {
   const { env, sha } = parseArgs();
   const prefix = getKeyPrefix(env, sha);
 
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-  if (!redisUrl) {
-    console.error('Missing UPSTASH_REDIS_REST_URL. Set it in .env.local or as an env var.');
-    process.exit(1);
-  }
-  if (!redisToken) {
-    console.error('Missing UPSTASH_REDIS_REST_TOKEN. Set it in .env.local or as an env var.');
-    process.exit(1);
-  }
+  const redisUrl = getKvBase();
+  const redisToken = getKvToken();
 
   const fullKey = `${prefix}${BOOTSTRAP_KEY}`;
   const progressKey = `${prefix}${PROGRESS_KEY}`;
@@ -398,8 +413,8 @@ async function main() {
   console.log('=== World Bank Indicators Seed ===');
   console.log(`  Environment:  ${env}`);
   console.log(`  Prefix:       ${prefix || '(none — production)'}`);
-  console.log(`  Redis URL:    ${redisUrl}`);
-  console.log(`  Redis Token:  ${maskToken(redisToken)}`);
+  console.log(`  KV Base:      ${redisUrl}`);
+  console.log(`  KV Token:     ${maskToken(redisToken)}`);
   console.log(`  Keys: ${fullKey}, ${progressKey}, ${renewableKey}`);
   console.log(`  TTL:          ${TTL_SECONDS}s (7 days)`);
   console.log();

@@ -1,36 +1,28 @@
 #!/usr/bin/env node
 
 // Standalone USNI Fleet Tracker seed — fetches the latest USNI fleet tracker
-// article, parses vessel/strike group data, writes to Upstash Redis.
+// article, parses vessel/strike group data, writes to Cloudflare KV.
 // Extracted from ais-relay.cjs startUsniFleetSeedLoop / seedUsniFleet.
 
 import { buildEnvelope } from './_seed-envelope-source.mjs';
-import { loadEnvFile } from './_seed-utils.mjs';
+import { loadEnvFile, getKvBase, getKvToken } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
-// ── Redis helpers ─────────────────────────────────────────────────────────
+// ── KV helpers ─────────────────────────────────────────────────────────
 
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-if (!UPSTASH_URL || !UPSTASH_TOKEN) {
-  console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-  process.exit(1);
-}
+const kvBase = getKvBase();
+const kvToken = getKvToken();
 
 async function redisSet(key, value, ttlSeconds) {
   try {
-    const body = JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(ttlSeconds)]);
-    const resp = await fetch(UPSTASH_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-      body,
+    const resp = await fetch(`${kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(value),
       signal: AbortSignal.timeout(5_000),
     });
-    if (!resp.ok) return false;
-    const data = await resp.json();
-    return data?.result === 'OK';
+    return resp.ok;
   } catch { return false; }
 }
 
@@ -273,7 +265,7 @@ async function main() {
   await envelopeWrite(USNI_STALE_KEY, report, USNI_STALE_TTL, { recordCount: report.vessels.length, sourceVersion: 'usni-fleet' });
   await redisSet('seed-meta:military:usni-fleet', { fetchedAt: Date.now(), recordCount: report.vessels.length }, 604800);
 
-  console.log(`[USNI] ${report.vessels.length} vessels, ${report.strikeGroups.length} CSGs, ${report.regions.length} regions (redis: ${ok ? 'OK' : 'FAIL'}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`[USNI] ${report.vessels.length} vessels, ${report.strikeGroups.length} CSGs, ${report.regions.length} regions (kv: ${ok ? 'OK' : 'FAIL'}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   if (report.parsingWarnings.length > 0) console.warn('[USNI] Warnings:', report.parsingWarnings.join('; '));
 }
 

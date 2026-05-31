@@ -4,7 +4,7 @@
  * Replaces Reddit scraping (blocked from datacenter IPs).
  * Writes to Redis key: intelligence:wsb-tickers:v1
  */
-import { loadEnvFile, CHROME_UA, runSeed } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, getKvBase, getKvToken } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -13,20 +13,10 @@ const REDIS_KEY = 'intelligence:wsb-tickers:v1';
 const CACHE_TTL = 10800; // 3h
 const TRENDING_URL = 'https://query1.finance.yahoo.com/v1/finance/trending/US?count=50';
 
-function getRedisCredentials() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
-    console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-    process.exit(1);
-  }
-  return { url, token };
-}
-
 async function redisSet(url, token, key, value, ttlSeconds) {
   const resp = await fetch(
-    `${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(JSON.stringify(value))}/EX/${ttlSeconds}`,
-    { method: 'POST', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) },
+    `${url}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`,
+    { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(value), signal: AbortSignal.timeout(15000) },
   );
   return resp.ok;
 }
@@ -70,7 +60,8 @@ async function enrichTickers(quotes) {
 }
 
 async function seedWsbTickers() {
-  const { url, token } = getRedisCredentials();
+  const url = getKvBase();
+  const token = getKvToken();
   console.log('[WsbTickers] Fetching Yahoo trending...');
   const t0 = Date.now();
 

@@ -76,8 +76,10 @@ import { emitCooldownShadowLog } from './lib/digest-cooldown-shadow-log.mjs';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL ?? '';
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? '';
+import { getKvBase, getKvToken } from './_seed-utils.mjs';
+
+const UPSTASH_URL = getKvBase();
+const UPSTASH_TOKEN = getKvToken();
 const CONVEX_SITE_URL =
   (process.env.CONVEX_SITE_URL ??
   (process.env.CONVEX_URL ?? '').replace('.convex.cloud', '.convex.site')).replace(/\/+$/, '');
@@ -102,7 +104,7 @@ if (process.env.DIGEST_CRON_ENABLED === '0') {
 }
 
 if (!UPSTASH_URL || !UPSTASH_TOKEN) {
-  console.error('[digest] UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN not set');
+  console.error('[digest] Cloudflare KV credentials not set');
   process.exit(1);
 }
 if (!CONVEX_SITE_URL || !RELAY_SECRET) {
@@ -278,42 +280,107 @@ const briefLlmDeps = {
   },
 };
 
-// ── Redis helpers ──────────────────────────────────────────────────────────────
+// ── KV helpers ──────────────────────────────────────────────────────────────
 
 async function upstashRest(...args) {
-  const res = await fetch(`${UPSTASH_URL}/${args.map(encodeURIComponent).join('/')}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${UPSTASH_TOKEN}`,
-      'User-Agent': 'worldmonitor-digest/1.0',
-    },
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!res.ok) {
-    console.warn(`[digest] Upstash error ${res.status} for command ${args[0]}`);
+  const verb = String(args[0]).toUpperCase();
+  try {
+    if (verb === 'GET') {
+      const key = args[1];
+      const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}`, {
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'User-Agent': 'worldmonitor-digest/1.0' },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return null;
+      const text = await res.text();
+      return text || null;
+    } else if (verb === 'SET') {
+      const key = args[1];
+      const value = args[2];
+      const exIdx = args.indexOf('EX');
+      const ttl = exIdx >= 0 ? Number(args[exIdx + 1]) : 0;
+      const params = ttl > 0 ? `?expiration_ttl=${ttl}` : '';
+      const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}${params}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json', 'User-Agent': 'worldmonitor-digest/1.0' },
+        body: value,
+        signal: AbortSignal.timeout(10000),
+      });
+      return res.ok ? 'OK' : null;
+    } else if (verb === 'SETEX') {
+      const key = args[1];
+      const ttl = Number(args[2]);
+      const value = args[3];
+      const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}?expiration_ttl=${ttl}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json', 'User-Agent': 'worldmonitor-digest/1.0' },
+        body: value,
+        signal: AbortSignal.timeout(10000),
+      });
+      return res.ok ? 'OK' : null;
+    } else {
+      console.warn(`[digest] Unsupported command ${verb} for KV`);
+      return null;
+    }
+  } catch {
+    console.warn(`[digest] KV error for command ${verb}`);
     return null;
   }
-  const json = await res.json();
-  return json.result;
 }
 
 async function upstashPipeline(commands) {
   if (commands.length === 0) return [];
-  const res = await fetch(`${UPSTASH_URL}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${UPSTASH_TOKEN}`,
-      'Content-Type': 'application/json',
-      'User-Agent': 'worldmonitor-digest/1.0',
-    },
-    body: JSON.stringify(commands),
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) {
-    console.warn(`[digest] pipeline error ${res.status}`);
-    return [];
+  // Convert pipeline to individual KV calls
+  const results = [];
+  for (const cmd of commands) {
+    const verb = String(cmd[0]).toUpperCase();
+    try {
+      if (verb === 'GET') {
+        const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(cmd[1])}`, {
+          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'User-Agent': 'worldmonitor-digest/1.0' },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (!res.ok) { results.push({ result: null }); continue; }
+        const text = await res.text();
+        results.push({ result: text || null });
+      } else if (verb === 'SET') {
+        const key = cmd[1];
+        const value = cmd[2];
+        const exIdx = cmd.indexOf('EX');
+        const ttl = exIdx >= 0 ? Number(cmd[exIdx + 1]) : 0;
+        const params = ttl > 0 ? `?expiration_ttl=${ttl}` : '';
+        const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}${params}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json', 'User-Agent': 'worldmonitor-digest/1.0' },
+          body: value,
+          signal: AbortSignal.timeout(10000),
+        });
+        results.push({ result: res.ok ? 'OK' : null });
+      } else if (verb === 'SETEX') {
+        const key = cmd[1];
+        const ttl = Number(cmd[2]);
+        const value = cmd[3];
+        const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}?expiration_ttl=${ttl}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json', 'User-Agent': 'worldmonitor-digest/1.0' },
+          body: value,
+          signal: AbortSignal.timeout(10000),
+        });
+        results.push({ result: res.ok ? 'OK' : null });
+      } else if (verb === 'SMEMBERS') {
+        // KV has no SMEMBERS
+        results.push({ result: [] });
+      } else if (verb === 'ZRANGEBYSCORE') {
+        // KV has no sorted sets
+        results.push({ result: null });
+      } else {
+        results.push({ result: null });
+      }
+    } catch {
+      results.push({ result: null });
+    }
   }
-  return res.json();
+  return results;
 }
 
 // ── Schedule helpers ──────────────────────────────────────────────────────────

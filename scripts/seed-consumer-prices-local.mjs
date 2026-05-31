@@ -1,45 +1,26 @@
 #!/usr/bin/env node
 /**
- * Seed consumer prices test data into Upstash Redis.
+ * Seed consumer prices test data into Cloudflare KV.
  * Writes realistic mock data so the ConsumerPricesPanel renders
  * while the real consumer-prices-core pipeline is being set up.
  *
  * Usage: node scripts/seed-consumer-prices-local.mjs
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { loadEnvFile, getKvBase, getKvToken } from './_seed-utils.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = resolve(__dirname, '..');
+loadEnvFile(import.meta.url);
 
-// Load .env.local
-function loadEnv() {
-  const envPath = resolve(root, '.env.local');
-  if (!existsSync(envPath)) { console.error('No .env.local found'); process.exit(1); }
-  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
-    const m = line.match(/^([A-Z0-9_]+)=(.*)$/i);
-    if (m) {
-      let v = m[2].trim();
-      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
-      process.env[m[1]] = v;
-    }
-  }
-}
-loadEnv();
-
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-if (!UPSTASH_URL || !UPSTASH_TOKEN) { console.error('Missing UPSTASH env vars'); process.exit(1); }
+const kvBase = getKvBase();
+const kvToken = getKvToken();
 
 const now = new Date().toISOString();
 
 async function redisSet(key, value, ttlSeconds) {
-  const resp = await fetch(UPSTASH_URL, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(ttlSeconds)]),
+  const resp = await fetch(`${kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(value),
   });
   if (!resp.ok) console.error(`  FAIL ${key}: ${resp.status} ${await resp.text()}`);
 }
@@ -133,7 +114,7 @@ const freshness = {
 };
 
 // --- Write ---
-console.log('Writing consumer prices seed data to Upstash Redis...');
+console.log('Writing consumer prices seed data to Cloudflare KV...');
 await redisSet(`consumer-prices:overview:${MARKET}`, overview, TTL);
 console.log('  ✓ overview');
 await redisSet(`consumer-prices:categories:${MARKET}:30d`, { marketCode: MARKET, asOf: now, range: '30d', categories, upstreamUnavailable: false }, TTL);

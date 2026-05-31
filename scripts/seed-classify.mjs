@@ -1,43 +1,36 @@
 #!/usr/bin/env node
 
 // Standalone classify seed — batch-classifies digest titles via LLM, writes
-// per-title cache keys + threat summary to Upstash Redis.
+// per-title cache keys + threat summary to Cloudflare KV.
 // Extracted from ais-relay.cjs startClassifySeedLoop / seedClassify.
 
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
-import { loadEnvFile } from './_seed-utils.mjs';
+import { loadEnvFile, getKvBase, getKvToken } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
-// ── Redis helpers ─────────────────────────────────────────────────────────
+// ── KV helpers ─────────────────────────────────────────────────────────
 
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-if (!UPSTASH_URL || !UPSTASH_TOKEN) {
-  console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
-  process.exit(1);
-}
+const kvBase = getKvBase();
+const kvToken = getKvToken();
 
 async function redisSet(key, value, ttlSeconds, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const body = JSON.stringify(['SET', key, JSON.stringify(value), 'EX', String(ttlSeconds)]);
-      const resp = await fetch(UPSTASH_URL, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-        body,
+      const resp = await fetch(`${kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(value),
         signal: AbortSignal.timeout(10_000),
       });
       if (!resp.ok) {
         if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
         return false;
       }
-      const data = await resp.json();
-      return data?.result === 'OK';
+      return true;
     } catch (e) {
       if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
       return false;
@@ -50,23 +43,17 @@ async function redisMGet(keys, retries = 3) {
   if (!keys.length) return [];
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const url = new URL('/pipeline', UPSTASH_URL);
-      const body = JSON.stringify(keys.map((k) => ['GET', k]));
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
-        body,
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!resp.ok) {
-        if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
-        return keys.map(() => null);
-      }
-      const parsed = await resp.json();
-      return parsed.map((r) => {
-        if (!r?.result) return null;
-        try { return JSON.parse(r.result); } catch { return null; }
-      });
+      const results = await Promise.all(keys.map(async (k) => {
+        const resp = await fetch(`${kvBase}/values/${encodeURIComponent(k)}`, {
+          headers: { Authorization: `Bearer ${kvToken}` },
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (!resp.ok) return null;
+        const text = await resp.text();
+        if (!text) return null;
+        try { return JSON.parse(text); } catch { return null; }
+      }));
+      return results;
     } catch {
       if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
       return keys.map(() => null);

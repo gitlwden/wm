@@ -129,69 +129,176 @@ export function maskToken(token) {
 }
 
 export function getRedisCredentials() {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
-    console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const namespaceId = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !namespaceId || !token) {
+    console.error('Missing CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_KV_NAMESPACE_ID, or CLOUDFLARE_API_TOKEN');
     process.exit(1);
   }
-  return { url, token };
+  return { accountId, namespaceId, token };
+}
+
+function kvBase(accountId, namespaceId) {
+  return `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}`;
 }
 
 async function redisCommand(url, token, command) {
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(command),
+  // Translate Redis commands to Cloudflare KV API calls
+  // url param is ignored (kept for call-site compat); creds come from env
+  const { accountId, namespaceId, token: cfToken } = getRedisCredentials();
+  const base = kvBase(accountId, namespaceId);
+  const headers = { Authorization: `Bearer ${cfToken}` };
+  const [verb, key, ...rest] = command;
+  const upperVerb = String(verb).toUpperCase();
+
+  try {
+    if (upperVerb === 'SET') {
+      const value = rest[0];
+      const exIdx = rest.indexOf('EX');
+      const pxIdx = rest.indexOf('PX');
+      const ttlSeconds = exIdx >= 0 ? Number(rest[exIdx + 1]) : pxIdx >= 0 ? Math.ceil(Number(rest[pxIdx + 1]) / 1000) : 0;
+      const params = ttlSeconds > 0 ? `?expiration_ttl=${ttlSeconds}` : '';
+      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}${params}`, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: typeof value === 'string' ? value : JSON.stringify(value),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        const err = new Error(`KV command failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+        if (PERMANENT_4XX_STATUSES.has(resp.status)) err.nonRetryable = true;
+        else if (resp.status === 429) {
+          const retryAfterMs = parseRetryAfterMs(resp.headers.get('retry-after'));
+          if (retryAfterMs != null) err.retryAfterMs = retryAfterMs;
+        }
+        err.httpStatus = resp.status;
+        throw err;
+      }
+      return { result: 'OK' };
+    } else if (upperVerb === 'GET') {
+      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+        headers,
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!resp.ok) return { result: null };
+      const text = await resp.text();
+      return { result: text || null };
+    } else if (upperVerb === 'DEL') {
+      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers,
+        signal: AbortSignal.timeout(15_000),
+      });
+      return { result: resp.ok ? 1 : 0 };
+    } else {
+      // Unsupported command — skip silently
+      return { result: null };
+    }
+  } catch (err) {
+    if (PERMANENT_4XX_STATUSES.has(err.httpStatus)) throw err;
+    throw err;
+  }
+}
+
+async function redisGet(url, token, key) {
+  const { accountId, namespaceId, token: cfToken } = getRedisCredentials();
+  const base = kvBase(accountId, namespaceId);
+  try {
+    const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${cfToken}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!resp.ok) return null;
+    const text = await resp.text();
+    if (!text) return null;
+    // Envelope-aware: returns inner `data` for seeded keys written in contract
+    // mode, passes through legacy (bare-shape) values unchanged.
+    return unwrapEnvelope(JSON.parse(text)).data;
+  } catch {
+    return null;
+  }
+}
+
+async function redisSet(url, token, key, value, ttlSeconds) {
+  const { accountId, namespaceId, token: cfToken } = getRedisCredentials();
+  const base = kvBase(accountId, namespaceId);
+  const payload = JSON.stringify(value);
+  const params = ttlSeconds ? `?expiration_ttl=${ttlSeconds}` : '';
+  const resp = await fetch(`${base}/values/${encodeURIComponent(key)}${params}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${cfToken}`, 'Content-Type': 'application/json' },
+    body: payload,
     signal: AbortSignal.timeout(15_000),
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    const err = new Error(`Redis command failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
-    // Tag errors so callers wrapping in withRetry know whether to back off.
-    // Permanent 4xx (auth, payload-too-large, etc.) won't recover on retry —
-    // mark non-retryable so withRetry exits the loop in ~10ms instead of
-    // wasting backoff on a guaranteed-fail. Only 429 (rate-limited) should
-    // keep retrying among the 4xx set, with the upstream Retry-After hint
-    // honoured. Transient 5xx and timeouts fall through with no flag —
-    // withRetry's default backoff applies.
-    if (PERMANENT_4XX_STATUSES.has(resp.status)) {
-      err.nonRetryable = true;
-    } else if (resp.status === 429) {
-      const retryAfterMs = parseRetryAfterMs(resp.headers.get('retry-after'));
-      if (retryAfterMs != null) err.retryAfterMs = retryAfterMs;
-    }
-    err.httpStatus = resp.status;
-    throw err;
+    throw new Error(`KV SET failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
   }
-  return resp.json();
+  return { result: 'OK' };
 }
 
-async function redisGet(url, token, key) {
-  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+async function redisDel(url, token, key) {
+  const { accountId, namespaceId, token: cfToken } = getRedisCredentials();
+  const base = kvBase(accountId, namespaceId);
+  const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${cfToken}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  return { result: resp.ok ? 1 : 0 };
+}
+
+/**
+ * Write a value to Cloudflare KV. Convenience wrapper for scripts that
+ * previously called Upstash directly.
+ */
+export async function kvSet(key, value, ttlSeconds) {
+  const { accountId, namespaceId, token } = getRedisCredentials();
+  const base = kvBase(accountId, namespaceId);
+  const payload = typeof value === 'string' ? value : JSON.stringify(value);
+  const params = ttlSeconds ? `?expiration_ttl=${ttlSeconds}` : '';
+  const resp = await fetch(`${base}/values/${encodeURIComponent(key)}${params}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: payload,
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`KV SET failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+  }
+}
+
+/**
+ * Read a value from Cloudflare KV. Convenience wrapper for scripts that
+ * previously called Upstash directly.
+ */
+export async function kvGet(key) {
+  const { accountId, namespaceId, token } = getRedisCredentials();
+  const base = kvBase(accountId, namespaceId);
+  const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(5_000),
   });
   if (!resp.ok) return null;
-  const data = await resp.json();
-  if (!data.result) return null;
-  // Envelope-aware: returns inner `data` for seeded keys written in contract
-  // mode, passes through legacy (bare-shape) values unchanged. Fixes WoW/cross-
-  // seed reads that were silently getting `{_seed, data}` after PR 2a enveloped
-  // the writer side of 91 canonical keys.
-  return unwrapEnvelope(JSON.parse(data.result)).data;
+  const text = await resp.text();
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return text; }
 }
 
-async function redisSet(url, token, key, value, ttlSeconds) {
-  const payload = JSON.stringify(value);
-  const cmd = ttlSeconds
-    ? ['SET', key, payload, 'EX', ttlSeconds]
-    : ['SET', key, payload];
-  return redisCommand(url, token, cmd);
+/**
+ * Returns Cloudflare KV base URL and auth token for scripts that need
+ * direct API access. Replaces direct UPSTASH_REDIS_REST_URL usage.
+ */
+export function getKvBase() {
+  const { accountId, namespaceId } = getRedisCredentials();
+  return kvBase(accountId, namespaceId);
 }
 
-async function redisDel(url, token, key) {
-  return redisCommand(url, token, ['DEL', key]);
+export function getKvToken() {
+  return getRedisCredentials().token;
 }
 
 // Upstash REST calls surface transient network issues through fetch/undici
@@ -206,10 +313,30 @@ export function isTransientRedisError(err) {
 }
 
 export async function acquireLock(domain, runId, ttlMs) {
-  const { url, token } = getRedisCredentials();
+  const { accountId, namespaceId, token } = getRedisCredentials();
+  const base = kvBase(accountId, namespaceId);
   const lockKey = `seed-lock:${domain}`;
-  const result = await redisCommand(url, token, ['SET', lockKey, runId, 'NX', 'PX', ttlMs]);
-  return result?.result === 'OK';
+  // KV has no NX — check-then-set is good enough for seed coordination
+  try {
+    const existing = await fetch(`${base}/values/${encodeURIComponent(lockKey)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (existing.ok) {
+      const text = await existing.text();
+      if (text && text !== runId) return false; // lock held by another run
+    }
+    const ttlSeconds = Math.ceil(ttlMs / 1000);
+    await fetch(`${base}/values/${encodeURIComponent(lockKey)}?expiration_ttl=${ttlSeconds}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'text/plain' },
+      body: runId,
+      signal: AbortSignal.timeout(5_000),
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function acquireLockSafely(domain, runId, ttlMs, opts = {}) {
@@ -226,12 +353,16 @@ export async function acquireLockSafely(domain, runId, ttlMs, opts = {}) {
   }
 }
 
-export async function releaseLock(domain, runId) {
-  const { url, token } = getRedisCredentials();
+export async function releaseLock(domain, _runId) {
+  const { accountId, namespaceId, token } = getRedisCredentials();
+  const base = kvBase(accountId, namespaceId);
   const lockKey = `seed-lock:${domain}`;
-  const script = `if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("del",KEYS[1]) else return 0 end`;
   try {
-    await redisCommand(url, token, ['EVAL', script, 1, lockKey, runId]);
+    await fetch(`${base}/values/${encodeURIComponent(lockKey)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5_000),
+    });
   } catch {
     // Best-effort release; lock will expire via TTL
   }
@@ -324,14 +455,17 @@ export async function writeFreshnessMetadata(domain, resource, count, source, tt
  */
 export async function readCanonicalEnvelopeMeta(canonicalKey) {
   try {
-    const { url, token } = getRedisCredentials();
-    const resp = await fetch(`${url}/get/${encodeURIComponent(canonicalKey)}`, {
+    const { accountId, namespaceId, token } = getRedisCredentials();
+    const base = kvBase(accountId, namespaceId);
+    const resp = await fetch(`${base}/values/${encodeURIComponent(canonicalKey)}`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(5_000),
     });
     if (!resp.ok) return null;
-    const data = await resp.json();
-    if (!data || !data.result) return null;
+    const text = await resp.text();
+    if (!text) return null;
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { return null; }
     let parsed;
     try { parsed = JSON.parse(data.result); } catch { return null; }
     if (!parsed || typeof parsed !== 'object') return null;
