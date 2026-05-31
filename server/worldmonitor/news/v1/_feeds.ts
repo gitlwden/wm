@@ -184,6 +184,40 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'TechCabal (Africa)', url: 'https://techcabal.com/feed/' },
       { name: 'Inc42 (India)', url: 'https://inc42.com/feed/' },
     ],
+    unicorns: [
+      { name: 'Unicorn News', url: gn('("unicorn startup" OR "unicorn valuation" OR "$1 billion valuation") when:7d') },
+      { name: 'Decacorn News', url: gn('("decacorn" OR "$10 billion valuation") startup when:14d') },
+    ],
+    security: [
+      { name: 'Krebs Security', url: 'https://krebsonsecurity.com/feed/' },
+      { name: 'Dark Reading', url: 'https://www.darkreading.com/rss.xml' },
+    ],
+    policy: [
+      { name: 'Politico Tech', url: 'https://rss.politico.com/technology.xml' },
+      { name: 'AI Regulation', url: gn('AI regulation OR "artificial intelligence" law OR policy when:7d') },
+      { name: 'Tech Antitrust', url: gn('tech antitrust OR FTC Google OR FTC Apple OR FTC Amazon when:7d') },
+    ],
+    markets: [
+      { name: 'CNBC', url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html' },
+      { name: 'Yahoo Finance', url: 'https://finance.yahoo.com/rss/topstories' },
+      { name: 'Seeking Alpha', url: 'https://seekingalpha.com/market_currents.xml' },
+    ],
+    commodities: [
+      { name: 'Oil & Gas', url: gn('(oil price OR OPEC OR "natural gas" OR pipeline OR LNG) when:2d') },
+      { name: 'Gold & Metals', url: gn('("gold price" OR "silver price" OR "precious metals" OR "copper price") when:2d') },
+    ],
+    crypto: [
+      { name: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/' },
+      { name: 'Cointelegraph', url: 'https://cointelegraph.com/rss' },
+      { name: 'The Block', url: 'https://news.google.com/rss/search?q=site:theblock.co+when:1d&hl=en-US&gl=US&ceid=US:en' },
+      { name: 'Decrypt', url: 'https://decrypt.co/feed' },
+      { name: 'Blockworks', url: 'https://blockworks.co/feed' },
+      { name: 'Bitcoin Magazine', url: 'https://bitcoinmagazine.com/feed' },
+      { name: 'CryptoSlate', url: 'https://cryptoslate.com/feed/' },
+    ],
+    economic: [
+      { name: 'Economic Data', url: gn('(CPI OR inflation OR GDP OR "economic data" OR "jobs report") when:2d') },
+    ],
   },
 
   tech: {

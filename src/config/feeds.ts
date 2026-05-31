@@ -496,6 +496,26 @@ const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'Decacorn News', url: rss('https://news.google.com/rss/search?q=("decacorn"+OR+"$10+billion+valuation"+OR+"$10B+valuation")+startup+when:14d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'New Unicorns', url: rss('https://news.google.com/rss/search?q=("becomes+unicorn"+OR+"joins+unicorn"+OR+"reaches+unicorn"+OR+"achieved+unicorn")+when:14d&hl=en-US&gl=US&ceid=US:en') },
   ],
+  markets: [
+    { name: 'CNBC', url: rss('https://www.cnbc.com/id/100003114/device/rss/rss.html') },
+    { name: 'Yahoo Finance', url: rss('https://finance.yahoo.com/rss/topstories') },
+    { name: 'Seeking Alpha', url: rss('https://seekingalpha.com/market_currents.xml') },
+  ],
+  commodities: [
+    { name: 'Oil & Gas', url: rss('https://news.google.com/rss/search?q=(oil+price+OR+OPEC+OR+"natural+gas"+OR+pipeline+OR+LNG)+when:2d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Gold & Metals', url: rss('https://news.google.com/rss/search?q=("gold+price"+OR+"silver+price"+OR+"precious+metals"+OR+"copper+price")+when:2d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  crypto: [
+    { name: 'CoinDesk', url: rss('https://www.coindesk.com/arc/outboundfeeds/rss/') },
+    { name: 'Cointelegraph', url: rss('https://cointelegraph.com/rss') },
+    { name: 'Decrypt', url: rss('https://decrypt.co/feed') },
+    { name: 'Blockworks', url: rss('https://blockworks.co/feed') },
+    { name: 'Bitcoin Magazine', url: rss('https://bitcoinmagazine.com/feed') },
+    { name: 'CryptoSlate', url: rss('https://cryptoslate.com/feed/') },
+  ],
+  economic: [
+    { name: 'Economic Data', url: rss('https://news.google.com/rss/search?q=(CPI+OR+inflation+OR+GDP+OR+"economic+data"+OR+"jobs+report")+when:2d&hl=en-US&gl=US&ceid=US:en') },
+  ],
 };
 
 // Tech/AI variant feeds
