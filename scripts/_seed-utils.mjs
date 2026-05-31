@@ -466,8 +466,6 @@ export async function readCanonicalEnvelopeMeta(canonicalKey) {
     if (!text) return null;
     let parsed;
     try { parsed = JSON.parse(text); } catch { return null; }
-    let parsed;
-    try { parsed = JSON.parse(data.result); } catch { return null; }
     if (!parsed || typeof parsed !== 'object') return null;
     const seed = parsed._seed;
     if (!seed || typeof seed !== 'object') return null;
