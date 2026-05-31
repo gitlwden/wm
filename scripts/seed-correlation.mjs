@@ -1,6 +1,6 @@
 #!/usr/bin/env node
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
-import { loadEnvFile, runSeed, getRedisCredentials, loadSharedConfig } from './_seed-utils.mjs';
 import { resolveIso2, normalizeCountryToken } from './_country-resolver.mjs';
 
 loadEnvFile(import.meta.url);

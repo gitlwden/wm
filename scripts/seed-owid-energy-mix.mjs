@@ -1,15 +1,6 @@
 #!/usr/bin/env node
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
-import {
-  acquireLockSafely,
-  CHROME_UA,
-  extendExistingTtl,
-  getRedisCredentials,
-  loadEnvFile,
-  logSeedResult,
-  releaseLock,
-  withRetry,
-} from './_seed-utils.mjs';
 import { resolveIso2 } from './_country-resolver.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 

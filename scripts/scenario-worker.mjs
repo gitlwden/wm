@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 // @ts-check
 /**
  * Scenario Engine Worker — always-on Railway service
@@ -12,8 +13,6 @@
  *   vCPUs: 1 / memoryGB: 1
  *   cronSchedule:  <none> (always-on long-running process)
  */
-
-import { getRedisCredentials, loadEnvFile } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 

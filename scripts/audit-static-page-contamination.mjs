@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 // Ops audit + cleanup for residual contamination in story:track:v1:* and the
 // digest accumulator (U6 of docs/plans/2026-04-26-001-fix-brief-static-page-
 // contamination-plan.md).
@@ -51,8 +52,6 @@
 // out of scope for this one-shot script).
 
 import { isInstitutionalStaticPage } from './shared/url-classifier.js';
-import { getRedisCredentials } from './_seed-utils.mjs';
-
 const VALID_MODES = ['url', 'age', 'residue', 'both'];
 
 export function parseArgs(argv) {

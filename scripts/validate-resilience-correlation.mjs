@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-
-import { loadEnvFile, getRedisCredentials } from './_seed-utils.mjs';
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
 // Source of truth: server/worldmonitor/resilience/v1/_shared.ts → RESILIENCE_SCORE_CACHE_PREFIX
 const RESILIENCE_SCORE_CACHE_PREFIX = 'resilience:score:v18:';

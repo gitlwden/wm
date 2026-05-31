@@ -10,6 +10,7 @@ import {
   logSeedResult,
   withRetry,
   readSeedSnapshot,
+  cfPipeline,
 } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);

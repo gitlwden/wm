@@ -1,15 +1,5 @@
 #!/usr/bin/env node
-
-import {
-  acquireLockSafely,
-  CHROME_UA,
-  extendExistingTtl,
-  getRedisCredentials,
-  loadEnvFile,
-  logSeedResult,
-  releaseLock,
-  withRetry,
-} from './_seed-utils.mjs';
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 

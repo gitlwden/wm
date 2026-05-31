@@ -1,17 +1,6 @@
 #!/usr/bin/env node
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
-import {
-  loadEnvFile,
-  CHROME_UA,
-  getRedisCredentials,
-  acquireLockSafely,
-  releaseLock,
-  extendExistingTtl,
-  logSeedResult,
-  readSeedSnapshot,
-  resolveProxyForConnect,
-  httpsProxyFetchRaw,
-} from './_seed-utils.mjs';
 import { createCountryResolvers } from './_country-resolver.mjs';
 
 loadEnvFile(import.meta.url);

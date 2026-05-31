@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 // @ts-check
 /**
  * Regional Intelligence snapshot seeder.
@@ -23,7 +24,6 @@
 
 import { pathToFileURL } from 'node:url';
 
-import { loadEnvFile, getRedisCredentials, writeExtraKeyWithMeta } from './_seed-utils.mjs';
 // Use scripts/shared mirror rather than the repo-root shared/ folder: the
 // Railway bundle service sets rootDirectory=scripts, so `../shared/` resolves
 // to filesystem / on deploy and the import fails with ERR_MODULE_NOT_FOUND.

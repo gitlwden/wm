@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
 /**
  * Backtesting framework: tests whether baseline resilience predicts recovery
@@ -21,7 +22,6 @@
  *       cached scores are missing from Redis.
  */
 
-import { getRedisCredentials, loadEnvFile } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);

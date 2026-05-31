@@ -1,17 +1,9 @@
 #!/usr/bin/env node
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
 // @ts-check
 
 import { createRequire } from 'node:module';
-import {
-  acquireLockSafely,
-  extendExistingTtl,
-  getRedisCredentials,
-  loadEnvFile,
-  logSeedResult,
-  releaseLock,
-} from './_seed-utils.mjs';
-
 loadEnvFile(import.meta.url);
 
 // ── Constants ─────────────────────────────────────────────────────────────────

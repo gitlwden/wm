@@ -1,17 +1,6 @@
 #!/usr/bin/env node
+import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
-import {
-  acquireLockSafely,
-  CHROME_UA,
-  extendExistingTtl,
-  getRedisCredentials,
-  httpsProxyFetchRaw,
-  loadEnvFile,
-  logSeedResult,
-  releaseLock,
-  verifySeedKey,
-  withRetry,
-} from './_seed-utils.mjs';
 import { resolveProxyStringConnect } from './_proxy-utils.cjs';
 import {
   createCountryResolvers,
