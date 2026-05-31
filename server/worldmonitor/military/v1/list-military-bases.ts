@@ -6,7 +6,7 @@ import type {
   MilitaryBaseCluster,
 } from '../../../../src/generated/server/worldmonitor/military/v1/service_server';
 
-import { cachedFetchJson, getCachedJson, geoSearchByBox, getHashFieldsBatch } from '../../../_shared/redis';
+import { cachedFetchJson, getCachedJson } from '../../../_shared/redis';
 import { markNoCacheResponse, setResponseHeader } from '../../../_shared/response-headers';
 
 const VALID_TYPES = new Set([
@@ -150,8 +150,7 @@ export async function listMilitaryBases(
     }
     const v = String(activeVersion);
     setResponseHeader(ctx.request, 'X-Bases-Debug', `v=${v},raw=${rawKeys}`);
-    const geoKey = `military:bases:geo:${v}`;
-    const metaKey = `military:bases:meta:${v}`;
+    const dataKey = `military:bases:data:${v}`;
 
     const gridStep = getBboxGridStep(zoom);
     const qBB = [
@@ -163,40 +162,26 @@ export async function listMilitaryBases(
     const result = await cachedFetchJson<ListMilitaryBasesResponse>(
       cacheKey, 3600,
       async () => {
+        // Load all bases as JSON array and filter client-side
+        let allData = await getCachedJson(dataKey, true) as Array<Record<string, unknown>> | null;
+        if (!allData) allData = await getCachedJson(dataKey) as Array<Record<string, unknown>> | null;
+        if (!allData || allData.length === 0) return { bases: [], clusters: [], totalInView: 0, truncated: false };
+
+        // Bounding box filter
         const antimeridian = swLon > neLon;
-        let allIds: string[];
+        const cap = getGeoSearchCap(zoom);
+        const inBounds = allData.filter(entry => {
+          const lat = Number(entry.lat) || 0;
+          const lon = Number(entry.lon) || 0;
+          if (lat < swLat || lat > neLat) return false;
+          if (antimeridian) return lon >= swLon || lon <= neLon;
+          return lon >= swLon && lon <= neLon;
+        });
 
-        if (antimeridian) {
-          const dims1 = bboxDimensionsKm(swLat, swLon, neLat, 180);
-          const dims2 = bboxDimensionsKm(swLat, -180, neLat, neLon);
-          const cap = getGeoSearchCap(zoom);
-          const [ids1, ids2] = await Promise.all([
-            geoSearchByBox(geoKey, dims1.centerLon, dims1.centerLat, dims1.widthKm, dims1.heightKm, cap, rawKeys),
-            geoSearchByBox(geoKey, dims2.centerLon, dims2.centerLat, dims2.widthKm, dims2.heightKm, cap, rawKeys),
-          ]);
-          const seen = new Set<string>();
-          allIds = [];
-          for (const id of [...ids1, ...ids2]) {
-            if (!seen.has(id)) { seen.add(id); allIds.push(id); }
-          }
-        } else {
-          const dims = bboxDimensionsKm(swLat, swLon, neLat, neLon);
-          const cap = getGeoSearchCap(zoom);
-          allIds = await geoSearchByBox(geoKey, dims.centerLon, dims.centerLat, dims.widthKm, dims.heightKm, cap, rawKeys);
-        }
-
-        const truncated = allIds.length >= getGeoSearchCap(zoom);
-        if (allIds.length === 0) return { bases: [], clusters: [], totalInView: 0, truncated: false };
-
-        const metaMap = await getHashFieldsBatch(metaKey, allIds, rawKeys);
+        const truncated = inBounds.length >= cap;
         const bases: MilitaryBaseEntry[] = [];
 
-        for (const id of allIds) {
-          const raw = metaMap.get(id);
-          if (!raw) continue;
-          let meta: Record<string, unknown>;
-          try { meta = JSON.parse(raw); } catch { continue; }
-
+        for (const meta of inBounds.slice(0, cap)) {
           const tier = (meta.tier as number) || 2;
           if (zoom < 5 && tier > 1) continue;
           if (zoom >= 5 && zoom < 8 && tier > 2) continue;
@@ -206,7 +191,7 @@ export async function listMilitaryBases(
           if (countryFilter && meta.countryIso2 !== countryFilter) continue;
 
           bases.push({
-            id: String(meta.id || id),
+            id: String(meta.id || ''),
             name: String(meta.name || ''),
             latitude: Number(meta.lat) || 0,
             longitude: Number(meta.lon) || 0,

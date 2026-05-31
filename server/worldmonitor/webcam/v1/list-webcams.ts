@@ -1,5 +1,5 @@
 import type { ListWebcamsRequest, ListWebcamsResponse, WebcamEntry, WebcamCluster, ServerContext } from '../../../../src/generated/server/worldmonitor/webcam/v1/service_server';
-import { geoSearchByBox, getHashFieldsBatch, getCachedJson, setCachedJson } from '../../../_shared/redis';
+import { getCachedJson, setCachedJson } from '../../../_shared/redis';
 
 const MAX_RESULTS = 2000;
 const RESPONSE_CACHE_TTL = 3600; // 1 hour
@@ -95,27 +95,19 @@ export async function listWebcams(_ctx: ServerContext, req: ListWebcamsRequest):
   const geoKey = `webcam:cameras:geo:${version}`;
   const metaKey = `webcam:cameras:meta:${version}`;
 
-  // Compute center and dimensions for GEOSEARCH using quantized bounds
-  const centerLat = (qN + qS) / 2;
-  const heightKm = Math.abs(qN - qS) * 111.32;
-
-  // Antimeridian: if W > E, split into two queries
-  let ids: string[];
-  if (qW > qE) {
-    const centerLon1 = (qW + 180) / 2;
-    const centerLon2 = (-180 + qE) / 2;
-    const width1 = (180 - qW) * 111.32 * Math.cos(centerLat * Math.PI / 180);
-    const width2 = (qE + 180) * 111.32 * Math.cos(centerLat * Math.PI / 180);
-    const [ids1, ids2] = await Promise.all([
-      geoSearchByBox(geoKey, centerLon1, centerLat, width1, heightKm, MAX_RESULTS, true),
-      geoSearchByBox(geoKey, centerLon2, centerLat, width2, heightKm, MAX_RESULTS, true),
-    ]);
-    ids = [...ids1, ...ids2];
-  } else {
-    const centerLon = (qW + qE) / 2;
-    const widthKm = equirectangularWidthKm(qS, qN, qW, qE);
-    ids = await geoSearchByBox(geoKey, centerLon, centerLat, widthKm, heightKm, MAX_RESULTS, true);
+  // Load geo index as JSON array [{lon, lat, id}, ...] and filter by bounding box
+  const geoData = await getCachedJson(geoKey, true) as Array<{ lon: number; lat: number; id: string }> | null;
+  if (!geoData || geoData.length === 0) {
+    const empty: ListWebcamsResponse = { webcams: [], clusters: [], totalInView: 0 };
+    await setCachedJson(cacheKey, empty, RESPONSE_CACHE_TTL);
+    return empty;
   }
+
+  // Filter entries within bounding box (handles antimeridian)
+  const inBounds = qW > qE
+    ? geoData.filter(e => e.lon >= qW || e.lon <= qE)
+    : geoData.filter(e => e.lon >= qW && e.lon <= qE && e.lat >= qS && e.lat <= qN);
+  const ids = inBounds.slice(0, MAX_RESULTS).map(e => e.id);
 
   if (ids.length === 0) {
     const empty: ListWebcamsResponse = { webcams: [], clusters: [], totalInView: 0 };
@@ -123,24 +115,21 @@ export async function listWebcams(_ctx: ServerContext, req: ListWebcamsRequest):
     return empty;
   }
 
-  // Fetch metadata
-  const metaMap = await getHashFieldsBatch(metaKey, ids, true);
+  // Fetch metadata as JSON object {id: {title, lat, lng, category, country}, ...}
+  const metaObj = await getCachedJson(metaKey, true) as Record<string, { title?: string; lat?: number; lng?: number; category?: string; country?: string }> | null;
   const webcams: Array<{ webcamId: string; title: string; lat: number; lng: number; category: string; country: string }> = [];
 
   for (const id of ids) {
-    const raw = metaMap.get(id);
-    if (!raw) continue;
-    try {
-      const meta = JSON.parse(raw);
-      webcams.push({
-        webcamId: id,
-        title: meta.title || '',
-        lat: meta.lat || 0,
-        lng: meta.lng || 0,
-        category: meta.category || 'other',
-        country: meta.country || '',
-      });
-    } catch { /* skip malformed */ }
+    const meta = metaObj?.[id];
+    if (!meta) continue;
+    webcams.push({
+      webcamId: id,
+      title: meta.title || '',
+      lat: meta.lat || 0,
+      lng: meta.lng || 0,
+      category: meta.category || 'other',
+      country: meta.country || '',
+    });
   }
 
   const cellSize = getClusterCellSize(zoom);

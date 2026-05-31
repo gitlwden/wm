@@ -303,29 +303,6 @@ export async function runRedisPipeline(
 }
 
 /**
- * GEOSEARCH — not supported in Cloudflare KV.
- * Returns empty array. Geo data should be stored as pre-computed JSON blobs.
- */
-export async function geoSearchByBox(
-  _key: string, _lon: number, _lat: number,
-  _widthKm: number, _heightKm: number, _count: number, _raw = false,
-): Promise<string[]> {
-  console.warn('[kv] geoSearchByBox not supported in Cloudflare KV — returning empty');
-  return [];
-}
-
-/**
- * HMGET (hash fields) — not supported in Cloudflare KV.
- * Hash data should be stored as JSON blobs and parsed client-side.
- */
-export async function getHashFieldsBatch(
-  _key: string, _fields: string[], _raw = false,
-): Promise<Map<string, string>> {
-  console.warn('[kv] getHashFieldsBatch not supported in Cloudflare KV — returning empty');
-  return new Map();
-}
-
-/**
  * Deletes a single key from Cloudflare KV.
  */
 export async function deleteRedisKey(key: string, raw = false): Promise<void> {
