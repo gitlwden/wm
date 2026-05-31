@@ -7,6 +7,18 @@ import { promisify } from 'util';
 import pkg from './package.json';
 import { VARIANT_META, type VariantMeta } from './src/config/variant-meta';
 
+// Catch ERR_HTTP2_INVALID_SESSION from Node's undici HTTP/2 connection pool.
+// Occurs when upstream fetch targets (Yahoo, Redis, relay) close HTTP/2 sessions
+// while undici still tries to reuse them. Log instead of crashing the dev server.
+process.on('uncaughtException', (err) => {
+  if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'ERR_HTTP2_INVALID_SESSION') {
+    console.warn('[http2] Stale session destroyed, continuing:', err.message);
+    return; // swallow — the failing fetch already returned/errored
+  }
+  // Re-throw anything else so normal error handling applies
+  throw err;
+});
+
 // Env-dependent constants moved inside defineConfig function
 
 
