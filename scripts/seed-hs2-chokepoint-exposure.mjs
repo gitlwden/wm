@@ -1,9 +1,18 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
 // @ts-check
 
 import { createRequire } from 'node:module';
+import {
+  acquireLockSafely,
+  extendExistingTtl,
+  getRedisCredentials,
+  loadEnvFile,
+  logSeedResult,
+  releaseLock,
+  cfPipeline,
+} from './_seed-utils.mjs';
+
 loadEnvFile(import.meta.url);
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -177,6 +186,48 @@ export function computeCountryLevelExposure(nearestRouteIds, coastSide, hs2) {
 async function redisPipeline(commands) {
   return cfPipeline(commands);
 }
+
+// ── Comtrade data loader ─────────────────────────────────────────────────────
+
+/**
+ * Batch-read Comtrade bilateral HS4 data for all countries from Redis.
+ * @param {string[]} iso2List
+ * @returns {Promise<Map<string, ComtradeProduct[]>>}
+ */
+async function loadComtradeData(iso2List) {
+  const keys = iso2List.map(iso2 => `${COMTRADE_KEY_PREFIX}${iso2}:v1`);
+  const { url, token } = getRedisCredentials();
+  const commands = keys.map(k => ['GET', k]);
+
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(commands),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!resp.ok) {
+    console.warn(`[chokepoint-exposure] Comtrade MGET failed: HTTP ${resp.status}`);
+    return new Map();
+  }
+
+  const results = await resp.json();
+  /** @type {Map<string, ComtradeProduct[]>} */
+  const map = new Map();
+  for (let i = 0; i < iso2List.length; i++) {
+    const raw = results[i]?.result;
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.products && Array.isArray(parsed.products)) {
+        map.set(iso2List[i], parsed.products);
+      }
+    } catch { /* skip malformed */ }
+  }
+  return map;
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 export async function main() {
   const startedAt = Date.now();
   const runId = `${LOCK_DOMAIN}:${startedAt}`;

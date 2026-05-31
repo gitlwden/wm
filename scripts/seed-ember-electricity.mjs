@@ -1,6 +1,16 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
+import {
+  acquireLockSafely,
+  CHROME_UA,
+  extendExistingTtl,
+  getRedisCredentials,
+  loadEnvFile,
+  logSeedResult,
+  releaseLock,
+  withRetry,
+  cfPipeline,
+} from './_seed-utils.mjs';
 import { resolveIso2 } from './_country-resolver.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 
@@ -190,6 +200,65 @@ export function buildAllCountriesMap(countries) {
 async function redisPipeline(commands) {
   return cfPipeline(commands);
 }
+
+async function redisGet(key) {
+  const { url, token } = getRedisCredentials();
+  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return data.result ? unwrapEnvelope(JSON.parse(data.result)).data : null;
+}
+
+async function preservePreviousSnapshot(errorMsg, stashedAllMap = null, newCountryKeys = null, dataWritten = false) {
+  console.error('[EmberElectricity] Preserving previous snapshot:', errorMsg);
+
+  const existingMeta = await redisGet(EMBER_META_KEY).catch(() => null);
+
+  if (stashedAllMap && typeof stashedAllMap === 'object' && !dataWritten) {
+    const restoreCmds = [];
+    for (const [iso2, val] of Object.entries(stashedAllMap)) {
+      restoreCmds.push([
+        'SET', `${EMBER_KEY_PREFIX}${iso2}`, JSON.stringify(val), 'EX', EMBER_TTL_SECONDS,
+      ]);
+    }
+    restoreCmds.push(['SET', EMBER_ALL_KEY, JSON.stringify(stashedAllMap), 'EX', EMBER_TTL_SECONDS]);
+    if (newCountryKeys) {
+      const oldIso2Set = new Set(Object.keys(stashedAllMap));
+      for (const iso2 of newCountryKeys) {
+        if (!oldIso2Set.has(iso2)) {
+          restoreCmds.push(['DEL', `${EMBER_KEY_PREFIX}${iso2}`]);
+        }
+      }
+    }
+    await redisPipeline(restoreCmds).catch((e) =>
+      console.error('[EmberElectricity] Snapshot restore failed:', e),
+    );
+  } else if (!dataWritten) {
+    const existingAll = await redisGet(EMBER_ALL_KEY).catch(() => null);
+    const iso2Keys = existingAll && typeof existingAll === 'object'
+      ? Object.keys(existingAll).map((iso2) => `${EMBER_KEY_PREFIX}${iso2}`)
+      : [];
+
+    await extendExistingTtl(
+      [...iso2Keys, EMBER_ALL_KEY, EMBER_META_KEY],
+      EMBER_TTL_SECONDS,
+    );
+  }
+
+  const metaPayload = {
+    fetchedAt: Date.now(),
+    recordCount: existingMeta?.recordCount ?? null,
+    status: 'error',
+    error: errorMsg,
+  };
+  await redisPipeline([
+    ['SET', EMBER_META_KEY, JSON.stringify(metaPayload), 'EX', EMBER_TTL_SECONDS],
+  ]);
+}
+
 export async function main() {
   const startedAt = Date.now();
   const runId = `energy:ember:${startedAt}`;

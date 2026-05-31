@@ -1,6 +1,16 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
+import {
+  acquireLockSafely,
+  CHROME_UA,
+  extendExistingTtl,
+  getRedisCredentials,
+  loadEnvFile,
+  logSeedResult,
+  releaseLock,
+  withRetry,
+  cfPipeline,
+} from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -37,6 +47,133 @@ const COUNTRY_NAMES = {
 async function redisPipeline(commands) {
   return cfPipeline(commands);
 }
+
+async function redisGet(key) {
+  const { url, token } = getRedisCredentials();
+  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return data.result ? unwrapEnvelope(JSON.parse(data.result)).data : null;
+}
+
+/** Parse a single GIE entry into fill/gwh/date/change */
+export function parseFillEntry(entry) {
+  const fill = parseFloat(entry.full || entry.fillLevel || entry.pct || '0');
+  const gwh = parseFloat(entry.gasInStorage || entry.gasTwh || entry.volume || '0');
+  const date = entry.gasDayStart ?? entry.date ?? '';
+  const change = parseFloat(entry.trend || entry.change || '0');
+  return { fill, gwh, date, change };
+}
+
+/** Derive trend string from 1-day fill % change */
+export function computeTrend(fillPctChange1d) {
+  if (fillPctChange1d > 0.05) return 'injecting';
+  if (fillPctChange1d < -0.05) return 'withdrawing';
+  return 'stable';
+}
+
+/** Build per-country payload objects from raw GIE data per country */
+export function buildCountriesPayload(rawEntries) {
+  const result = [];
+  for (const { iso2, entries } of rawEntries) {
+    if (!entries || !entries.length) continue;
+
+    // Sort descending so entries[0] = most recent
+    const sorted = [...entries].sort((a, b) => {
+      const da = a.gasDayStart ?? a.date ?? '';
+      const db = b.gasDayStart ?? b.date ?? '';
+      return db.localeCompare(da);
+    });
+
+    const current = parseFillEntry(sorted[0]);
+    const prev = sorted.length > 1 ? parseFillEntry(sorted[1]) : null;
+
+    const fillPct = current.fill;
+    if (!Number.isFinite(fillPct) || fillPct < 0 || fillPct > 100) continue;
+
+    const fillPctChange1d = prev !== null ? +(fillPct - prev.fill).toFixed(2) : 0;
+    const trend = computeTrend(fillPctChange1d);
+
+    const countryName =
+      sorted[0].name ?? sorted[0].country ?? COUNTRY_NAMES[iso2] ?? iso2;
+
+    result.push({
+      iso2,
+      countryName,
+      fillPct: +(fillPct.toFixed(2)),
+      fillPctChange1d,
+      gasTwh: +(current.gwh.toFixed(1)),
+      trend,
+      date: current.date,
+      seededAt: new Date().toISOString(),
+    });
+  }
+  return result;
+}
+
+async function fetchCountryData(iso2) {
+  const apiKey = process.env.GIE_API_KEY || process.env.AGSI_API_KEY || '';
+  const url = `${GIE_API_BASE}?country=${iso2}&size=3`;
+  const headers = {
+    Accept: 'application/json',
+    'User-Agent': CHROME_UA,
+  };
+  if (apiKey) headers['x-key'] = apiKey;
+
+  const resp = await fetch(url, {
+    headers,
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '');
+    throw new Error(`GIE AGSI+ HTTP ${resp.status} for ${iso2}: ${body.slice(0, 200)}`);
+  }
+  const latestData = await resp.json();
+
+  let entries = [];
+  if (Array.isArray(latestData)) entries = latestData;
+  else if (Array.isArray(latestData?.data)) entries = latestData.data;
+  else if (latestData?.gasDayStart) entries = [latestData];
+
+  return entries;
+}
+
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function preservePreviousSnapshot(errorMsg) {
+  console.error('[gas-storage-countries] Preserving previous snapshot:', errorMsg);
+
+  const countryList = await redisGet(GAS_STORAGE_COUNTRIES_KEY).catch(() => null);
+  const perCountryKeys = Array.isArray(countryList)
+    ? countryList.map((iso2) => `${GAS_STORAGE_KEY_PREFIX}${iso2}`)
+    : [];
+
+  await extendExistingTtl(
+    [...perCountryKeys, GAS_STORAGE_COUNTRIES_KEY],
+    GAS_STORAGE_TTL_SECONDS,
+  );
+
+  // Preserve old fetchedAt so health staleness detection stays accurate.
+  // A fresh fetchedAt on a failed run would make health report OK indefinitely.
+  // (GAS_STORAGE_META_KEY is not in extendExistingTtl above — the SET below handles its TTL.)
+  const existingMeta = await redisGet(GAS_STORAGE_META_KEY).catch(() => null);
+  const metaPayload = {
+    fetchedAt: existingMeta?.fetchedAt ?? 0,
+    recordCount: existingMeta?.recordCount ?? 0,
+    sourceVersion: 'gie-agsi-plus-countries-v1',
+    status: 'error',
+    error: errorMsg,
+  };
+  await redisPipeline([
+    ['SET', GAS_STORAGE_META_KEY, JSON.stringify(metaPayload), 'EX', GAS_STORAGE_TTL_SECONDS],
+  ]);
+}
+
 export async function main() {
   const startedAt = Date.now();
   const runId = `gas-storage-countries:${startedAt}`;

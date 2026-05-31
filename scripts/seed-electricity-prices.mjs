@@ -1,5 +1,16 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
+
+import {
+  acquireLockSafely,
+  CHROME_UA,
+  extendExistingTtl,
+  getRedisCredentials,
+  loadEnvFile,
+  logSeedResult,
+  releaseLock,
+  withRetry,
+  cfPipeline,
+} from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -82,6 +93,147 @@ export function buildElectricityIndex(regionData, date) {
 async function redisPipeline(commands) {
   return cfPipeline(commands);
 }
+
+// ── ENTSO-E fetcher ───────────────────────────────────────────────────────────
+
+async function fetchEntsoERegion(region, token, today, yesterday) {
+  const params = new URLSearchParams({
+    documentType: 'A44',
+    in_Domain: region.eic,
+    out_Domain: region.eic,
+    periodStart: formatEntsoDate(yesterday),
+    periodEnd: `${isoDate(today).replace(/-/g, '')}2300`,
+    securityToken: token,
+  });
+
+  try {
+    const resp = await withRetry(
+      () =>
+        fetch(`https://web-api.tp.entsoe.eu/api?${params.toString()}`, {
+          headers: { 'User-Agent': CHROME_UA, Accept: 'application/xml' },
+          signal: AbortSignal.timeout(20_000),
+        }).then((r) => {
+          if (!r.ok) throw new Error(`ENTSO-E ${region.region} HTTP ${r.status}`);
+          return r.text();
+        }),
+      2,
+      500,
+    );
+
+    const price = parseEntsoEPrice(resp);
+    if (price == null) {
+      console.warn(`[electricity] ENTSO-E ${region.region}: no price.amount in response`);
+      return null;
+    }
+
+    console.log(`[electricity] ENTSO-E ${region.region}: ${price} EUR/MWh`);
+    return {
+      region: region.region,
+      source: 'entso-e',
+      priceMwhEur: price,
+      priceMwhUsd: null,
+      date: isoDate(today),
+      unit: 'EUR/MWh',
+      seededAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    console.warn(`[electricity] ENTSO-E ${region.region} failed: ${err.message}`);
+    return null;
+  }
+}
+
+async function fetchAllEntsoE(token, today, yesterday) {
+  const BATCH = 3;
+  const results = [];
+
+  for (let i = 0; i < ENTSO_E_REGIONS.length; i += BATCH) {
+    const batch = ENTSO_E_REGIONS.slice(i, i + BATCH);
+    const batchResults = await Promise.all(
+      batch.map((r) => fetchEntsoERegion(r, token, today, yesterday)),
+    );
+    results.push(...batchResults);
+    if (i + BATCH < ENTSO_E_REGIONS.length) {
+      await new Promise((res) => setTimeout(res, 300));
+    }
+  }
+
+  return results.filter(Boolean);
+}
+
+// ── EIA-930 fetcher ───────────────────────────────────────────────────────────
+
+async function fetchEiaRegion(region, apiKey, today) {
+  const dateStr = isoDate(today);
+  const params = new URLSearchParams({
+    'data[]': 'value',
+    'facets[respondent][]': region.respondent,
+    start: isoDate(new Date(Date.now() - 2 * 24 * 3600 * 1000)),
+    end: dateStr,
+    'sort[0][column]': 'period',
+    'sort[0][direction]': 'desc',
+    length: '1',
+    api_key: apiKey,
+  });
+
+  try {
+    const resp = await withRetry(
+      () =>
+        fetch(`https://api.eia.gov/v2/electricity/rto/region-data/data/?${params.toString()}`, {
+          headers: { 'User-Agent': CHROME_UA },
+          signal: AbortSignal.timeout(20_000),
+        }).then((r) => {
+          if (!r.ok) throw new Error(`EIA-930 ${region.region} HTTP ${r.status}`);
+          return r.json();
+        }),
+      2,
+      500,
+    );
+
+    const rows = resp?.response?.data;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      console.warn(`[electricity] EIA-930 ${region.region}: no data rows`);
+      return null;
+    }
+
+    const latest = rows[0];
+    const demandMwh = typeof latest?.value === 'number' ? latest.value : parseFloat(latest?.value);
+    if (!Number.isFinite(demandMwh)) {
+      console.warn(`[electricity] EIA-930 ${region.region}: invalid demand value`);
+      return null;
+    }
+
+    console.log(`[electricity] EIA-930 ${region.region}: ${demandMwh} MWh demand`);
+    return {
+      region: region.region,
+      source: 'eia-930',
+      priceMwhEur: null,
+      priceMwhUsd: null,
+      demandMwh,
+      date: dateStr,
+      unit: 'MWh',
+      seededAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    console.warn(`[electricity] EIA-930 ${region.region} failed: ${err.message}`);
+    return null;
+  }
+}
+
+async function fetchAllEia(apiKey, today) {
+  const results = await Promise.all(EIA_REGIONS.map((r) => fetchEiaRegion(r, apiKey, today)));
+  return results.filter(Boolean);
+}
+
+// ── Failure preservation ──────────────────────────────────────────────────────
+
+async function preservePreviousSnapshot(errorMsg, regionKeys) {
+  console.error('[electricity] Preserving previous snapshot:', errorMsg);
+  const keys = [...regionKeys.map((k) => `${ELECTRICITY_KEY_PREFIX}${k}`), ELECTRICITY_INDEX_KEY, ELECTRICITY_META_KEY];
+  await extendExistingTtl(keys, ELECTRICITY_TTL_SECONDS);
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 export async function main() {
   const startedAt = Date.now();
   const runId = `electricity-prices:${startedAt}`;

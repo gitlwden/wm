@@ -1,5 +1,12 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
+import {
+  acquireLockSafely,
+  getRedisCredentials,
+  loadEnvFile,
+  logSeedResult,
+  releaseLock,
+  writeFreshnessMetadata,
+  cfPipeline } from './_seed-utils.mjs';
 loadEnvFile(import.meta.url);
 
 const API_BASE = process.env.API_BASE_URL || 'https://api.worldmonitor.app';

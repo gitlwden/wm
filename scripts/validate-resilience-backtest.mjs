@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
+import { getRedisCredentials, loadEnvFile , cfPipeline } from './_seed-utils.mjs';
 
 /**
  * Backtesting framework: tests whether baseline resilience predicts recovery

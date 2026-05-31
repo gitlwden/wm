@@ -1,6 +1,16 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
 
+import {
+  acquireLockSafely,
+  CHROME_UA,
+  extendExistingTtl,
+  getRedisCredentials,
+  loadEnvFile,
+  logSeedResult,
+  releaseLock,
+  withRetry,
+  cfPipeline,
+} from './_seed-utils.mjs';
 import { resolveIso2 } from './_country-resolver.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 
@@ -191,6 +201,45 @@ export function buildAllCountriesMap(countries) {
 async function redisPipeline(commands) {
   return cfPipeline(commands);
 }
+
+async function redisGet(key) {
+  const { url, token } = getRedisCredentials();
+  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return data.result ? unwrapEnvelope(JSON.parse(data.result)).data : null;
+}
+
+async function preservePreviousSnapshot(errorMsg) {
+  console.error('[owid-energy-mix] Preserving previous snapshot:', errorMsg);
+
+  // Read the full country list written by the last successful run.
+  // This covers ALL seeded ISO2 codes, including countries that do not appear
+  // in any top-20 fuel bucket in the exposure index.
+  const countryList = await redisGet(OWID_COUNTRY_LIST_KEY).catch(() => null);
+  const perCountryKeys = Array.isArray(countryList)
+    ? countryList.map((iso2) => `${OWID_ENERGY_MIX_KEY_PREFIX}${iso2}`)
+    : [];
+
+  await extendExistingTtl(
+    [...perCountryKeys, OWID_COUNTRY_LIST_KEY, OWID_EXPOSURE_INDEX_KEY, OWID_ALL_KEY, OWID_META_KEY],
+    OWID_TTL_SECONDS,
+  );
+  const metaPayload = {
+    fetchedAt: Date.now(),
+    recordCount: 0,
+    sourceVersion: 'owid-energy-mix-v1',
+    status: 'error',
+    error: errorMsg,
+  };
+  await redisPipeline([
+    ['SET', OWID_META_KEY, JSON.stringify(metaPayload), 'EX', OWID_TTL_SECONDS],
+  ]);
+}
+
 export async function main() {
   const startedAt = Date.now();
   const runId = `owid-energy-mix:${startedAt}`;

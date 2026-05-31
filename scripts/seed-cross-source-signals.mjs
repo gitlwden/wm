@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, getRedisCredentials , cfPipeline } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 

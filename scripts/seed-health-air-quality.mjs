@@ -1,5 +1,17 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
+
+import {
+  acquireLockSafely,
+  CHROME_UA,
+  extendExistingTtl,
+  getRedisCredentials,
+  loadEnvFile,
+  logSeedResult,
+  releaseLock,
+  verifySeedKey,
+  withRetry,
+  cfPipeline,
+} from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -297,10 +309,6 @@ function isConfigurationError(error) {
   return error instanceof SeedConfigurationError || error?.code === 'SEED_CONFIGURATION_ERROR';
 }
 
-async function redisPipeline(commands) {
-  return cfPipeline(commands);
-}
-
 async function fetchJson(url, label, headers = {}) {
   const response = await fetch(url, {
     headers: {
@@ -315,4 +323,266 @@ async function fetchJson(url, label, headers = {}) {
     throw new Error(`${label}: HTTP ${response.status} ${body.slice(0, 200)}`.trim());
   }
   return response.json();
+}
+
+function buildUrl(baseUrl, params) {
+  const url = new URL(baseUrl);
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null || value === '') continue;
+    url.searchParams.set(key, String(value));
+  }
+  return url.toString();
+}
+
+async function fetchOpenAqLocationsPage(page) {
+  const headers = buildOpenAqHeaders();
+  const url = buildUrl(OPENAQ_LOCATIONS_URL, {
+    limit: OPENAQ_PAGE_LIMIT,
+    page,
+    parameters_id: 2,
+    sort_order: 'desc',
+  });
+  return await withRetry(() => fetchJson(url, `OpenAQ locations page ${page}`, headers), 2, 1_000);
+}
+
+async function fetchOpenAqLatestPage(page) {
+  const headers = buildOpenAqHeaders();
+  const url = buildUrl(OPENAQ_PM25_LATEST_URL, {
+    limit: OPENAQ_PAGE_LIMIT,
+    page,
+  });
+  return withRetry(() => fetchJson(url, `OpenAQ latest page ${page}`, headers), 2, 1_000);
+}
+
+async function fetchPagedResults(fetchPage, label) {
+  const results = [];
+  let expectedFound = 0;
+
+  for (let page = 1; page <= OPENAQ_MAX_PAGES; page++) {
+    const payload = await fetchPage(page);
+    const pageResults = Array.isArray(payload?.results) ? payload.results : [];
+    results.push(...pageResults);
+
+    const found = toFiniteNumber(payload?.meta?.found);
+    const effectiveLimit = toFiniteNumber(payload?.meta?.limit) ?? OPENAQ_PAGE_LIMIT;
+    if (found != null && found > 0) expectedFound = found;
+
+    if (pageResults.length < effectiveLimit) break;
+    if (expectedFound > 0 && results.length >= expectedFound) break;
+  }
+
+  if (results.length === 0) {
+    throw new Error(`${label}: no results returned`);
+  }
+
+  return results;
+}
+
+async function fetchWaqiStations(nowMs) {
+  const apiKey = trimString(process.env.WAQI_API_KEY);
+  if (!apiKey) {
+    console.log('  [AIR] WAQI_API_KEY missing; skipping WAQI supplement');
+    return [];
+  }
+
+  const entries = [];
+  for (const bbox of WAQI_WORLD_TILES) {
+    const url = buildUrl('https://api.waqi.info/map/bounds/', { latlng: bbox, token: apiKey });
+    try {
+      const payload = await withRetry(() => fetchJson(url, `WAQI ${bbox}`), 1, 1_000);
+      if (payload?.status === 'ok' && Array.isArray(payload.data)) {
+        entries.push(...payload.data);
+      }
+    } catch (error) {
+      console.warn(`  [AIR] WAQI tile ${bbox} failed: ${error?.message ?? error}`);
+    }
+  }
+
+  return buildWaqiStations(entries, nowMs);
+}
+
+export function buildAirQualityPayload({
+  locations = [],
+  latestMeasurements = [],
+  waqiStations = [],
+  waqiEntries = [],
+  nowMs = Date.now(),
+} = {}) {
+  const openAqStations = buildOpenAqStations(locations, latestMeasurements, nowMs);
+  const supplementalStations = normalizeSupplementalStations({ waqiStations, waqiEntries, nowMs });
+  const mergedStations = mergeAirQualityStations(openAqStations, supplementalStations);
+  return {
+    stations: mergedStations.map(toOutputStation),
+    fetchedAt: nowMs,
+  };
+}
+
+export async function fetchAirQualityPayload(nowMs = Date.now()) {
+  const [locations, latestMeasurements, waqiStations] = await Promise.all([
+    fetchPagedResults(fetchOpenAqLocationsPage, 'OpenAQ locations'),
+    fetchPagedResults(fetchOpenAqLatestPage, 'OpenAQ latest'),
+    fetchWaqiStations(nowMs).catch((error) => {
+      console.warn(`  [AIR] WAQI supplement failed: ${error?.message ?? error}`);
+      return [];
+    }),
+  ]);
+
+  const payload = buildAirQualityPayload({
+    locations,
+    latestMeasurements,
+    waqiStations,
+    nowMs,
+  });
+
+  if (!payload.stations.length) {
+    throw new Error('No fresh PM2.5 stations found in the last 2 hours');
+  }
+
+  return payload;
+}
+
+export function validateAirQualityPayload(payload) {
+  return Array.isArray(payload?.stations) && payload.stations.length > 0;
+}
+
+export function buildMirrorWriteCommands(payload, ttlSeconds, fetchedAt = Date.now(), sourceVersion = OPENAQ_SOURCE_VERSION) {
+  const payloadJson = JSON.stringify(payload);
+  const recordCount = payload?.stations?.length ?? 0;
+  const metaTtl = 86400 * 7;
+  const healthMeta = JSON.stringify({ fetchedAt, recordCount, sourceVersion });
+  const climateMeta = JSON.stringify({ fetchedAt, recordCount, sourceVersion });
+  return [
+    ['SET', HEALTH_AIR_QUALITY_KEY, payloadJson, 'EX', String(ttlSeconds)],
+    ['SET', CLIMATE_AIR_QUALITY_KEY, payloadJson, 'EX', String(ttlSeconds)],
+    ['SET', OPENAQ_META_KEY, healthMeta, 'EX', String(metaTtl)],
+    ['SET', CLIMATE_META_KEY, climateMeta, 'EX', String(metaTtl)],
+  ];
+}
+
+async function redisPipeline(commands) {
+  return cfPipeline(commands);
+}
+
+async function publishMirroredPayload(payload) {
+  const fetchedAt = Date.now();
+  const commands = buildMirrorWriteCommands(payload, CACHE_TTL, fetchedAt, OPENAQ_SOURCE_VERSION);
+  await redisPipeline(commands);
+  return {
+    fetchedAt,
+    payloadBytes: Buffer.byteLength(JSON.stringify(payload), 'utf8'),
+    recordCount: payload?.stations?.length ?? 0,
+  };
+}
+
+async function verifyMirroredKeys() {
+  const [healthPayload, climatePayload] = await Promise.all([
+    verifySeedKey(HEALTH_AIR_QUALITY_KEY),
+    verifySeedKey(CLIMATE_AIR_QUALITY_KEY),
+  ]);
+  return Boolean(healthPayload && climatePayload);
+}
+
+async function fetchAirQualityPayloadWithRetry(maxRetries = 2, delayMs = 1_000) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetchAirQualityPayload();
+    } catch (error) {
+      lastError = error;
+      if (isConfigurationError(error) || attempt >= maxRetries) break;
+      const wait = delayMs * 2 ** attempt;
+      const cause = error?.cause ? ` (cause: ${error.cause.message || error.cause.code || error.cause})` : '';
+      console.warn(`  Retry ${attempt + 1}/${maxRetries} in ${wait}ms: ${error?.message ?? error}${cause}`);
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+  throw lastError;
+}
+
+async function main() {
+  const domain = 'health';
+  const resource = 'air-quality';
+  const startMs = Date.now();
+  const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  console.log(`=== ${domain}:${resource} Seed ===`);
+  console.log(`  Run ID:  ${runId}`);
+  console.log(`  Keys:    ${HEALTH_AIR_QUALITY_KEY}, ${CLIMATE_AIR_QUALITY_KEY}`);
+
+  // Each OpenAQ branch can walk up to 20 pages sequentially with per-request timeouts.
+  // Keep the lock well above the realistic worst-case runtime to avoid overlapping cron runs.
+  const lockResult = await acquireLockSafely(`${domain}:${resource}`, runId, AIR_QUALITY_LOCK_TTL_MS, {
+    label: `${domain}:${resource}`,
+  });
+  if (lockResult.skipped) process.exit(0);
+  if (!lockResult.locked) {
+    console.log('  SKIPPED: another seed run in progress');
+    process.exit(0);
+  }
+
+  let payload;
+  try {
+    payload = await fetchAirQualityPayloadWithRetry();
+  } catch (error) {
+    await releaseLock(`${domain}:${resource}`, runId);
+    const durationMs = Date.now() - startMs;
+    const cause = error?.cause ? ` (cause: ${error.cause.message || error.cause.code || error.cause})` : '';
+    console.error(`  FETCH FAILED: ${error?.message ?? error}${cause}`);
+    await extendExistingTtl([
+      HEALTH_AIR_QUALITY_KEY,
+      CLIMATE_AIR_QUALITY_KEY,
+      OPENAQ_META_KEY,
+      CLIMATE_META_KEY,
+    ], CACHE_TTL).catch(() => {});
+    if (isConfigurationError(error)) {
+      console.log(`\n=== Fatal configuration error (${Math.round(durationMs)}ms) ===`);
+      process.exit(1);
+    }
+    console.log(`\n=== Failed gracefully (${Math.round(durationMs)}ms) ===`);
+    process.exit(0);
+  }
+
+  if (!validateAirQualityPayload(payload)) {
+    await releaseLock(`${domain}:${resource}`, runId);
+    await extendExistingTtl([
+      HEALTH_AIR_QUALITY_KEY,
+      CLIMATE_AIR_QUALITY_KEY,
+      OPENAQ_META_KEY,
+      CLIMATE_META_KEY,
+    ], CACHE_TTL).catch(() => {});
+    console.log('  SKIPPED: validation failed (empty data)');
+    process.exit(0);
+  }
+
+  try {
+    const publishResult = await publishMirroredPayload(payload);
+    const durationMs = Date.now() - startMs;
+    logSeedResult(domain, publishResult.recordCount, durationMs, {
+      payloadBytes: publishResult.payloadBytes,
+      mirroredKeys: 2,
+    });
+
+    const verified = await verifyMirroredKeys().catch(() => false);
+    if (verified) {
+      console.log('  Verified: both Redis keys present');
+    } else {
+      console.warn(`  WARNING: verification read returned null for one or more mirror keys (${HEALTH_AIR_QUALITY_KEY}, ${CLIMATE_AIR_QUALITY_KEY})`);
+    }
+
+    console.log(`\n=== Done (${Math.round(durationMs)}ms) ===`);
+    await releaseLock(`${domain}:${resource}`, runId);
+    process.exit(0);
+  } catch (error) {
+    await releaseLock(`${domain}:${resource}`, runId);
+    throw error;
+  }
+}
+
+const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/^file:\/\//, ''));
+if (isMain) {
+  main().catch((error) => {
+    const cause = error?.cause ? ` (cause: ${error.cause.message || error.cause.code || error.cause})` : '';
+    console.error('FATAL:', `${error?.message ?? error}${cause}`);
+    process.exit(1);
+  });
 }

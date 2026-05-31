@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
+import { getRedisCredentials, loadEnvFile , cfPipeline } from './_seed-utils.mjs';
 // @ts-check
 /**
  * Scenario Engine Worker — always-on Railway service

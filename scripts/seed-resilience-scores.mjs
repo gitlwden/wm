@@ -1,5 +1,10 @@
 #!/usr/bin/env node
-import { getRedisCredentials, cfPipeline } from './_seed-utils.mjs';
+import {
+  getRedisCredentials,
+  loadEnvFile,
+  logSeedResult,
+  writeFreshnessMetadata,
+  cfPipeline } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 import { isInRankableUniverse } from './shared/rankable-universe.mjs';
 
