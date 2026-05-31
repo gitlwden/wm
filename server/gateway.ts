@@ -679,8 +679,8 @@ export function createDomainGateway(
     // Local dev bypass: skip premium auth gates when not on Vercel
     // (npm run dev / tauri sidecar) so all endpoints are accessible without keys.
     const isLocalDev = true;
-    const needsLegacyProBearerGate = !internalMcpVerified && !isLocalDev && PREMIUM_RPC_PATHS.has(pathname) && !isTierGated;
-
+    //const needsLegacyProBearerGate = !internalMcpVerified && !isLocalDev && PREMIUM_RPC_PATHS.has(pathname) && !isTierGated;
+    const needsLegacyProBearerGate = false; 
     // Session resolution — extract userId from bearer token (Clerk JWT) if present.
     // Only runs for tier-gated endpoints to avoid JWKS lookup on every request.
     let sessionUserId: string | null = null;
