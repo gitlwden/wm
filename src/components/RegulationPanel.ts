@@ -65,7 +65,7 @@ export class RegulationPanel extends Panel {
   }
 
   private renderTimeline(): string {
-    const recentActions = getRecentActions(12); // Last 12 months
+    const recentActions = getRecentActions(60); // Last 5 years
 
     if (recentActions.length === 0) {
       return `<div class="empty-state">${t('components.regulation.emptyActions')}</div>`;
