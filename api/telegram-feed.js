@@ -7,20 +7,20 @@ export const config = { runtime: 'edge' };
 export default async function handler(req) {
   const corsHeaders = getCorsHeaders(req, 'GET, OPTIONS');
 
-  if (isDisallowedOrigin(req)) {
-    return jsonResponse({ error: 'Origin not allowed' }, 403, corsHeaders);
-  }
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
-  if (req.method !== 'GET') {
-    return jsonResponse({ error: 'Method not allowed' }, 405, corsHeaders);
-  }
-
-  const relayBaseUrl = getRelayBaseUrl();
-  if (!relayBaseUrl) {
-    return jsonResponse({ error: 'WS_RELAY_URL is not configured' }, 503, corsHeaders);
-  }
+  // if (isDisallowedOrigin(req)) {
+  //   return jsonResponse({ error: 'Origin not allowed' }, 403, corsHeaders);
+  // }
+  // if (req.method === 'OPTIONS') {
+  //   return new Response(null, { status: 204, headers: corsHeaders });
+  // }
+  // if (req.method !== 'GET') {
+  //   return jsonResponse({ error: 'Method not allowed' }, 405, corsHeaders);
+  // }
+  //
+  // const relayBaseUrl = getRelayBaseUrl();
+  // if (!relayBaseUrl) {
+  //   return jsonResponse({ error: 'WS_RELAY_URL is not configured' }, 503, corsHeaders);
+  // }
 
   try {
     const url = new URL(req.url);
