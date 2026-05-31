@@ -3,7 +3,7 @@ name: Seed Research & Aviation
 on:
   schedule:
     # Every 12h — aviation, research feeds, security advisories
-    - cron: '37 */12 * * *'
+    - cron: '37 7 * * *'
   workflow_dispatch:
 
 jobs:

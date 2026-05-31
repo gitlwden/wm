@@ -3,7 +3,7 @@ name: Seed Digest & Brief
 on:
   schedule:
     # Every 8h — digest dispatch + brief compose
-    - cron: '0 */8 * * *'
+    - cron: '0 7 * * *'
   workflow_dispatch:
 
 jobs:

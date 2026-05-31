@@ -3,7 +3,7 @@ name: Seed Energy Data
 on:
   schedule:
     # Every 12h — energy economy, petroleum, Hormuz, energy intelligence
-    - cron: '7 */12 * * *'
+    - cron: '7 8 * * *'
   workflow_dispatch:
 
 jobs:

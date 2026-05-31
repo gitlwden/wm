@@ -3,7 +3,7 @@ name: Seed Health & Disease
 on:
   schedule:
     # Every 12h — health, disease, air quality
-    - cron: '17 */12 * * *'
+    - cron: '17 4 * * *'
   workflow_dispatch:
 
 jobs:

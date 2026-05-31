@@ -3,7 +3,7 @@ name: Seed AI Forecasts
 on:
   schedule:
     # Every 12h — AI forecast pipeline (LLM-heavy, expensive)
-    - cron: '7 */12 * * *'
+    - cron: '7 7 * * *'
   workflow_dispatch:
 
 jobs:

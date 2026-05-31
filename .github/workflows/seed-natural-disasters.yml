@@ -3,7 +3,7 @@ name: Seed Natural Events & Earthquakes
 on:
   schedule:
     # Every 12h — earthquakes, natural events, displacement
-    - cron: '23 */12 * * *'
+    - cron: '23 0 * * *'
   workflow_dispatch:
 
 jobs:
