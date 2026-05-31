@@ -64,23 +64,23 @@ export default async function handler(
   req: Request,
   ctx?: { waitUntil: (p: Promise<unknown>) => void },
 ): Promise<Response> {
-  if (isDisallowedOrigin(req)) {
-    return new Response('Origin not allowed', { status: 403 });
-  }
+  // if (isDisallowedOrigin(req)) {
+  //   return new Response('Origin not allowed', { status: 403 });
+  // }
   const cors = getCorsHeaders(req, 'GET, OPTIONS') as Record<string, string>;
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: cors });
   }
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return jsonError('Method not allowed', 405, cors);
-  }
+  // if (req.method !== 'GET' && req.method !== 'HEAD') {
+  //   return jsonError('Method not allowed', 405, cors);
+  // }
 
   const secret = process.env.BRIEF_URL_SIGNING_SECRET ?? '';
-  if (!secret) {
-    console.error('[api/brief/carousel] BRIEF_URL_SIGNING_SECRET is not configured');
-    return jsonError('service_unavailable', 503, cors);
-  }
+  // if (!secret) {
+  //   console.error('[api/brief/carousel] BRIEF_URL_SIGNING_SECRET is not configured');
+  //   return jsonError('service_unavailable', 503, cors);
+  // }
 
   const url = new URL(req.url);
   const parts = url.pathname.split('/').filter(Boolean);

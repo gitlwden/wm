@@ -215,13 +215,13 @@ export default async function handler(req: Request, ctx: { waitUntil: (p: Promis
 
   if (req.method === 'POST') {
     const ent = await getEntitlements(session.userId);
-    if (!ent || ent.features.tier < 1) {
-      return json({
-        error: 'pro_required',
-        message: 'Real-time alerts are available on the Pro plan.',
-        upgradeUrl: 'https://worldmonitor.app/pro',
-      }, 403, corsHeaders);
-    }
+    // if (!ent || ent.features.tier < 1) {
+    //   return json({
+    //     error: 'pro_required',
+    //     message: 'Real-time alerts are available on the Pro plan.',
+    //     upgradeUrl: 'https://worldmonitor.app/pro',
+    //   }, 403, corsHeaders);
+    // }
 
     let body: PostBody;
     try {

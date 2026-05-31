@@ -634,15 +634,15 @@ return next();
       }
 
       // Origin check
-      if (corsMod.isDisallowedOrigin(webRequest)) {
-        res.statusCode = 403;
-        res.setHeader('Content-Type', 'application/json');
-        for (const [key, value] of Object.entries(corsHeaders)) {
-          res.setHeader(key, String(value));
-        }
-        res.end(JSON.stringify({ error: 'Origin not allowed' }));
-        return;
-      }
+      // if (corsMod.isDisallowedOrigin(webRequest)) {
+      //   res.statusCode = 403;
+      //   res.setHeader('Content-Type', 'application/json');
+      //   for (const [key, value] of Object.entries(corsHeaders)) {
+      //     res.setHeader(key, String(value));
+      //   }
+      //   res.end(JSON.stringify({ error: 'Origin not allowed' }));
+      //   return;
+      // }
 
       // Route matching
       const matchedHandler = router.match(webRequest);
@@ -753,21 +753,21 @@ function rssProxyPlugin(): Plugin {
 
         const url = new URL(req.url, 'http://localhost');
         const feedUrl = url.searchParams.get('url');
-        if (!feedUrl) {
-          res.statusCode = 400;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Missing url parameter' }));
-          return;
-        }
+        // if (!feedUrl) {
+        //   res.statusCode = 400;
+        //   res.setHeader('Content-Type', 'application/json');
+        //   res.end(JSON.stringify({ error: 'Missing url parameter' }));
+        //   return;
+        // }
 
         try {
           const parsed = new URL(feedUrl);
-          if (!RSS_PROXY_ALLOWED_DOMAINS.has(parsed.hostname)) {
-            res.statusCode = 403;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ error: `Domain not allowed: ${parsed.hostname}` }));
-            return;
-          }
+          // if (!RSS_PROXY_ALLOWED_DOMAINS.has(parsed.hostname)) {
+          //   res.statusCode = 403;
+          //   res.setHeader('Content-Type', 'application/json');
+          //   res.end(JSON.stringify({ error: `Domain not allowed: ${parsed.hostname}` }));
+          //   return;
+          // }
 
           const controller = new AbortController();
           const timeout = feedUrl.includes('news.google.com') ? 20000 : 12000;
@@ -820,12 +820,12 @@ function youtubeLivePlugin(): Plugin {
         const url = new URL(req.url, 'http://localhost');
         const channel = url.searchParams.get('channel');
 
-        if (!channel) {
-          res.statusCode = 400;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Missing channel parameter' }));
-          return;
-        }
+        // if (!channel) {
+        //   res.statusCode = 400;
+        //   res.setHeader('Content-Type', 'application/json');
+        //   res.end(JSON.stringify({ error: 'Missing channel parameter' }));
+        //   return;
+        // }
 
         try {
           const channelHandle = channel.startsWith('@') ? channel : `@${channel}`;

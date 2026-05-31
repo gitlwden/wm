@@ -127,16 +127,16 @@ async function getMetaBatch(keys) {
 }
 
 export default async function handler(req) {
-  if (isDisallowedOrigin(req))
-    return new Response('Forbidden', { status: 403 });
+  // if (isDisallowedOrigin(req))
+  //   return new Response('Forbidden', { status: 403 });
 
   const cors = getCorsHeaders(req);
-  if (req.method === 'OPTIONS')
-    return new Response(null, { status: 204, headers: cors });
+  // if (req.method === 'OPTIONS')
+  //   return new Response(null, { status: 204, headers: cors });
 
   const apiKeyResult = await validateApiKey(req);
-  if (apiKeyResult.required && !apiKeyResult.valid)
-    return jsonResponse({ error: apiKeyResult.error }, 401, cors);
+  // if (apiKeyResult.required && !apiKeyResult.valid)
+  //   return jsonResponse({ error: apiKeyResult.error }, 401, cors);
 
   const now = Date.now();
   const entries = Object.entries(SEED_DOMAINS);

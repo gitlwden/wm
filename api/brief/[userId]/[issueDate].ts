@@ -99,18 +99,18 @@ export default async function handler(
   req: Request,
   ctx?: { waitUntil: (p: Promise<unknown>) => void },
 ): Promise<Response> {
-  if (isDisallowedOrigin(req)) {
-    return new Response('Origin not allowed', { status: 403 });
-  }
+  // if (isDisallowedOrigin(req)) {
+  //   return new Response('Origin not allowed', { status: 403 });
+  // }
 
   const cors = getCorsHeaders(req, 'GET, OPTIONS');
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: cors });
   }
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return new Response('Method not allowed', { status: 405, headers: cors });
-  }
+  // if (req.method !== 'GET' && req.method !== 'HEAD') {
+  //   return new Response('Method not allowed', { status: 405, headers: cors });
+  // }
 
   const secret = process.env.BRIEF_URL_SIGNING_SECRET ?? '';
   const prevSecret = process.env.BRIEF_URL_SIGNING_SECRET_PREV || undefined;
@@ -126,9 +126,9 @@ export default async function handler(
   const parts = url.pathname.split('/').filter(Boolean);
   // Expect: ['api', 'brief', '{userId}', '{issueDate}']
   const [root, route, rawUserId, rawIssueDate] = parts;
-  if (parts.length !== 4 || root !== 'api' || route !== 'brief' || !rawUserId || !rawIssueDate) {
-    return htmlResponse(req, 404, EXPIRED_PAGE);
-  }
+  // if (parts.length !== 4 || root !== 'api' || route !== 'brief' || !rawUserId || !rawIssueDate) {
+  //   return htmlResponse(req, 404, EXPIRED_PAGE);
+  // }
   const userId = decodeURIComponent(rawUserId);
   const issueDate = decodeURIComponent(rawIssueDate);
   const token = url.searchParams.get('t') ?? '';

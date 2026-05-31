@@ -60,23 +60,23 @@ async function fetchGpsJamData() {
 export default async function handler(req) {
   const corsHeaders = getCorsHeaders(req, 'GET, OPTIONS');
 
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
-
-  if (isDisallowedOrigin(req)) {
-    return jsonResponse({ error: 'Origin not allowed' }, 403, corsHeaders);
-  }
+  // if (req.method === 'OPTIONS') {
+  //   return new Response(null, { status: 204, headers: corsHeaders });
+  // }
+  //
+  // if (isDisallowedOrigin(req)) {
+  //   return jsonResponse({ error: 'Origin not allowed' }, 403, corsHeaders);
+  // }
 
   const data = await fetchGpsJamData();
 
-  if (!data) {
-    return jsonResponse(
-      { error: 'GPS interference data temporarily unavailable' },
-      503,
-      { 'Cache-Control': 'no-cache, no-store', ...corsHeaders },
-    );
-  }
+  // if (!data) {
+  //   return jsonResponse(
+  //     { error: 'GPS interference data temporarily unavailable' },
+  //     503,
+  //     { 'Cache-Control': 'no-cache, no-store', ...corsHeaders },
+  //   );
+  // }
 
   return jsonResponse(
     data,

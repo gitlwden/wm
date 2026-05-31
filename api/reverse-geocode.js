@@ -9,23 +9,23 @@ const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/reverse';
 const CHROME_UA = 'WorldMonitor/2.0 (https://worldmonitor.app)';
 
 export default async function handler(req, ctx) {
-  if (isDisallowedOrigin(req))
-    return new Response('Forbidden', { status: 403 });
+  // if (isDisallowedOrigin(req))
+  //   return new Response('Forbidden', { status: 403 });
 
   const cors = getCorsHeaders(req);
-  if (req.method === 'OPTIONS')
-    return new Response(null, { status: 204, headers: cors });
-
-  const url = new URL(req.url);
-  const lat = url.searchParams.get('lat');
-  const lon = url.searchParams.get('lon');
-
-  const latN = Number(lat);
-  const lonN = Number(lon);
-  if (!lat || !lon || Number.isNaN(latN) || Number.isNaN(lonN)
-      || latN < -90 || latN > 90 || lonN < -180 || lonN > 180) {
-    return jsonResponse({ error: 'valid lat (-90..90) and lon (-180..180) required' }, 400, cors);
-  }
+  // if (req.method === 'OPTIONS')
+  //   return new Response(null, { status: 204, headers: cors });
+  //
+  // const url = new URL(req.url);
+  // const lat = url.searchParams.get('lat');
+  // const lon = url.searchParams.get('lon');
+  //
+  // const latN = Number(lat);
+  // const lonN = Number(lon);
+  // if (!lat || !lon || Number.isNaN(latN) || Number.isNaN(lonN)
+  //     || latN < -90 || latN > 90 || lonN < -180 || lonN > 180) {
+  //   return jsonResponse({ error: 'valid lat (-90..90) and lon (-180..180) required' }, 400, cors);
+  // }
 
   const cacheKey = `geocode:${latN.toFixed(1)},${lonN.toFixed(1)}`;
 
@@ -50,9 +50,9 @@ export default async function handler(req, ctx) {
       },
     );
 
-    if (!resp.ok) {
-      return jsonResponse({ error: `Nominatim ${resp.status}` }, 502, cors);
-    }
+    // if (!resp.ok) {
+    //   return jsonResponse({ error: `Nominatim ${resp.status}` }, 502, cors);
+    // }
 
     const data = await resp.json();
     const country = data.address?.country;

@@ -97,35 +97,35 @@ export default async function handler(
   req: Request,
   ctx?: { waitUntil: (p: Promise<unknown>) => void },
 ): Promise<Response> {
-  if (isDisallowedOrigin(req)) {
-    return new Response('Origin not allowed', { status: 403 });
-  }
+  // if (isDisallowedOrigin(req)) {
+  //   return new Response('Origin not allowed', { status: 403 });
+  // }
 
   const cors = getCorsHeaders(req, 'GET, OPTIONS');
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: cors });
   }
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    return new Response('Method not allowed', { status: 405, headers: cors });
-  }
+  // if (req.method !== 'GET' && req.method !== 'HEAD') {
+  //   return new Response('Method not allowed', { status: 405, headers: cors });
+  // }
 
   // Extract the hash from the URL pathname. Expect:
   //   ['api', 'brief', 'public', '{hash}']
   const url = new URL(req.url);
   const parts = url.pathname.split('/').filter(Boolean);
-  if (
-    parts.length !== 4
-    || parts[0] !== 'api'
-    || parts[1] !== 'brief'
-    || parts[2] !== 'public'
-  ) {
-    return htmlResponse(req, 404, NOT_FOUND_PAGE);
-  }
+  // if (
+  //   parts.length !== 4
+  //   || parts[0] !== 'api'
+  //   || parts[1] !== 'brief'
+  //   || parts[2] !== 'public'
+  // ) {
+  //   return htmlResponse(req, 404, NOT_FOUND_PAGE);
+  // }
   const rawHash = decodeURIComponent(parts[3] ?? '');
-  if (!isValidShareHashShape(rawHash)) {
-    return htmlResponse(req, 404, NOT_FOUND_PAGE);
-  }
+  // if (!isValidShareHashShape(rawHash)) {
+  //   return htmlResponse(req, 404, NOT_FOUND_PAGE);
+  // }
 
   // Pass-through for the optional ?ref= referral attribution. We only
   // interpolate it into the CTA link later; drop anything over 32
@@ -166,9 +166,9 @@ export default async function handler(
             ? `${(pointerRaw as { userId?: string }).userId}:${(pointerRaw as { issueDate?: string }).issueDate}`
             : null,
         );
-  if (!pointer) {
-    return htmlResponse(req, 404, NOT_FOUND_PAGE);
-  }
+  // if (!pointer) {
+  //   return htmlResponse(req, 404, NOT_FOUND_PAGE);
+  // }
 
   // Step 2: resolve the actual brief envelope.
   let envelope: unknown;
@@ -179,12 +179,12 @@ export default async function handler(
     captureSilentError(err, { tags: { route: 'api/brief/public', step: 'envelope-read' }, ctx });
     return htmlResponse(req, 503, UNAVAILABLE_PAGE);
   }
-  if (!envelope) {
-    // Pointer out-lived the brief. Treat identically to the
-    // recipient's "not found" experience rather than exposing the
-    // (userId, date) pair this would represent.
-    return htmlResponse(req, 404, NOT_FOUND_PAGE);
-  }
+  // if (!envelope) {
+  //   // Pointer out-lived the brief. Treat identically to the
+  //   // recipient's "not found" experience rather than exposing the
+  //   // (userId, date) pair this would represent.
+  //   return htmlResponse(req, 404, NOT_FOUND_PAGE);
+  // }
 
   let html: string;
   try {

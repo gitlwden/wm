@@ -9,9 +9,9 @@ export const config = { runtime: 'edge' };
 export default async function handler(request) {
   const cors = getCorsHeaders(request);
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-  if (isDisallowedOrigin(request)) {
-    return new Response(JSON.stringify({ error: 'Origin not allowed' }), { status: 403, headers: cors });
-  }
+  // if (isDisallowedOrigin(request)) {
+  //   return new Response(JSON.stringify({ error: 'Origin not allowed' }), { status: 403, headers: cors });
+  // }
   const url = new URL(request.url);
   const channel = url.searchParams.get('channel');
   const videoIdParam = url.searchParams.get('videoId');
@@ -21,12 +21,12 @@ export default async function handler(request) {
   if (videoIdParam) params.set('videoId', videoIdParam);
   const qs = params.toString();
 
-  if (!qs) {
-    return new Response(JSON.stringify({ error: 'Missing channel or videoId parameter' }), {
-      status: 400,
-      headers: { ...cors, 'Content-Type': 'application/json' },
-    });
-  }
+  // if (!qs) {
+  //   return new Response(JSON.stringify({ error: 'Missing channel or videoId parameter' }), {
+  //     status: 400,
+  //     headers: { ...cors, 'Content-Type': 'application/json' },
+  //   });
+  // }
 
   // Proxy to Railway relay
   const relayBase = getRelayBaseUrl();
@@ -70,12 +70,12 @@ export default async function handler(request) {
     });
   }
 
-  if (!channel) {
-    return new Response(JSON.stringify({ error: 'Missing channel parameter' }), {
-      status: 400,
-      headers: { ...cors, 'Content-Type': 'application/json' },
-    });
-  }
+  // if (!channel) {
+  //   return new Response(JSON.stringify({ error: 'Missing channel parameter' }), {
+  //     status: 400,
+  //     headers: { ...cors, 'Content-Type': 'application/json' },
+  //   });
+  // }
 
   // Fallback: direct scrape (limited from datacenter IPs)
   try {

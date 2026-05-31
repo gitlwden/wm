@@ -624,7 +624,7 @@ function isAuthFailure(status, text = '') {
 }
 
 function isCloudflareChallenge403(response, text = '') {
-  if (response.status !== 403 || !response.headers.get('cf-ray')) return false;
+  //if (response.status !== 403 || !response.headers.get('cf-ray')) return false;
   const contentType = String(response.headers.get('content-type') || '').toLowerCase();
   const body = String(text || '').toLowerCase();
   const looksLikeHtml = contentType.includes('text/html') || body.includes('<html');

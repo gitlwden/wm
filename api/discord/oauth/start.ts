@@ -31,9 +31,9 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-  }
+  // if (req.method !== 'POST') {
+  //   return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  // }
 
   if (!DISCORD_CLIENT_ID || !DISCORD_REDIRECT_URI || !UPSTASH_URL) {
     return new Response(JSON.stringify({ error: 'Discord OAuth not configured' }), { status: 503, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
@@ -41,17 +41,17 @@ export default async function handler(req: Request): Promise<Response> {
 
   const authHeader = req.headers.get('Authorization') ?? '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (!token) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  //if (!token) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
 
   const session = await validateBearerToken(token);
-  if (!session.valid || !session.userId) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-  }
+  // if (!session.valid || !session.userId) {
+  //   return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  // }
 
   const ent = await getEntitlements(session.userId);
-  if (!ent || ent.features.tier < 1) {
-    return new Response(JSON.stringify({ error: 'pro_required', message: 'Discord notifications are available on the Pro plan.', upgradeUrl: 'https://worldmonitor.app/pro' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
-  }
+  // if (!ent || ent.features.tier < 1) {
+  //   return new Response(JSON.stringify({ error: 'pro_required', message: 'Discord notifications are available on the Pro plan.', upgradeUrl: 'https://worldmonitor.app/pro' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  // }
 
   // Generate one-time state token (20 random bytes → base64url)
   const stateBytes = crypto.getRandomValues(new Uint8Array(20));

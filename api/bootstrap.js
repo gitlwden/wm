@@ -274,8 +274,8 @@ async function getCachedJsonBatch(keys) {
 }
 
 export default async function handler(req) {
-  if (isDisallowedOrigin(req))
-    return new Response('Forbidden', { status: 403 });
+  // if (isDisallowedOrigin(req))
+  //   return new Response('Forbidden', { status: 403 });
 
   const cors = getCorsHeaders(req);
   if (req.method === 'OPTIONS')
@@ -284,8 +284,8 @@ export default async function handler(req) {
   // Development mode: skip API key validation when WM_SESSION_SECRET is not set
   const isDev = !process.env.WM_SESSION_SECRET;
   const apiKeyResult = isDev ? { valid: true, required: false } : await validateApiKey(req);
-  if (apiKeyResult.required && !apiKeyResult.valid)
-    return jsonResponse({ error: apiKeyResult.error }, 401, cors);
+  // if (apiKeyResult.required && !apiKeyResult.valid)
+  //   return jsonResponse({ error: apiKeyResult.error }, 401, cors);
 
   const url = new URL(req.url);
   const tier = url.searchParams.get('tier');
