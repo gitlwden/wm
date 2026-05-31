@@ -226,18 +226,7 @@ async function fetchAllRows() {
 }
 
 async function redisPipeline(commands) {
-  const { url, token } = getRedisCredentials();
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(commands),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Redis pipeline failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
-  }
-  return resp.json();
+  return cfPipeline(commands);
 }
 
 async function main() {

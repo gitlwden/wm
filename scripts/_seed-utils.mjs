@@ -307,6 +307,54 @@ export function getKvToken() {
   return _cfCredentials().token;
 }
 
+/**
+ * Cloudflare KV replacement for Upstash POST /pipeline.
+ * Accepts an array of Redis-style commands and executes them via individual
+ * Cloudflare KV REST calls. Returns an array of {result} objects matching
+ * the Upstash pipeline response shape.
+ *
+ * Supported commands:
+ *   ['GET', key]
+ *   ['SET', key, value, 'EX', ttl]
+ *   ['DEL', key]
+ */
+export async function cfPipeline(commands) {
+  const { accountId, namespaceId, token } = _cfCredentials();
+  const base = kvBase(accountId, namespaceId);
+  const headers = { Authorization: `Bearer ${token}` };
+  return Promise.all(commands.map(async ([verb, key, value, exFlag, ttl]) => {
+    if (verb === 'GET') {
+      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+        headers,
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!resp.ok) return { result: null };
+      const text = await resp.text();
+      return { result: text || null };
+    }
+    if (verb === 'SET') {
+      const params = (exFlag === 'EX' && ttl) ? `?expiration_ttl=${ttl}` : '';
+      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}${params}`, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: typeof value === 'string' ? value : JSON.stringify(value),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!resp.ok) throw new Error(`KV SET ${key}: HTTP ${resp.status}`);
+      return { result: 'OK' };
+    }
+    if (verb === 'DEL') {
+      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers,
+        signal: AbortSignal.timeout(5_000),
+      });
+      return { result: resp.ok ? 1 : 0 };
+    }
+    return { result: null };
+  }));
+}
+
 // Upstash REST calls surface transient network issues through fetch/undici
 // errors rather than stable app-level error codes, so we normalize the common
 // timeout/reset/DNS variants here before deciding to skip a seed run.

@@ -40,14 +40,7 @@ const REFERENCE_INDICES = {
 const SAMPLE_COUNTRIES = Object.keys(REFERENCE_INDICES.ndgain);
 
 async function redisPipeline(url, token, commands) {
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(commands),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!resp.ok) throw new Error(`Redis pipeline HTTP ${resp.status}`);
-  return resp.json();
+  return cfPipeline(commands);
 }
 
 function toRanks(values) {

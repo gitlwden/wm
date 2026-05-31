@@ -113,17 +113,7 @@ async function redisCommand(url, token, command) {
 }
 
 async function redisPipeline(url, token, commands) {
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(commands),
-    signal: AbortSignal.timeout(SCAN_TIMEOUT_MS),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Redis pipeline failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
-  }
-  return resp.json();
+  return cfPipeline(commands);
 }
 
 /**

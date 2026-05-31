@@ -452,18 +452,7 @@ export function withPerCountryTimeout(doWork, iso3, timeoutMs = PER_COUNTRY_TIME
 }
 
 async function redisPipeline(commands) {
-  const { url, token } = getRedisCredentials();
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': CHROME_UA },
-    body: JSON.stringify(commands),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Redis pipeline failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
-  }
-  return resp.json();
+  return cfPipeline(commands);
 }
 
 // MGET-style batch read via the Upstash REST /pipeline endpoint. Returns an

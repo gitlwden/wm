@@ -64,17 +64,7 @@ export function computeIntervals(domainScores, domainWeights, draws = DRAWS) {
 }
 
 async function redisPipeline(url, token, commands) {
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(commands),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Redis pipeline HTTP ${resp.status} — ${text.slice(0, 200)}`);
-  }
-  return resp.json();
+  return cfPipeline(commands);
 }
 
 async function fetchRanking() {
