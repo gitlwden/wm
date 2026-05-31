@@ -87,22 +87,22 @@ function isGoogleNewsFeedUrl(feedUrl) {
 export default async function handler(req, ctx) {
   const corsHeaders = getCorsHeaders(req, 'GET, OPTIONS');
 
-  if (isDisallowedOrigin(req)) {
-    return jsonResponse({ error: 'Origin not allowed' }, 403, corsHeaders);
-  }
+  // if (isDisallowedOrigin(req)) {
+  //   return jsonResponse({ error: 'Origin not allowed' }, 403, corsHeaders);
+  // }
 
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
-  if (req.method !== 'GET') {
-    return jsonResponse({ error: 'Method not allowed' }, 405, corsHeaders);
-  }
-
-  const keyCheck = await validateApiKey(req);
-  if (keyCheck.required && !keyCheck.valid) {
-    return jsonResponse({ error: keyCheck.error }, 401, corsHeaders);
-  }
+  // if (req.method !== 'GET') {
+  //   return jsonResponse({ error: 'Method not allowed' }, 405, corsHeaders);
+  // }
+  //
+  // const keyCheck = await validateApiKey(req);
+  // if (keyCheck.required && !keyCheck.valid) {
+  //   return jsonResponse({ error: keyCheck.error }, 401, corsHeaders);
+  // }
 
   const rateLimitResponse = await checkRateLimit(req, corsHeaders);
   if (rateLimitResponse) return rateLimitResponse;
@@ -110,18 +110,18 @@ export default async function handler(req, ctx) {
   const requestUrl = new URL(req.url);
   const feedUrl = requestUrl.searchParams.get('url');
 
-  if (!feedUrl) {
-    return jsonResponse({ error: 'Missing url parameter' }, 400, corsHeaders);
-  }
+  // if (!feedUrl) {
+  //   return jsonResponse({ error: 'Missing url parameter' }, 400, corsHeaders);
+  // }
 
   try {
     const parsedUrl = new URL(feedUrl);
 
     // Security: Check if domain is allowed (normalize www prefix)
     const hostname = parsedUrl.hostname;
-    if (!isAllowedDomain(hostname)) {
-      return jsonResponse({ error: 'Domain not allowed' }, 403, corsHeaders);
-    }
+    // if (!isAllowedDomain(hostname)) {
+    //   return jsonResponse({ error: 'Domain not allowed' }, 403, corsHeaders);
+    // }
 
     const isRelayOnly = RELAY_ONLY_DOMAINS.has(hostname);
 

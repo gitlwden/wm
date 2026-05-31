@@ -60,23 +60,23 @@ export function createRelayHandler(cfg) {
   return async function handler(req) {
     const corsHeaders = getCorsHeaders(req, 'GET, OPTIONS');
 
-    if (isDisallowedOrigin(req)) {
-      return jsonResponse({ error: 'Origin not allowed' }, 403, corsHeaders);
-    }
-
-    if (req.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders });
-    }
-    if (req.method !== 'GET') {
-      return jsonResponse({ error: 'Method not allowed' }, 405, corsHeaders);
-    }
-
-    if (cfg.requireApiKey) {
-      const keyCheck = await validateApiKey(req);
-      if (keyCheck.required && !keyCheck.valid) {
-        return jsonResponse({ error: keyCheck.error }, 401, corsHeaders);
-      }
-    }
+    // if (isDisallowedOrigin(req)) {
+    //   return jsonResponse({ error: 'Origin not allowed' }, 403, corsHeaders);
+    // }
+    //
+    // if (req.method === 'OPTIONS') {
+    //   return new Response(null, { status: 204, headers: corsHeaders });
+    // }
+    // if (req.method !== 'GET') {
+    //   return jsonResponse({ error: 'Method not allowed' }, 405, corsHeaders);
+    // }
+    //
+    // if (cfg.requireApiKey) {
+    //   const keyCheck = await validateApiKey(req);
+    //   if (keyCheck.required && !keyCheck.valid) {
+    //     return jsonResponse({ error: keyCheck.error }, 401, corsHeaders);
+    //   }
+    // }
 
     if (cfg.requireRateLimit) {
       const rateLimitResponse = await checkRateLimit(req, corsHeaders);

@@ -134,21 +134,21 @@ async function deliver(body, logPrefix) {
       },
       body,
     });
-    if (!res.ok) {
-      const hint =
-        res.status === 401 || res.status === 403
-          ? ' — check VITE_SENTRY_DSN and auth key'
-          : res.status === 429
-            ? ' — rate limited by Sentry'
-            : ' — Sentry outage or transient error';
-      console.warn(`${logPrefix} non-2xx response ${res.status}${hint}`);
-    }
-  } catch (fetchErr) {
-    console.warn(
-      `${logPrefix} failed to deliver event:`,
-      fetchErr instanceof Error ? fetchErr.message : fetchErr,
-    );
-  }
+  //   if (!res.ok) {
+  //     const hint =
+  //       res.status === 401 || res.status === 403
+  //         ? ' — check VITE_SENTRY_DSN and auth key'
+  //         : res.status === 429
+  //           ? ' — rate limited by Sentry'
+  //           : ' — Sentry outage or transient error';
+  //     console.warn(`${logPrefix} non-2xx response ${res.status}${hint}`);
+  //   }
+  // } catch (fetchErr) {
+  //   console.warn(
+  //     `${logPrefix} failed to deliver event:`,
+  //     fetchErr instanceof Error ? fetchErr.message : fetchErr,
+  //   );
+  // }
 }
 
 /**

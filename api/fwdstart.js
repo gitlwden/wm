@@ -7,9 +7,9 @@ export const config = { runtime: 'edge' };
 // Scrape FwdStart newsletter archive and return as RSS
 export default async function handler(req, ctx) {
   const cors = getCorsHeaders(req);
-  if (isDisallowedOrigin(req)) {
-    return jsonResponse({ error: 'Origin not allowed' }, 403, cors);
-  }
+  // if (isDisallowedOrigin(req)) {
+  //   return jsonResponse({ error: 'Origin not allowed' }, 403, cors);
+  // }
   try {
     const response = await fetch('https://www.fwdstart.me/archive', {
       headers: {

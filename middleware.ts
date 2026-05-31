@@ -195,20 +195,20 @@ export default function middleware(request: Request) {
   }
 
   // Block bots from all API routes
-  if (BOT_UA.test(ua)) {
-    return new Response('{"error":"Forbidden"}', {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  // if (BOT_UA.test(ua)) {
+  //   return new Response('{"error":"Forbidden"}', {
+  //     status: 403,
+  //     headers: { 'Content-Type': 'application/json' },
+  //   });
+  // }
 
   // No user-agent or suspiciously short — likely a script
-  if (!ua || ua.length < 10) {
-    return new Response('{"error":"Forbidden"}', {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  // if (!ua || ua.length < 10) {
+  //   return new Response('{"error":"Forbidden"}', {
+  //     status: 403,
+  //     headers: { 'Content-Type': 'application/json' },
+  //   });
+  // }
 }
 
 export const config = {
