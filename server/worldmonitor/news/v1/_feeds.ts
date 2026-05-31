@@ -171,7 +171,10 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'Crunchbase News', url: 'https://news.crunchbase.com/feed/' },
     ],
     funding: [
-      { name: 'VC News', url: gn('("Series A" OR "Series B" OR "Series C" OR "venture capital" OR "funding round") when:2d') },
+      { name: 'TechCrunch Venture', url: 'https://techcrunch.com/category/venture/feed/' },
+      { name: 'Crunchbase News', url: 'https://news.crunchbase.com/feed/' },
+      { name: 'SaaStr', url: 'https://www.saastr.com/feed/' },
+      { name: 'CB Insights', url: 'https://www.cbinsights.com/research/feed/' },
     ],
   },
 
