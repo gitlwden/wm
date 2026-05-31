@@ -262,15 +262,16 @@ export class DeductionPanel extends Panel {
             console.error('[DeductionPanel] Error:', err);
             this.resultContainer.className = 'deduction-result error';
             const status = (err as any)?.status ?? (err as any)?.statusCode;
-      if (status === 401 || status === 403) {
-        this.resultContainer.textContent = '【学习模式】后端返回了 403，权限校验依然在后端生效！';
-    } else if (status === 429) {
-        this.resultContainer.textContent = 'Rate limited — please wait a moment and try again.';
-      } else if (status === 503 || status === 502) {
-        this.resultContainer.textContent = 'AI service temporarily unavailable. Please try again shortly.';
-      } else {
-        this.resultContainer.textContent = 'An error occurred while analyzing the situation. Check console for details.';
-      }
+            const msg = (err as any)?.message ?? String(err);
+            if (status === 401 || status === 403) {
+              this.resultContainer.textContent = `Pro access required (${status}). Sign in or add an API key in Settings to use Deduct Situation. ${msg}`;
+            } else if (status === 429) {
+              this.resultContainer.textContent = 'Rate limited — please wait a moment and try again.';
+            } else if (status === 503 || status === 502) {
+              this.resultContainer.textContent = 'AI service temporarily unavailable. Please try again shortly.';
+            } else {
+              this.resultContainer.textContent = 'An error occurred while analyzing the situation. Check console for details.';
+            }
         } finally {
             this.isSubmitting = false;
             if (this.element?.isConnected) {

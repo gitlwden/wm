@@ -11,7 +11,6 @@ const ENV = (() => {
 
 const WS_API_URL = ENV.VITE_WS_API_URL || '';
 const DEFAULT_WEB_API_URL = 'https://api.worldmonitor.app';
-const KEYED_CLOUD_API_PATTERN = /^\/api\/(?:[^/]+\/v1\/|bootstrap(?:\?|$)|polymarket(?:\?|$)|ais-snapshot(?:\?|$))/;
 
 const DEFAULT_REMOTE_HOSTS: Record<string, string> = {
   tech: WS_API_URL,
@@ -539,19 +538,6 @@ export async function waitForSidecarReady(timeoutMs = 3000): Promise<boolean> {
   return false;
 }
 
-function isLocalOnlyApiTarget(target: string): boolean {
-  // Security boundary: endpoints that can carry local secrets must use the
-  // `/api/local-*` prefix so cloud fallback is automatically blocked.
-  return target.startsWith('/api/local-');
-}
-
-function isKeyFreeApiTarget(target: string): boolean {
-  return target.startsWith('/api/register-interest')
-    || target.startsWith('/api/leads/v1/register-interest')
-    || target.startsWith('/api/leads/v1/submit-contact')
-    || target.startsWith('/api/version');
-}
-
 async function fetchLocalWithStartupRetry(
   nativeFetch: typeof window.fetch,
   localUrl: string,
@@ -652,85 +638,38 @@ export function installRuntimeFetchPatch(): void {
 
     const localUrl = `${getApiBaseUrl()}${target}`;
     if (debug) console.log(`[fetch] intercept → ${target}`);
-    let allowCloudFallback = !isLocalOnlyApiTarget(target);
 
-    if (allowCloudFallback && !isKeyFreeApiTarget(target)) {
+    const t0 = performance.now();
+    let response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, localInit);
+    if (debug) console.log(`[fetch] ${target} → ${response.status} (${Math.round(performance.now() - t0)}ms)`);
+
+    // Token may be stale after a sidecar restart — refresh and retry once.
+    // Skip retry if we recently failed (avoid doubling every request during auth outages).
+    if (response.status === 401 && localApiToken && Date.now() > authRetryCooldownUntil) {
+      if (debug) console.log(`[fetch] 401 from sidecar, refreshing token and retrying`);
       try {
-        const { getSecretState, secretsReady } = await import('@/services/runtime-config');
-        await Promise.race([secretsReady, new Promise<void>(r => setTimeout(r, 2000))]);
-        const wmKeyState = getSecretState('WORLDMONITOR_API_KEY');
-        if (!wmKeyState.present || !wmKeyState.valid) {
-          allowCloudFallback = false;
-        }
+        const { tryInvokeTauri } = await import('@/services/tauri-bridge');
+        localApiToken = await tryInvokeTauri<string>('get_local_api_token');
+        tokenFetchedAt = Date.now();
       } catch {
-        allowCloudFallback = false;
+        localApiToken = null;
+        tokenFetchedAt = 0;
+      }
+      if (localApiToken) {
+        const retryHeaders = new Headers(init?.headers);
+        retryHeaders.set('Authorization', `Bearer ${localApiToken}`);
+        response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, { ...init, headers: retryHeaders });
+        if (debug) console.log(`[fetch] retry ${target} → ${response.status}`);
+        if (response.status === 401) {
+          authRetryCooldownUntil = Date.now() + 60_000;
+          if (debug) console.log(`[fetch] auth retry failed, suppressing retries for 60s`);
+        } else {
+          authRetryCooldownUntil = 0;
+        }
       }
     }
 
-    const cloudFallback = async () => {
-      if (!allowCloudFallback) {
-        throw new Error(`Cloud fallback blocked for ${target}`);
-      }
-      const cloudUrl = `${getRemoteApiBaseUrl()}${target}`;
-      if (debug) console.log(`[fetch] cloud fallback → ${cloudUrl}`);
-      const cloudHeaders = new Headers(init?.headers);
-      if (KEYED_CLOUD_API_PATTERN.test(target)) {
-        const { getRuntimeConfigSnapshot } = await import('@/services/runtime-config');
-        const wmKeyValue = getRuntimeConfigSnapshot().secrets['WORLDMONITOR_API_KEY']?.value;
-        if (wmKeyValue) {
-          cloudHeaders.set('X-WorldMonitor-Key', wmKeyValue);
-        }
-      }
-      return nativeFetch(cloudUrl, { ...init, headers: cloudHeaders });
-    };
-
-    try {
-      const t0 = performance.now();
-      let response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, localInit);
-      if (debug) console.log(`[fetch] ${target} → ${response.status} (${Math.round(performance.now() - t0)}ms)`);
-
-      // Token may be stale after a sidecar restart — refresh and retry once.
-      // Skip retry if we recently failed (avoid doubling every request during auth outages).
-      if (response.status === 401 && localApiToken && Date.now() > authRetryCooldownUntil) {
-        if (debug) console.log(`[fetch] 401 from sidecar, refreshing token and retrying`);
-        try {
-          const { tryInvokeTauri } = await import('@/services/tauri-bridge');
-          localApiToken = await tryInvokeTauri<string>('get_local_api_token');
-          tokenFetchedAt = Date.now();
-        } catch {
-          localApiToken = null;
-          tokenFetchedAt = 0;
-        }
-        if (localApiToken) {
-          const retryHeaders = new Headers(init?.headers);
-          retryHeaders.set('Authorization', `Bearer ${localApiToken}`);
-          response = await fetchLocalWithStartupRetry(nativeFetch, localUrl, { ...init, headers: retryHeaders });
-          if (debug) console.log(`[fetch] retry ${target} → ${response.status}`);
-          if (response.status === 401) {
-            authRetryCooldownUntil = Date.now() + 60_000;
-            if (debug) console.log(`[fetch] auth retry failed, suppressing retries for 60s`);
-          } else {
-            authRetryCooldownUntil = 0;
-          }
-        }
-      }
-
-      if (!response.ok) {
-        if (!allowCloudFallback) {
-          if (debug) console.log(`[fetch] local-only endpoint ${target} returned ${response.status}; skipping cloud fallback`);
-          return response;
-        }
-        if (debug) console.log(`[fetch] local ${response.status}, falling back to cloud`);
-        return cloudFallback();
-      }
-      return response;
-    } catch (error) {
-      if (debug) console.warn(`[runtime] Local API unavailable for ${target}`, error);
-      if (!allowCloudFallback) {
-        throw error;
-      }
-      return cloudFallback();
-    }
+    return response;
   };
 
   (window as unknown as Record<string, unknown>).__wmFetchPatched = true;
