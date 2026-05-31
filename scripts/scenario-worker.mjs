@@ -99,5 +99,6 @@ function getCredentials() {
  * @param {unknown[]} args
  */
 async function redisCmd(cmd, args) {
-  return cfPipeline(commands);
+  const results = await cfPipeline([[cmd.toUpperCase(), ...args]]);
+  return results[0];
 }

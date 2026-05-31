@@ -103,6 +103,18 @@ function roundMetric(value, digits = 3) {
   return Math.round(numeric * factor) / factor;
 }
 
-async function fetchTextDirect(url, accept, timeoutMs) {
+async function redisPipeline(commands) {
   return cfPipeline(commands);
+}
+
+async function fetchTextDirect(url, accept, timeoutMs) {
+  const response = await fetch(url, {
+    headers: { Accept: accept, 'User-Agent': CHROME_UA },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!response.ok) {
+    const err = Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
+    throw err;
+  }
+  return { text: await response.text(), contentType: response.headers.get('content-type') || '' };
 }

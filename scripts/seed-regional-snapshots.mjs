@@ -59,5 +59,25 @@ const SEED_META_KEY = 'intelligence:regional-snapshots';
  * @returns {Promise<{ sources: Record<string, any>, metaSources: Record<string, any> }>}
  */
 async function readAllInputs() {
-  return cfPipeline(commands);
-}
+  const keys = [...ALL_INPUT_KEYS, ...ALL_META_KEYS];
+  const commands = keys.map((k) => ['GET', k]);
+  const results = await cfPipeline(commands);
+
+  /** @type {Record<string, any>} */
+  const sources = {};
+  /** @type {Record<string, any>} */
+  const metaSources = {};
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    const target = i < ALL_INPUT_KEYS.length ? sources : metaSources;
+    const raw = results[i]?.result;
+    if (raw === null || raw === undefined) {
+      target[key] = null;
+      continue;
+    }
+    try {
+      target[key] = JSON.parse(raw);
+    } catch {
+      target[key] = null;
+    }
+  }

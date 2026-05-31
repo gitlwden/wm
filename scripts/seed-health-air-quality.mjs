@@ -308,6 +308,22 @@ function isConfigurationError(error) {
   return error instanceof SeedConfigurationError || error?.code === 'SEED_CONFIGURATION_ERROR';
 }
 
-async function fetchJson(url, label, headers = {}) {
+async function redisPipeline(commands) {
   return cfPipeline(commands);
+}
+
+async function fetchJson(url, label, headers = {}) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': CHROME_UA,
+      ...headers,
+    },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    throw new Error(`${label}: HTTP ${response.status} ${body.slice(0, 200)}`.trim());
+  }
+  return response.json();
 }

@@ -21,5 +21,14 @@ const INPUT_KEYS = [
 ];
 
 async function fetchInputData() {
-  return cfPipeline(commands);
+  const commands = INPUT_KEYS.map(k => ['GET', k]);
+  const results = await cfPipeline(commands);
+  const data = {};
+  for (let i = 0; i < INPUT_KEYS.length; i++) {
+    const raw = results[i]?.result;
+    if (raw) {
+      try { data[INPUT_KEYS[i]] = JSON.parse(raw); } catch { /* skip */ }
+    }
+  }
+  return data;
 }

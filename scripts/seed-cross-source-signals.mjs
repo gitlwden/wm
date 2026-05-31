@@ -158,5 +158,13 @@ function safeNum(v) {
 
 // ── Read all source keys in parallel via Upstash pipeline ─────────────────────
 async function readAllSourceKeys() {
-  return cfPipeline(commands);
+  const commands = SOURCE_KEYS.map(k => ['GET', k]);
+  const results = await cfPipeline(commands);
+  const data = {};
+  for (let i = 0; i < SOURCE_KEYS.length; i++) {
+    const raw = results[i]?.result;
+    if (!raw) continue;
+    try { data[SOURCE_KEYS[i]] = JSON.parse(raw); } catch { /* skip malformed */ }
+  }
+  return data;
 }
