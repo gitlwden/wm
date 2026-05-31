@@ -200,3 +200,131 @@ export function buildAllCountriesMap(countries) {
 async function redisPipeline(commands) {
   return cfPipeline(commands);
 }
+export async function main() {
+  const startedAt = Date.now();
+  const runId = `owid-energy-mix:${startedAt}`;
+  const lock = await acquireLockSafely(LOCK_DOMAIN, runId, LOCK_TTL_MS, { label: LOCK_DOMAIN });
+  if (lock.skipped) return;
+  if (!lock.locked) {
+    console.log('[owid-energy-mix] Lock held, skipping');
+    return;
+  }
+
+  try {
+    const csvText = await withRetry(
+      () =>
+        fetch(OWID_CSV_URL, {
+          headers: { 'User-Agent': CHROME_UA },
+          signal: AbortSignal.timeout(30_000),
+        }).then((r) => {
+          if (!r.ok) throw new Error(`OWID HTTP ${r.status}`);
+          return r.text();
+        }),
+      2,
+      750,
+    );
+
+    const countries = parseOwidCsv(csvText);
+
+    if (countries.size < MIN_COUNTRIES) {
+      throw new Error(
+        `OWID: only ${countries.size} countries parsed, expected >=${MIN_COUNTRIES}`,
+      );
+    }
+
+    const prevMeta = await redisGet(OWID_META_KEY).catch(() => null);
+    if (prevMeta && typeof prevMeta === 'object' && prevMeta.recordCount > 0) {
+      const drop =
+        ((prevMeta.recordCount - countries.size) / prevMeta.recordCount) * 100;
+      if (drop > MAX_DROP_PCT) {
+        throw new Error(
+          `OWID: country count dropped ${drop.toFixed(1)}% vs previous ${prevMeta.recordCount}`,
+        );
+      }
+    }
+
+    const exposureIndex = buildExposureIndex(countries);
+    const allCountriesMap = buildAllCountriesMap(countries);
+    const allCountriesCount = Object.keys(allCountriesMap).length;
+    if (allCountriesCount < MIN_COUNTRIES) {
+      throw new Error(
+        `OWID _all: only ${allCountriesCount} entries, expected >=${MIN_COUNTRIES}`,
+      );
+    }
+
+    const metaPayload = {
+      fetchedAt: Date.now(),
+      recordCount: countries.size,
+      sourceVersion: 'owid-energy-mix-v1',
+    };
+
+    const commands = [];
+    for (const [iso2, payload] of countries) {
+      commands.push([
+        'SET',
+        `${OWID_ENERGY_MIX_KEY_PREFIX}${iso2}`,
+        JSON.stringify(payload),
+        'EX',
+        OWID_TTL_SECONDS,
+      ]);
+    }
+    commands.push([
+      'SET',
+      OWID_EXPOSURE_INDEX_KEY,
+      JSON.stringify(exposureIndex),
+      'EX',
+      OWID_TTL_SECONDS,
+    ]);
+    // Full ISO2 list — used by failure-preservation path to extend TTL on
+    // ALL per-country keys, including countries outside the top-20 fuel buckets.
+    commands.push([
+      'SET',
+      OWID_COUNTRY_LIST_KEY,
+      JSON.stringify([...countries.keys()]),
+      'EX',
+      OWID_TTL_SECONDS,
+    ]);
+    // Bulk map keyed by ISO2 — compact shape without redundant fields.
+    commands.push([
+      'SET',
+      OWID_ALL_KEY,
+      JSON.stringify(allCountriesMap),
+      'EX',
+      OWID_TTL_SECONDS,
+    ]);
+    commands.push([
+      'SET',
+      OWID_META_KEY,
+      JSON.stringify(metaPayload),
+      'EX',
+      OWID_TTL_SECONDS, // must outlive the monthly cron interval (35 days)
+    ]);
+
+    const results = await redisPipeline(commands);
+    const failures = results.filter((r) => r?.error || r?.result === 'ERR');
+    if (failures.length > 0) {
+      throw new Error(
+        `Redis pipeline: ${failures.length}/${commands.length} commands failed`,
+      );
+    }
+
+    logSeedResult('economic:owid-energy-mix', countries.size, Date.now() - startedAt, {
+      exposureYear: exposureIndex.year,
+    });
+    console.log(`[owid-energy-mix] Seeded ${countries.size} countries`);
+  } catch (err) {
+    await preservePreviousSnapshot(String(err)).catch((e) =>
+      console.error('[owid-energy-mix] Failed to preserve snapshot:', e),
+    );
+    throw err;
+  } finally {
+    await releaseLock(LOCK_DOMAIN, runId);
+  }
+}
+
+if (process.argv[1]?.endsWith('seed-owid-energy-mix.mjs')) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -92,3 +92,126 @@ export function buildElectricityIndex(regionData, date) {
 async function redisPipeline(commands) {
   return cfPipeline(commands);
 }
+export async function main() {
+  const startedAt = Date.now();
+  const runId = `electricity-prices:${startedAt}`;
+  const lock = await acquireLockSafely(LOCK_DOMAIN, runId, LOCK_TTL_MS, { label: LOCK_DOMAIN });
+  if (lock.skipped) return;
+  if (!lock.locked) {
+    console.log('[electricity] Lock held, skipping');
+    return;
+  }
+
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 24 * 3600 * 1000);
+  const dateStr = isoDate(today);
+
+  const entsoToken = process.env.ENTSO_E_TOKEN;
+  const eiaKey = process.env.EIA_API_KEY;
+
+  let entsoResults = [];
+  let eiaResults = [];
+
+  try {
+    // ENTSO-E (EU day-ahead prices)
+    if (!entsoToken) {
+      console.warn('[electricity] ENTSO_E_TOKEN not set — skipping ENTSO-E');
+    } else {
+      entsoResults = await fetchAllEntsoE(entsoToken, today, yesterday);
+      console.log(`[electricity] ENTSO-E: ${entsoResults.length} regions`);
+    }
+
+    // EIA-930 (US demand data)
+    if (!eiaKey) {
+      console.warn('[electricity] EIA_API_KEY not set — skipping EIA-930');
+    } else {
+      eiaResults = await fetchAllEia(eiaKey, today);
+      console.log(`[electricity] EIA-930: ${eiaResults.length} regions`);
+    }
+
+    // Check EU coverage threshold — preserve EU snapshot but still write US data
+    if (entsoToken && entsoResults.length < MIN_ENTSO_REGIONS) {
+      const euKeys = ENTSO_E_REGIONS.map((r) => r.region);
+      await preservePreviousSnapshot(
+        `Only ${entsoResults.length} ENTSO-E regions returned valid prices (min: ${MIN_ENTSO_REGIONS})`,
+        euKeys,
+      );
+      if (eiaResults.length > 0) {
+        const usCommands = eiaResults.map((entry) => [
+          'SET', `${ELECTRICITY_KEY_PREFIX}${entry.region}`, JSON.stringify(entry), 'EX', ELECTRICITY_TTL_SECONDS,
+        ]);
+        await redisPipeline(usCommands);
+        console.log(`[electricity] EU below threshold but wrote ${eiaResults.length} US regions`);
+      }
+      return;
+    }
+
+    const allRegions = [...entsoResults, ...eiaResults];
+    if (allRegions.length === 0) {
+      console.warn('[electricity] No data from any source — skipping write');
+      return;
+    }
+
+    const index = buildElectricityIndex(entsoResults, dateStr);
+    const metaPayload = {
+      fetchedAt: Date.now(),
+      recordCount: allRegions.length,
+      sourceVersion: 'electricity-prices-v1',
+    };
+
+    const commands = [];
+    for (const entry of allRegions) {
+      commands.push([
+        'SET',
+        `${ELECTRICITY_KEY_PREFIX}${entry.region}`,
+        JSON.stringify(entry),
+        'EX',
+        ELECTRICITY_TTL_SECONDS,
+      ]);
+    }
+    commands.push([
+      'SET',
+      ELECTRICITY_INDEX_KEY,
+      JSON.stringify(index),
+      'EX',
+      ELECTRICITY_TTL_SECONDS,
+    ]);
+    commands.push([
+      'SET',
+      ELECTRICITY_META_KEY,
+      JSON.stringify(metaPayload),
+      'EX',
+      ELECTRICITY_TTL_SECONDS,
+    ]);
+
+    const results = await redisPipeline(commands);
+    const failures = results.filter((r) => r?.error || r?.result === 'ERR');
+    if (failures.length > 0) {
+      throw new Error(`Redis pipeline: ${failures.length}/${commands.length} commands failed`);
+    }
+
+    logSeedResult('energy:electricity-prices', allRegions.length, Date.now() - startedAt, {
+      entsoRegions: entsoResults.length,
+      eiaRegions: eiaResults.length,
+    });
+    console.log(`[electricity] Seeded ${allRegions.length} regions (${entsoResults.length} ENTSO-E, ${eiaResults.length} EIA-930)`);
+  } catch (err) {
+    const allKnownRegions = [
+      ...ENTSO_E_REGIONS.map((r) => r.region),
+      ...EIA_REGIONS.map((r) => r.region),
+    ];
+    await preservePreviousSnapshot(String(err), allKnownRegions).catch((e) =>
+      console.error('[electricity] Failed to preserve snapshot:', e),
+    );
+    throw err;
+  } finally {
+    await releaseLock(LOCK_DOMAIN, runId);
+  }
+}
+
+if (process.argv[1]?.endsWith('seed-electricity-prices.mjs')) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

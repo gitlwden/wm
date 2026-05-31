@@ -199,3 +199,123 @@ export function buildAllCountriesMap(countries) {
 async function redisPipeline(commands) {
   return cfPipeline(commands);
 }
+export async function main() {
+  const startedAt = Date.now();
+  const runId = `energy:ember:${startedAt}`;
+  const lock = await acquireLockSafely(LOCK_DOMAIN, runId, LOCK_TTL_MS, { label: LOCK_DOMAIN });
+  if (lock.skipped) {
+    console.log('[EmberElectricity] Lock held by concurrent run, skipping');
+    return;
+  }
+  if (!lock.locked) {
+    console.log('[EmberElectricity] Lock held by another run, skipping');
+    return;
+  }
+
+  let oldAllMap = null;
+  let newCountryKeys = null;
+  let dataWritten = false;
+
+  try {
+    const csvText = await withRetry(
+      () =>
+        fetch(EMBER_CSV_URL, {
+          headers: { 'User-Agent': CHROME_UA },
+          signal: AbortSignal.timeout(5 * 60 * 1000), // 5 min — large CSV
+        }).then((r) => {
+          if (!r.ok) throw new Error(`Ember HTTP ${r.status}`);
+          return r.text();
+        }),
+      2,
+      2000,
+    );
+
+    const countries = parseEmberCsv(csvText);
+    console.log(`[EmberElectricity] Parsed ${countries.size} countries`);
+
+    if (countries.size < MIN_COUNTRIES) {
+      throw new Error(
+        `Ember: only ${countries.size} countries parsed, expected >=${MIN_COUNTRIES}`,
+      );
+    }
+
+    // Count-drop guard: abort if new count < 75% of previous
+    const prevMeta = await redisGet(EMBER_META_KEY).catch(() => null);
+    if (prevMeta && typeof prevMeta === 'object' && prevMeta.recordCount > 0) {
+      if (countries.size < prevMeta.recordCount * MIN_COUNT_RATIO) {
+        throw new Error(
+          `Ember: country count dropped from ${prevMeta.recordCount} to ${countries.size} (<75% threshold) — aborting`,
+        );
+      }
+    }
+
+    newCountryKeys = new Set(countries.keys());
+
+    const allCountriesMap = buildAllCountriesMap(countries);
+
+    const metaPayload = {
+      fetchedAt: Date.now(),
+      recordCount: countries.size,
+      sourceVersion: 'ember-monthly-v1',
+    };
+
+    // Stash old _all for restore on failure
+    oldAllMap = await redisGet(EMBER_ALL_KEY).catch(() => null);
+
+    // Phase A: write all per-country keys + _all in a single pipeline
+    const dataCommands = [];
+    for (const [iso2, payload] of countries) {
+      dataCommands.push([
+        'SET',
+        `${EMBER_KEY_PREFIX}${iso2}`,
+        JSON.stringify(payload),
+        'EX',
+        EMBER_TTL_SECONDS,
+      ]);
+    }
+    dataCommands.push([
+      'SET',
+      EMBER_ALL_KEY,
+      JSON.stringify(allCountriesMap),
+      'EX',
+      EMBER_TTL_SECONDS,
+    ]);
+
+    // DEL obsolete per-country keys no longer in the new dataset
+    const oldIso2Set = oldAllMap && typeof oldAllMap === 'object' ? new Set(Object.keys(oldAllMap)) : new Set();
+    for (const iso2 of oldIso2Set) {
+      if (!newCountryKeys.has(iso2)) {
+        dataCommands.push(['DEL', `${EMBER_KEY_PREFIX}${iso2}`]);
+      }
+    }
+
+    const dataResults = await redisPipeline(dataCommands);
+    const dataFailures = dataResults.filter((r) => r?.error || r?.result === 'ERR');
+    if (dataFailures.length > 0) {
+      throw new Error(
+        `Redis pipeline: ${dataFailures.length}/${dataCommands.length} data commands failed`,
+      );
+    }
+    dataWritten = true;
+
+    // Phase B: seed-meta (only after all data is fully written)
+    await redisPipeline([['SET', EMBER_META_KEY, JSON.stringify(metaPayload), 'EX', EMBER_TTL_SECONDS]]);
+
+    logSeedResult('energy:ember', countries.size, Date.now() - startedAt);
+    console.log(`[EmberElectricity] Seeded ${countries.size} countries`);
+  } catch (err) {
+    await preservePreviousSnapshot(String(err), oldAllMap, newCountryKeys, dataWritten).catch((e) =>
+      console.error('[EmberElectricity] Failed to preserve snapshot:', e),
+    );
+    throw err;
+  } finally {
+    await releaseLock(LOCK_DOMAIN, runId);
+  }
+}
+
+if (process.argv[1]?.endsWith('seed-ember-electricity.mjs')) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

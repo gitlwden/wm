@@ -185,3 +185,130 @@ export function computeCountryLevelExposure(nearestRouteIds, coastSide, hs2) {
 async function redisPipeline(commands) {
   return cfPipeline(commands);
 }
+export async function main() {
+  const startedAt = Date.now();
+  const runId = `${LOCK_DOMAIN}:${startedAt}`;
+  const lock = await acquireLockSafely(LOCK_DOMAIN, runId, LOCK_TTL_MS, { label: LOCK_DOMAIN });
+
+  if (lock.skipped) {
+    const allKeys = Object.keys(COUNTRY_PORT_CLUSTERS)
+      .filter(k => k !== '_comment' && k.length === 2)
+      .flatMap(iso2 => HS2_CODES.map(hs2 => `${KEY_PREFIX}${iso2}:${hs2}:v1`));
+    await extendExistingTtl([...allKeys, META_KEY], TTL_SECONDS)
+      .catch(e => console.warn('[chokepoint-exposure] TTL extension (skipped) failed:', e.message));
+    return;
+  }
+  if (!lock.locked) {
+    console.log('[chokepoint-exposure] Lock held, skipping');
+    return;
+  }
+
+  /** @param {number} count @param {string} [status] */
+  const writeMeta = async (count, status = 'ok') => {
+    const meta = JSON.stringify({ fetchedAt: Date.now(), recordCount: count, status });
+    await redisPipeline([['SET', META_KEY, meta, 'EX', TTL_SECONDS * 3]])
+      .catch(e => console.warn('[chokepoint-exposure] Failed to write seed-meta:', e.message));
+  };
+
+  try {
+    const countries = Object.entries(COUNTRY_PORT_CLUSTERS).filter(
+      ([k]) => k !== '_comment' && k.length === 2,
+    );
+    const iso2List = countries.map(([iso2]) => iso2);
+
+    console.log(`[chokepoint-exposure] Loading Comtrade bilateral data for ${iso2List.length} countries...`);
+    const comtradeMap = await loadComtradeData(iso2List);
+    console.log(`[chokepoint-exposure] Comtrade data loaded for ${comtradeMap.size}/${iso2List.length} countries`);
+    console.log(`[chokepoint-exposure] Computing exposure for ${countries.length} countries × ${HS2_CODES.length} HS2 code(s)...`);
+
+    const commands = [];
+    let writtenCount = 0;
+    let flowWeightedCount = 0;
+    let fallbackCount = 0;
+
+    /** @param {object[]} exposures */
+    const buildVulnIndex = (exposures) => {
+      const weights = [0.5, 0.3, 0.2];
+      return Math.round(
+        exposures.slice(0, 3).reduce((sum, e, i) => sum + e.exposureScore * weights[i], 0) * 10,
+      ) / 10;
+    };
+
+    for (const hs2 of HS2_CODES) {
+      for (const [iso2, cluster] of countries) {
+        const comtradeProducts = comtradeMap.get(iso2);
+        let result;
+
+        if (comtradeProducts && comtradeProducts.length > 0) {
+          const exposures = computeFlowWeightedExposures(iso2, hs2, comtradeProducts);
+          if (exposures.length > 0 && exposures.some(e => e.exposureScore > 0)) {
+            const coastSide = cluster.coastSide ?? '';
+            if (exposures[0]) exposures[0] = { ...exposures[0], coastSide };
+            result = {
+              exposures,
+              primaryChokepointId: exposures[0]?.chokepointId ?? '',
+              vulnerabilityIndex: buildVulnIndex(exposures),
+            };
+            flowWeightedCount++;
+          } else {
+            result = computeCountryLevelExposure(cluster.nearestRouteIds ?? [], cluster.coastSide ?? '', hs2);
+            fallbackCount++;
+          }
+        } else {
+          result = computeCountryLevelExposure(cluster.nearestRouteIds ?? [], cluster.coastSide ?? '', hs2);
+          fallbackCount++;
+        }
+
+        const payload = JSON.stringify({
+          iso2,
+          hs2,
+          ...result,
+          fetchedAt: new Date().toISOString(),
+        });
+        commands.push(['SET', `${KEY_PREFIX}${iso2}:${hs2}:v1`, payload, 'EX', TTL_SECONDS]);
+        writtenCount++;
+      }
+    }
+
+    commands.push([
+      'SET', META_KEY,
+      JSON.stringify({ fetchedAt: Date.now(), recordCount: writtenCount, status: 'ok' }),
+      'EX', TTL_SECONDS * 3,
+    ]);
+
+    const results = await redisPipeline(commands);
+    const failures = results.filter(r => r?.error || r?.result === 'ERR');
+    if (failures.length > 0) {
+      throw new Error(`Redis pipeline: ${failures.length}/${commands.length} commands failed`);
+    }
+
+    logSeedResult('supply_chain:chokepoint-exposure', writtenCount, Date.now() - startedAt, {
+      countries: countries.length,
+      hs2Codes: HS2_CODES,
+      flowWeighted: flowWeightedCount,
+      fallback: fallbackCount,
+      comtradeCountries: comtradeMap.size,
+      ttlH: TTL_SECONDS / 3600,
+    });
+    console.log(`[chokepoint-exposure] Seeded ${writtenCount} keys (${flowWeightedCount} flow-weighted, ${fallbackCount} fallback)`);
+  } catch (err) {
+    console.error('[chokepoint-exposure] Seed failed:', err.message || err);
+    const existingKeys = Object.keys(COUNTRY_PORT_CLUSTERS)
+      .filter(k => k !== '_comment' && k.length === 2)
+      .flatMap(iso2 => HS2_CODES.map(hs2 => `${KEY_PREFIX}${iso2}:${hs2}:v1`));
+    await extendExistingTtl([...existingKeys, META_KEY], TTL_SECONDS)
+      .catch(e => console.warn('[chokepoint-exposure] TTL extension failed:', e.message));
+    await writeMeta(0, 'error');
+    throw err;
+  } finally {
+    await releaseLock(LOCK_DOMAIN, runId);
+  }
+}
+
+const isMain = process.argv[1]?.endsWith('seed-hs2-chokepoint-exposure.mjs');
+if (isMain) {
+  main().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}

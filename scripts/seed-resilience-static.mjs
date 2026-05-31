@@ -118,3 +118,33 @@ async function fetchTextDirect(url, accept, timeoutMs) {
   }
   return { text: await response.text(), contentType: response.headers.get('content-type') || '' };
 }
+
+export async function main() {
+  const startedAt = Date.now();
+  const runId = `resilience-static:${startedAt}`;
+  const lock = await acquireLockSafely(LOCK_DOMAIN, runId, LOCK_TTL_MS, { label: LOCK_DOMAIN });
+  if (lock.skipped) return;
+  if (!lock.locked) {
+    console.log('  resilience-static: another seed run is already active');
+    return;
+  }
+
+  try {
+    const result = await seedResilienceStatic();
+    logSeedResult('resilience:static', result?.manifest?.recordCount ?? 0, Date.now() - startedAt, {
+      skipped: Boolean(result?.skipped),
+      seedYear: result?.seedYear ?? result?.manifest?.seedYear ?? nowSeedYear(),
+      failedDatasets: result?.manifest?.failedDatasets ?? [],
+    });
+  } finally {
+    await releaseLock(LOCK_DOMAIN, runId);
+  }
+}
+
+if (process.argv[1]?.endsWith('seed-resilience-static.mjs')) {
+  main().catch((error) => {
+    const cause = error?.cause ? ` (cause: ${error.cause.message || error.cause})` : '';
+    console.error(`FATAL: ${error.message || error}${cause}`);
+    process.exit(1);
+  });
+}
