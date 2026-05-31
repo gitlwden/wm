@@ -176,26 +176,27 @@ async function redisGetJson(url, token, key) {
 }
 
 async function redisPipeline(url, token, commands) {
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(commands),
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Redis pipeline HTTP ${resp.status}: ${text.slice(0, 200)}`);
-  }
-  return resp.json();
+  const headers = { Authorization: `Bearer ${token}` };
+  return Promise.all(commands.map(async ([verb, key]) => {
+    if (verb === 'GET') {
+      const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
+        headers,
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!resp.ok) return { result: null };
+      const text = await resp.text();
+      return { result: text || null };
+    }
+    return { result: null };
+  }));
 }
 
 async function redisSet(url, token, key, value, ttl) {
-  const args = ['SET', key, JSON.stringify(value)];
-  if (ttl) args.push('EX', String(ttl));
-  const resp = await fetch(`${url}`, {
-    method: 'POST',
+  const params = ttl ? `?expiration_ttl=${ttl}` : '';
+  const resp = await fetch(`${url}/values/${encodeURIComponent(key)}${params}`, {
+    method: 'PUT',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(args),
+    body: JSON.stringify(value),
     signal: AbortSignal.timeout(10_000),
   });
   if (!resp.ok) {
