@@ -128,7 +128,7 @@ export function maskToken(token) {
   return token.slice(0, 4) + '***' + token.slice(-4);
 }
 
-export function getRedisCredentials() {
+function _cfCredentials() {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   const namespaceId = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
   const token = process.env.CLOUDFLARE_API_TOKEN;
@@ -139,6 +139,12 @@ export function getRedisCredentials() {
   return { accountId, namespaceId, token };
 }
 
+/** Returns { url, token } for direct Cloudflare KV API usage. */
+export function getRedisCredentials() {
+  const { accountId, namespaceId, token } = _cfCredentials();
+  return { url: kvBase(accountId, namespaceId), token };
+}
+
 function kvBase(accountId, namespaceId) {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}`;
 }
@@ -146,7 +152,7 @@ function kvBase(accountId, namespaceId) {
 async function redisCommand(url, token, command) {
   // Translate Redis commands to Cloudflare KV API calls
   // url param is ignored (kept for call-site compat); creds come from env
-  const { accountId, namespaceId, token: cfToken } = getRedisCredentials();
+  const { accountId, namespaceId, token: cfToken } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const headers = { Authorization: `Bearer ${cfToken}` };
   const [verb, key, ...rest] = command;
@@ -203,7 +209,7 @@ async function redisCommand(url, token, command) {
 }
 
 async function redisGet(url, token, key) {
-  const { accountId, namespaceId, token: cfToken } = getRedisCredentials();
+  const { accountId, namespaceId, token: cfToken } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   try {
     const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
@@ -222,7 +228,7 @@ async function redisGet(url, token, key) {
 }
 
 async function redisSet(url, token, key, value, ttlSeconds) {
-  const { accountId, namespaceId, token: cfToken } = getRedisCredentials();
+  const { accountId, namespaceId, token: cfToken } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const payload = JSON.stringify(value);
   const params = ttlSeconds ? `?expiration_ttl=${ttlSeconds}` : '';
@@ -240,7 +246,7 @@ async function redisSet(url, token, key, value, ttlSeconds) {
 }
 
 async function redisDel(url, token, key) {
-  const { accountId, namespaceId, token: cfToken } = getRedisCredentials();
+  const { accountId, namespaceId, token: cfToken } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
     method: 'DELETE',
@@ -255,7 +261,7 @@ async function redisDel(url, token, key) {
  * previously called Upstash directly.
  */
 export async function kvSet(key, value, ttlSeconds) {
-  const { accountId, namespaceId, token } = getRedisCredentials();
+  const { accountId, namespaceId, token } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const payload = typeof value === 'string' ? value : JSON.stringify(value);
   const params = ttlSeconds ? `?expiration_ttl=${ttlSeconds}` : '';
@@ -276,7 +282,7 @@ export async function kvSet(key, value, ttlSeconds) {
  * previously called Upstash directly.
  */
 export async function kvGet(key) {
-  const { accountId, namespaceId, token } = getRedisCredentials();
+  const { accountId, namespaceId, token } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -293,12 +299,12 @@ export async function kvGet(key) {
  * direct API access. Replaces direct UPSTASH_REDIS_REST_URL usage.
  */
 export function getKvBase() {
-  const { accountId, namespaceId } = getRedisCredentials();
+  const { accountId, namespaceId } = _cfCredentials();
   return kvBase(accountId, namespaceId);
 }
 
 export function getKvToken() {
-  return getRedisCredentials().token;
+  return _cfCredentials().token;
 }
 
 // Upstash REST calls surface transient network issues through fetch/undici
@@ -313,7 +319,7 @@ export function isTransientRedisError(err) {
 }
 
 export async function acquireLock(domain, runId, ttlMs) {
-  const { accountId, namespaceId, token } = getRedisCredentials();
+  const { accountId, namespaceId, token } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const lockKey = `seed-lock:${domain}`;
   // KV has no NX — check-then-set is good enough for seed coordination
@@ -354,7 +360,7 @@ export async function acquireLockSafely(domain, runId, ttlMs, opts = {}) {
 }
 
 export async function releaseLock(domain, _runId) {
-  const { accountId, namespaceId, token } = getRedisCredentials();
+  const { accountId, namespaceId, token } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const lockKey = `seed-lock:${domain}`;
   try {
@@ -369,7 +375,8 @@ export async function releaseLock(domain, _runId) {
 }
 
 export async function atomicPublish(canonicalKey, data, validateFn, ttlSeconds, options = {}) {
-  const { url, token } = getRedisCredentials();
+  const url = getKvBase();
+  const token = getKvToken();
 
   if (validateFn) {
     const valid = validateFn(data);
@@ -412,7 +419,8 @@ export async function atomicPublish(canonicalKey, data, validateFn, ttlSeconds, 
 }
 
 export async function writeFreshnessMetadata(domain, resource, count, source, ttlSeconds, fetchedAtOverride, contentAge) {
-  const { url, token } = getRedisCredentials();
+  const url = getKvBase();
+  const token = getKvToken();
   const metaKey = `seed-meta:${domain}:${resource}`;
   const meta = {
     // Default to now; callers that want to mirror an existing canonical
@@ -455,7 +463,7 @@ export async function writeFreshnessMetadata(domain, resource, count, source, tt
  */
 export async function readCanonicalEnvelopeMeta(canonicalKey) {
   try {
-    const { accountId, namespaceId, token } = getRedisCredentials();
+    const { accountId, namespaceId, token } = _cfCredentials();
     const base = kvBase(accountId, namespaceId);
     const resp = await fetch(`${base}/values/${encodeURIComponent(canonicalKey)}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -575,16 +583,14 @@ export function logSeedResult(domain, count, durationMs, extra = {}) {
  * unchanged. Callers MUST NOT parse the envelope themselves.
  */
 export async function readCanonicalValue(key) {
-  const { url, token } = getRedisCredentials();
+  const url = getKvBase();
+  const token = getKvToken();
   return redisGet(url, token, key);
 }
 
 export async function verifySeedKey(key) {
-  // redisGet() now unwraps envelopes internally, so callers that read migrated
-  // canonical keys (e.g. seed-climate-anomalies reading climate:zone-normals:v1,
-  // seed-thermal-escalation reading wildfire:fires:v1) see bare legacy-shape
-  // payloads regardless of whether the writer has migrated to contract mode.
-  const { url, token } = getRedisCredentials();
+  const url = getKvBase();
+  const token = getKvToken();
   return redisGet(url, token, key);
 }
 
@@ -601,7 +607,8 @@ export function shouldEnvelopeKey(key) {
 }
 
 export async function writeExtraKey(key, data, ttl, envelopeMeta) {
-  const { url, token } = getRedisCredentials();
+  const url = getKvBase();
+  const token = getKvToken();
   const value = envelopeMeta && shouldEnvelopeKey(key) ? buildEnvelope({ ...envelopeMeta, data }) : data;
   const payload = JSON.stringify(value);
   const resp = await fetch(url, {
@@ -615,7 +622,8 @@ export async function writeExtraKey(key, data, ttl, envelopeMeta) {
 }
 
 export async function writeSeedMeta(dataKey, recordCount, metaKeyOverride, metaTtlSeconds) {
-  const { url, token } = getRedisCredentials();
+  const url = getKvBase();
+  const token = getKvToken();
   const metaKey = metaKeyOverride || `seed-meta:${dataKey.replace(/:v\d+$/, '')}`;
   const meta = { fetchedAt: Date.now(), recordCount: recordCount ?? 0 };
   const metaTtl = metaTtlSeconds ?? 86400 * 7;
@@ -634,29 +642,31 @@ export async function writeExtraKeyWithMeta(key, data, ttl, recordCount, metaKey
 }
 
 export async function extendExistingTtl(keys, ttlSeconds = 600) {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) {
-    console.error('  Cannot extend TTL: missing Redis credentials');
-    return;
-  }
+  const { accountId, namespaceId, token } = _cfCredentials();
+  const base = kvBase(accountId, namespaceId);
+  const headers = { Authorization: `Bearer ${token}` };
   try {
-    // EXPIRE only refreshes TTL when key already exists (returns 0 on missing keys — no-op).
-    // Check each result: keys that returned 0 are missing/expired and cannot be extended.
-    const pipeline = keys.map(k => ['EXPIRE', k, ttlSeconds]);
-    const resp = await fetch(`${url}/pipeline`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(pipeline),
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (resp.ok) {
-      const results = await resp.json();
-      const extended = results.filter(r => r?.result === 1).length;
-      const missing = results.filter(r => r?.result === 0).length;
-      if (extended > 0) console.log(`  Extended TTL on ${extended} key(s) (${ttlSeconds}s)`);
-      if (missing > 0) console.warn(`  WARNING: ${missing} key(s) were expired/missing — EXPIRE was a no-op; manual seed required`);
+    // Cloudflare KV has no EXPIRE — re-write each key to refresh TTL.
+    let extended = 0;
+    let missing = 0;
+    for (const key of keys) {
+      const getResp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+        headers,
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!getResp.ok) { missing++; continue; }
+      const text = await getResp.text();
+      if (!text) { missing++; continue; }
+      const putResp = await fetch(`${base}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': getResp.headers.get('content-type') || 'application/json' },
+        body: text,
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (putResp.ok) extended++;
     }
+    if (extended > 0) console.log(`  Extended TTL on ${extended} key(s) (${ttlSeconds}s)`);
+    if (missing > 0) console.warn(`  WARNING: ${missing} key(s) were expired/missing — TTL extension skipped`);
   } catch (e) {
     console.error(`  TTL extension failed: ${e.message}`);
   }
@@ -909,7 +919,8 @@ export function isAllowedRouteHost(url, allowedHosts) {
 // Returns Map<key → routeData>. Non-fatal: throws on HTTP error (caller catches).
 export async function bulkReadLearnedRoutes(scope, keys) {
   if (!keys.length) return new Map();
-  const { url, token } = getRedisCredentials();
+  const url = getKvBase();
+  const token = getKvToken();
   const pipeline = keys.map(k => ['GET', `seed-routes:${scope}:${k}`]);
   const resp = await fetch(`${url}/pipeline`, {
     method: 'POST',
@@ -933,22 +944,18 @@ export async function bulkReadLearnedRoutes(scope, keys) {
 // Keys in updates always win over deletes (SET/DEL conflict resolution).
 // DELs are sent before SETs to ensure correct ordering.
 export async function bulkWriteLearnedRoutes(scope, updates, deletes = new Set()) {
-  const { url, token } = getRedisCredentials();
+  const { accountId, namespaceId, token } = _cfCredentials();
+  const base = kvBase(accountId, namespaceId);
+  const headers = { Authorization: `Bearer ${token}` };
   const ROUTE_TTL = 14 * 24 * 3600; // 14 days
   const effectiveDeletes = [...deletes].filter(k => !updates.has(k));
-  const pipeline = [];
+  const ops = [];
   for (const k of effectiveDeletes)
-    pipeline.push(['DEL', `seed-routes:${scope}:${k}`]);
+    ops.push(fetch(`${base}/values/${encodeURIComponent(`seed-routes:${scope}:${k}`)}`, { method: 'DELETE', headers, signal: AbortSignal.timeout(10_000) }));
   for (const [k, v] of updates)
-    pipeline.push(['SET', `seed-routes:${scope}:${k}`, JSON.stringify(v), 'EX', ROUTE_TTL]);
-  if (!pipeline.length) return;
-  const resp = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(pipeline),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!resp.ok) throw new Error(`bulkWriteLearnedRoutes HTTP ${resp.status}`);
+    ops.push(fetch(`${base}/values/${encodeURIComponent(`seed-routes:${scope}:${k}`)}?expiration_ttl=${ROUTE_TTL}`, { method: 'PUT', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(v), signal: AbortSignal.timeout(10_000) }));
+  if (!ops.length) return;
+  await Promise.all(ops);
   console.log(`  [routes] written: ${updates.size} updated, ${effectiveDeletes.length} deleted`);
 }
 
@@ -1034,7 +1041,8 @@ export async function processItemRoute({
  */
 export async function getSharedFxRates(fxSymbols, fallbacks) {
   const SHARED_KEY = 'shared:fx-rates:v1';
-  const { url, token } = getRedisCredentials();
+  const url = getKvBase();
+  const token = getKvToken();
 
   // Try reading cached rates first (read-only — only seed-fx-rates.mjs writes this key)
   try {
@@ -1088,21 +1096,8 @@ export async function fetchYahooFxRates(fxSymbols, fallbacks) {
  * Returns null on any error — scripts must handle first-run (no prev data).
  */
 export async function readSeedSnapshot(canonicalKey) {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
   try {
-    const resp = await fetch(`${url}/get/${encodeURIComponent(canonicalKey)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!resp.ok) return null;
-    const { result } = await resp.json();
-    if (!result) return null;
-    // Envelope-aware: WoW/prev baselines (bigmac, grocery-basket, fear-greed)
-    // must see bare legacy-shape data whether the last write was pre- or post-
-    // contract-migration. unwrapEnvelope is a no-op on legacy values.
-    return unwrapEnvelope(JSON.parse(result)).data;
+    return await redisGet(null, null, canonicalKey);
   } catch {
     return null;
   }
