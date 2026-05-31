@@ -465,6 +465,15 @@ const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'VentureBeat', url: rss('https://venturebeat.com/feed/') },
     { name: 'Crunchbase News', url: rss('https://news.crunchbase.com/feed/') },
   ],
+  vcblogs: [
+    { name: 'Y Combinator Blog', url: rss('https://www.ycombinator.com/blog/rss/') },
+    { name: 'a16z Blog', url: rss('https://news.google.com/rss/search?q=site:a16z.com+OR+"Andreessen+Horowitz"+blog+when:14d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Sequoia Blog', url: rss('https://news.google.com/rss/search?q=site:sequoiacap.com+when:7d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Paul Graham Essays', url: rss('https://news.google.com/rss/search?q="Paul+Graham"+essay+OR+blog+when:30d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'VC Insights', url: rss('https://news.google.com/rss/search?q=("venture+capital"+insights+OR+"VC+trends"+OR+"startup+advice")+when:7d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Lenny\'s Newsletter', url: rss('https://www.lennysnewsletter.com/feed') },
+    { name: 'Stratechery', url: rss('https://stratechery.com/feed/') },
+  ],
   unicorns: [
     { name: 'Unicorn News', url: rss('https://news.google.com/rss/search?q=("unicorn+startup"+OR+"unicorn+valuation"+OR+"$1+billion+valuation")+when:7d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'CB Insights Unicorn', url: rss('https://news.google.com/rss/search?q=site:cbinsights.com+unicorn+when:14d&hl=en-US&gl=US&ceid=US:en') },
