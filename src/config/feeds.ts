@@ -516,6 +516,21 @@ const FULL_FEEDS: Record<string, Feed[]> = {
   economic: [
     { name: 'Economic Data', url: rss('https://news.google.com/rss/search?q=(CPI+OR+inflation+OR+GDP+OR+"economic+data"+OR+"jobs+report")+when:2d&hl=en-US&gl=US&ceid=US:en') },
   ],
+  dev: [
+    { name: 'Dev.to', url: rss('https://dev.to/feed') },
+    { name: 'Lobsters', url: rss('https://lobste.rs/rss') },
+    { name: 'Changelog', url: rss('https://changelog.com/feed') },
+    { name: 'Show HN', url: rss('https://hnrss.org/show') },
+  ],
+  accelerators: [
+    { name: 'YC News', url: rss('https://news.ycombinator.com/rss') },
+    { name: 'YC Blog', url: rss('https://www.ycombinator.com/blog/rss/') },
+    { name: 'Demo Day News', url: rss('https://news.google.com/rss/search?q=("demo+day"+OR+"YC+batch"+OR+"accelerator+batch")+startup+when:7d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  cloud: [
+    { name: 'InfoQ', url: rss('https://feed.infoq.com/') },
+    { name: 'The New Stack', url: rss('https://thenewstack.io/feed/') },
+  ],
 };
 
 // Tech/AI variant feeds

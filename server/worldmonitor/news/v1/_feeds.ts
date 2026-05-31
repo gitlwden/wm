@@ -218,6 +218,21 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
     economic: [
       { name: 'Economic Data', url: gn('(CPI OR inflation OR GDP OR "economic data" OR "jobs report") when:2d') },
     ],
+    dev: [
+      { name: 'Dev.to', url: 'https://dev.to/feed' },
+      { name: 'Lobsters', url: 'https://lobste.rs/rss' },
+      { name: 'Changelog', url: 'https://changelog.com/feed' },
+      { name: 'Show HN', url: 'https://hnrss.org/show' },
+    ],
+    accelerators: [
+      { name: 'YC News', url: 'https://news.ycombinator.com/rss' },
+      { name: 'YC Blog', url: 'https://www.ycombinator.com/blog/rss/' },
+      { name: 'Demo Day News', url: gn('("demo day" OR "YC batch" OR "accelerator batch") startup when:7d') },
+    ],
+    cloud: [
+      { name: 'InfoQ', url: 'https://feed.infoq.com/' },
+      { name: 'The New Stack', url: 'https://thenewstack.io/feed/' },
+    ],
   },
 
   tech: {
