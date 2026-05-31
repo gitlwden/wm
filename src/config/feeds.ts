@@ -531,6 +531,12 @@ const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'InfoQ', url: rss('https://feed.infoq.com/') },
     { name: 'The New Stack', url: rss('https://thenewstack.io/feed/') },
   ],
+  ipo: [
+    { name: 'IPO News', url: rss('https://news.google.com/rss/search?q=(IPO+OR+"initial+public+offering"+OR+SPAC)+when:7d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+  producthunt: [
+    { name: 'Product Hunt', url: rss('https://www.producthunt.com/feed') },
+  ],
 };
 
 // Tech/AI variant feeds
