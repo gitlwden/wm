@@ -668,6 +668,14 @@ export function createDomainGateway(
       internalMcpVerified = true;
     }
 
+    // ── Local dev bypass: skip ALL auth, entitlement, and rate-limit checks ──
+    // In local dev (npm run dev / tauri sidecar), sebufApiPlugin runs handlers
+    // without any auth. This block makes the gateway match that behavior so
+    // browser requests never get 401/403/429.
+    if (!process.env.VERCEL_ENV && !internalMcpVerified) {
+      // Fall through directly to route matching (line ~920+).
+    } else {
+
     // Tier gate check first — JWT resolution is expensive (JWKS + RS256) and only needed
     // for tier-gated endpoints. Non-tier-gated endpoints never use sessionUserId.
     //
@@ -914,6 +922,8 @@ export function createDomainGateway(
         }
       }
     }
+
+    } // end local dev bypass else block
 
     // Route matching — if POST doesn't match, convert to GET for stale clients
     let matchedHandler = router.match(request);
