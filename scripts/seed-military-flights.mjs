@@ -41,6 +41,7 @@ const FORECAST_REFRESH_REQUEST_TTL = 60 * 60;
 // ── Proxy Config ─────────────────────────────────────────
 const OPENSKY_PROXY_AUTH = process.env.OPENSKY_PROXY_AUTH || process.env.PROXY_URL || '';
 const PROXY_ENABLED = !!OPENSKY_PROXY_AUTH;
+const PROXY_POOL = (() => { try { return JSON.parse(process.env.PROXY_POOL || '[]'); } catch { return []; } })();
 
 // ── Query Regions ──────────────────────────────────────────
 const QUERY_REGIONS = [
@@ -493,17 +494,26 @@ function redactProxy(msg) {
 
 async function proxyFetchJson(url, { headers = {}, timeout = 15000, method = 'GET', body = null } = {}) {
   const { proxyFetch, parseProxyConfig } = createRequire(import.meta.url)('./_proxy-utils.cjs');
-  const proxyConfig = parseProxyConfig(OPENSKY_PROXY_AUTH);
-  if (!proxyConfig) throw new Error('No proxy config');
-  // proxyConfig.tls defaults to true from parseProxyConfig (Decodo requires TLS)
-  const result = await proxyFetch(url, proxyConfig, {
-    headers: { 'User-Agent': CHROME_UA, ...headers },
-    method,
-    body,
-    timeoutMs: timeout,
-  });
-  if (!result.ok) throw Object.assign(new Error(`HTTP ${result.status}`), { status: result.status });
-  return JSON.parse(result.buffer.toString('utf8'));
+  const proxies = [OPENSKY_PROXY_AUTH, ...PROXY_POOL].filter(Boolean);
+  let lastErr;
+  for (const proxyStr of proxies) {
+    const proxyConfig = parseProxyConfig(proxyStr);
+    if (!proxyConfig) continue;
+    try {
+      const result = await proxyFetch(url, proxyConfig, {
+        headers: { 'User-Agent': CHROME_UA, ...headers },
+        method,
+        body,
+        timeoutMs: timeout,
+      });
+      if (!result.ok) throw Object.assign(new Error(`HTTP ${result.status}`), { status: result.status });
+      return JSON.parse(result.buffer.toString('utf8'));
+    } catch (err) {
+      lastErr = err;
+      continue;
+    }
+  }
+  throw lastErr || new Error('All proxies failed');
 }
 
 // ── Data Sources ───────────────────────────────────────────

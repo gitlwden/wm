@@ -2,11 +2,44 @@
 // Seed USPTO PatentsView defense/dual-use patent filings (issue #2047).
 // Weekly cron — top 20 recent filings per strategic CPC category.
 
-import { loadEnvFile, CHROME_UA, runSeed, sleep, resolveProxy, httpsProxyFetchRaw } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, sleep, httpsProxyFetchRaw } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'patents:defense:latest';
+
+// Proxy pool — try multiple free proxies since they're unreliable
+let _proxyPool = null;
+function getProxyPool() {
+  if (_proxyPool) return _proxyPool;
+  try { _proxyPool = JSON.parse(process.env.PROXY_POOL || '[]'); } catch { _proxyPool = []; }
+  if (_proxyPool.length === 0 && process.env.PROXY_URL) _proxyPool = [process.env.PROXY_URL];
+  return _proxyPool;
+}
+
+async function fetchWithProxy(urlStr, headers, timeoutMs) {
+  // Try direct first
+  try {
+    const resp = await fetch(urlStr, { headers, signal: AbortSignal.timeout(timeoutMs) });
+    if (resp.ok) return resp;
+  } catch { /* fall through to proxy */ }
+
+  // Try each proxy in the pool
+  const pool = getProxyPool();
+  for (const proxy of pool) {
+    try {
+      const proxied = await httpsProxyFetchRaw(urlStr, proxy, {
+        accept: headers.Accept || 'application/json',
+        timeoutMs,
+      });
+      return {
+        ok: true,
+        json: () => Promise.resolve(JSON.parse(proxied.buffer.toString('utf8'))),
+      };
+    } catch { continue; }
+  }
+  throw new Error('All proxies failed');
+}
 const CACHE_TTL = 1_814_400; // 21 days (3× weekly interval)
 const PATENTSVIEW_API = 'https://search.patentsview.org/api/v1/patent/';
 const INTER_CATEGORY_DELAY_MS = 3_000;
@@ -45,22 +78,9 @@ async function fetchCategoryPatents(category) {
   url.searchParams.set('o', JSON.stringify({ size: MAX_PER_CATEGORY }));
   url.searchParams.set('s', JSON.stringify([{ patent_date: 'desc' }]));
 
-  const urlStr = url.toString();
-  const proxyAuth = resolveProxy();
-
-  let data;
-  try {
-    const resp = await fetch(urlStr, {
-      headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    data = await resp.json();
-  } catch (directErr) {
-    if (!proxyAuth) throw directErr;
-    const proxied = await httpsProxyFetchRaw(urlStr, proxyAuth, { accept: 'application/json', timeoutMs: 20_000 });
-    data = JSON.parse(proxied.buffer.toString('utf8'));
-  }
+  const resp = await fetchWithProxy(url.toString(), { 'User-Agent': CHROME_UA, Accept: 'application/json' }, 20_000);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const data = await resp.json();
 
   return (data.patents ?? []).map((p) => ({
     patentId: String(p.patent_id ?? ''),
