@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, runSeed, getRedisCredentials } from './_seed-utils.mjs';
-import { unwrapEnvelope } from './_seed-envelope-source.mjs';
+import { loadEnvFile, runSeed, kvGetUnwrapped } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -46,28 +45,16 @@ function findNearestHazard(events, cpLat, cpLon) {
   return best;
 }
 
-async function redisGet(url, token, key) {
-  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!resp.ok) return null;
-  const data = await resp.json();
-  return data.result ? unwrapEnvelope(JSON.parse(data.result)).data : null;
-}
-
 function avg(arr) {
   if (!arr.length) return 0;
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
 export async function fetchAll() {
-  const { url, token } = getRedisCredentials();
-
   const [portwatch, baselines, disruptions] = await Promise.all([
-    redisGet(url, token, PORTWATCH_KEY),
-    redisGet(url, token, BASELINES_KEY),
-    redisGet(url, token, DISRUPTIONS_KEY).catch(() => null), // optional — absent until PR 4 deploys
+    kvGetUnwrapped(PORTWATCH_KEY),
+    kvGetUnwrapped(BASELINES_KEY),
+    kvGetUnwrapped(DISRUPTIONS_KEY).catch(() => null),
   ]);
 
   if (!portwatch || typeof portwatch !== 'object' || Object.keys(portwatch).length === 0) {

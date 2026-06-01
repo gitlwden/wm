@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, runSeed, getRedisCredentials, writeExtraKeyWithMeta } from './_seed-utils.mjs';
-import { unwrapEnvelope } from './_seed-envelope-source.mjs';
+import { loadEnvFile, runSeed, kvGetUnwrapped, writeExtraKeyWithMeta } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -24,17 +23,6 @@ const BASELINE_MAP = {
   bab_el_mandeb: 'babelm', dover_strait: 'danish', bosphorus: 'turkish', panama: 'panama',
 };
 
-async function redisGet(url, token, key) {
-  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!resp.ok) return null;
-  const data = await resp.json();
-  if (!data.result) return null;
-  const parsed = JSON.parse(data.result);
-  return unwrapEnvelope(parsed).data;
-}
 
 function avg(arr) {
   if (!arr.length) return 0;
@@ -42,11 +30,10 @@ function avg(arr) {
 }
 
 export async function fetchAll() {
-  const { url, token } = getRedisCredentials();
   const [portwatch, baselines, flows] = await Promise.all([
-    redisGet(url, token, PORTWATCH_KEY),
-    redisGet(url, token, BASELINES_KEY),
-    redisGet(url, token, FLOWS_KEY).catch(() => null),
+    kvGetUnwrapped(PORTWATCH_KEY),
+    kvGetUnwrapped(BASELINES_KEY),
+    kvGetUnwrapped(FLOWS_KEY).catch(() => null),
   ]);
 
   if (!portwatch || typeof portwatch !== 'object') {

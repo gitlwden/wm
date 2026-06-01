@@ -451,6 +451,35 @@ export async function kvGet(key) {
 }
 
 /**
+ * Read a key's value with envelope unwrap, trying Upstash first then
+ * falling back to Cloudflare KV. Use this in scripts that read data
+ * written by other seeders (which may route to either backend after
+ * the KV routing inversion 388e96a7).
+ */
+export async function kvGetUnwrapped(key) {
+  // Upstash first (post-inversion writes land here)
+  try {
+    const raw = await _upstashGet(key);
+    if (raw != null) {
+      try { return unwrapEnvelope(JSON.parse(raw)).data; } catch { return null; }
+    }
+  } catch { /* fall through */ }
+  // CF KV fallback (pre-inversion data)
+  try {
+    const { accountId, namespaceId, token } = _cfCredentials();
+    const base = kvBase(accountId, namespaceId);
+    const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!resp.ok) return null;
+    const text = await resp.text();
+    if (!text) return null;
+    return unwrapEnvelope(JSON.parse(text)).data;
+  } catch { return null; }
+}
+
+/**
  * Returns Cloudflare KV base URL and auth token for scripts that need
  * direct API access. Replaces direct UPSTASH_REDIS_REST_URL usage.
  */
