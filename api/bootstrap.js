@@ -255,21 +255,48 @@ async function getCachedJsonBatch(keys) {
   // populate prefixed keys, so prefixing would always miss.
   const pipeline = keys.map((k) => ['GET', k]);
   const data = await redisPipeline(pipeline, 3000);
-  if (!data) return result;
-
-  for (let i = 0; i < keys.length; i++) {
-    const raw = data[i]?.result;
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (parsed === NEG_SENTINEL) continue;
-        // Envelope-aware: bootstrap is a public-boundary consumer — strip _seed
-        // from contract-mode canonical keys so clients never see envelope
-        // metadata. Legacy bare-shape values pass through unchanged.
-        result.set(keys[i], unwrapEnvelope(parsed).data);
-      } catch { /* skip malformed */ }
+  if (data) {
+    for (let i = 0; i < keys.length; i++) {
+      const raw = data[i]?.result;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed === NEG_SENTINEL) continue;
+          result.set(keys[i], unwrapEnvelope(parsed).data);
+        } catch { /* skip malformed */ }
+      }
     }
   }
+
+  // CF KV fallback for keys missing from Upstash.
+  // Handles the migration window where data was written to CF KV before the
+  // routing inversion (388e96a7) moved writes to Upstash.
+  const missing = keys.filter((k) => !result.has(k));
+  if (missing.length > 0) {
+    const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const cfNamespaceId = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
+    const cfToken = process.env.CLOUDFLARE_API_TOKEN;
+    if (cfAccountId && cfNamespaceId && cfToken) {
+      const cfBase = `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/storage/kv/namespaces/${cfNamespaceId}`;
+      const cfHeaders = { Authorization: `Bearer ${cfToken}` };
+      const cfReads = missing.map(async (k) => {
+        try {
+          const resp = await fetch(`${cfBase}/values/${encodeURIComponent(k)}`, {
+            headers: cfHeaders,
+            signal: AbortSignal.timeout(3000),
+          });
+          if (!resp.ok) return;
+          const text = await resp.text();
+          if (!text) return;
+          const parsed = JSON.parse(text);
+          if (parsed === NEG_SENTINEL) return;
+          result.set(k, unwrapEnvelope(parsed).data);
+        } catch { /* skip */ }
+      });
+      await Promise.all(cfReads);
+    }
+  }
+
   return result;
 }
 

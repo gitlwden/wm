@@ -164,9 +164,23 @@ export async function getRawJson(key: string): Promise<unknown | null> {
     return sidecarCacheGet(key);
   }
   if (shouldUseUpstash(key)) {
-    const raw = await upstashGetRaw(key);
-    if (raw == null) return null;
-    return unwrapEnvelope(JSON.parse(raw)).data;
+    try {
+      const raw = await upstashGetRaw(key);
+      if (raw != null) return unwrapEnvelope(JSON.parse(raw)).data;
+    } catch { /* fall through to CF KV fallback */ }
+    // Fallback: read from Cloudflare KV when Upstash has no data.
+    // Handles the migration window where data was written to CF KV
+    // before the routing inversion moved writes to Upstash.
+    const creds = getKvCredentials();
+    if (!creds) return null;
+    const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(key)}`, {
+      headers: kvHeaders(creds.token),
+      signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
+    });
+    if (!resp.ok) return null;
+    const text = await resp.text();
+    if (!text) return null;
+    return unwrapEnvelope(JSON.parse(text)).data;
   }
   const creds = getKvCredentials();
   if (!creds) throw new Error('Cloudflare KV credentials not configured');
@@ -197,7 +211,20 @@ export async function getCachedRawString(key: string): Promise<string | null> {
     return typeof v === 'string' ? v : null;
   }
   if (shouldUseUpstash(key)) {
-    return upstashGetRaw(key);
+    const raw = await upstashGetRaw(key);
+    if (raw != null) return raw;
+    // Fallback: read from Cloudflare KV when Upstash has no data.
+    const cfCreds = getKvCredentials();
+    if (!cfCreds) return null;
+    try {
+      const resp = await fetch(`${kvBase(cfCreds)}/values/${encodeURIComponent(key)}`, {
+        headers: kvHeaders(cfCreds.token),
+        signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
+      });
+      if (!resp.ok) return null;
+      const text = await resp.text();
+      return text.length > 0 ? text : null;
+    } catch { return null; }
   }
   const creds = getKvCredentials();
   if (!creds) return null;
@@ -231,14 +258,34 @@ export async function getCachedJson(key: string, raw = false): Promise<unknown |
   if (shouldUseUpstash(key)) {
     try {
       const rawVal = await upstashGetRaw(key);
-      if (rawVal == null) return null;
-      const parsed = unwrapEnvelope(JSON.parse(rawVal)).data;
-      localCacheSet(cacheKey, parsed);
-      return parsed;
-    } catch (err) {
-      console.warn('[upstash] getCachedJson failed:', errMsg(err));
-      return null;
+      if (rawVal != null) {
+        const parsed = unwrapEnvelope(JSON.parse(rawVal)).data;
+        localCacheSet(cacheKey, parsed);
+        return parsed;
+      }
+    } catch { /* fall through to CF KV fallback */ }
+    // Fallback: read from Cloudflare KV when Upstash has no data.
+    // Handles the migration window where data was written to CF KV
+    // before the routing inversion moved writes to Upstash.
+    const cfCreds = getKvCredentials();
+    if (cfCreds) {
+      try {
+        const finalKey = raw ? key : prefixKey(key);
+        const resp = await fetch(`${kvBase(cfCreds)}/values/${encodeURIComponent(finalKey)}`, {
+          headers: kvHeaders(cfCreds.token),
+          signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
+        });
+        if (resp.ok) {
+          const text = await resp.text();
+          if (text) {
+            const parsed = unwrapEnvelope(JSON.parse(text)).data;
+            localCacheSet(cacheKey, parsed);
+            return parsed;
+          }
+        }
+      } catch { /* CF KV also miss — return null */ }
     }
+    return null;
   }
 
   const creds = getKvCredentials();

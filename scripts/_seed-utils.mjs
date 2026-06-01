@@ -333,8 +333,22 @@ async function redisGet(url, token, key) {
   if (shouldUseUpstash(key)) {
     try {
       const raw = await _upstashGet(key);
-      if (raw == null) return null;
-      return unwrapEnvelope(JSON.parse(raw)).data;
+      if (raw != null) return unwrapEnvelope(JSON.parse(raw)).data;
+    } catch { /* fall through to CF KV fallback */ }
+    // Fallback: read from Cloudflare KV when Upstash has no data.
+    // Handles the migration window where data was written to CF KV
+    // before the routing inversion (388e96a7) moved writes to Upstash.
+    try {
+      const { accountId, namespaceId, token: cfToken } = _cfCredentials();
+      const base = kvBase(accountId, namespaceId);
+      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+        headers: { Authorization: `Bearer ${cfToken}` },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!resp.ok) return null;
+      const text = await resp.text();
+      if (!text) return null;
+      return unwrapEnvelope(JSON.parse(text)).data;
     } catch { return null; }
   }
   const { accountId, namespaceId, token: cfToken } = _cfCredentials();
