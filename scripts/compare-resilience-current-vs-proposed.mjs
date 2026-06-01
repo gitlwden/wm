@@ -613,7 +613,7 @@ async function readExtractionSources(countryCode, reader) {
     socialVelocity, tradeRestrictions, tradeBarriers,
     ...bulkV1Payloads
   ] = await Promise.all([
-    reader(`resilience:static:${countryCode}`),
+    reader('resilience:static:bulk:v1').then(bulk => bulk?.[countryCode] ?? null),
     reader(`energy:mix:v1:${countryCode}`),
     reader(`energy:gas-storage:v1:${countryCode}`),
     reader('resilience:recovery:fiscal-space:v1'),
