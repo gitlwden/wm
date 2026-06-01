@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-import { cfPipeline } from './_seed-utils.mjs';
-
-import { loadEnvFile, getRedisCredentials, writeExtraKeyWithMeta } from './_seed-utils.mjs';
+import { cfPipeline, loadEnvFile, getRedisCredentials, writeExtraKeyWithMeta } from './_seed-utils.mjs';
 // @ts-check
 /**
  * Regional Intelligence snapshot seeder.

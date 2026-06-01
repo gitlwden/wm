@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, CHROME_UA, runSeed } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, resolveProxy, httpsProxyFetchRaw } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -205,19 +205,35 @@ async function fetchSubmarineCables() {
   }
   console.log(`  ${lpCoords.size} landing points`);
 
-  // Fetch individual cable details in batches of 5
+  // Fetch individual cable details in batches of 3 with proxy fallback
   const cables = [];
   const failed = [];
+  const proxyAuth = resolveProxy();
 
-  for (let i = 0; i < allIds.length; i += 5) {
-    const batch = allIds.slice(i, i + 5);
+  for (let i = 0; i < allIds.length; i += 3) {
+    const batch = allIds.slice(i, i + 3);
     const results = await Promise.all(batch.map(async (id) => {
-      const resp = await fetch(`${BASE}/cable/${id}.json`, {
-        headers: { 'User-Agent': CHROME_UA },
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!resp.ok) { failed.push(id); return null; }
-      return { id, data: await resp.json() };
+      const url = `${BASE}/cable/${id}.json`;
+      try {
+        const resp = await fetch(url, {
+          headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
+          signal: AbortSignal.timeout(15_000),
+        });
+        const ct = resp.headers.get('content-type') || '';
+        if (!resp.ok || !ct.includes('json')) {
+          // Anti-bot returned HTML — try via proxy
+          if (proxyAuth) {
+            const proxied = await httpsProxyFetchRaw(url, proxyAuth, { accept: 'application/json', timeoutMs: 15_000 });
+            return { id, data: JSON.parse(proxied.buffer.toString('utf8')) };
+          }
+          failed.push(id);
+          return null;
+        }
+        return { id, data: await resp.json() };
+      } catch {
+        failed.push(id);
+        return null;
+      }
     }));
 
     for (const result of results) {
@@ -269,7 +285,7 @@ async function fetchSubmarineCables() {
       });
     }
 
-    if (i + 5 < allIds.length) await new Promise(r => setTimeout(r, 150));
+    if (i + 3 < allIds.length) await new Promise(r => setTimeout(r, 500));
   }
 
   console.log(`  Fetched ${cables.length}/${allIds.length} cables`);
