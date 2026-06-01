@@ -139,6 +139,141 @@ function _cfCredentials() {
   return { accountId, namespaceId, token };
 }
 
+// ─── Dual-backend routing ─────────────────────────────────────────────
+// High-frequency seeders (≤ hourly) and atomic-dependent key families
+// route to Upstash Redis (500K ops/month, atomic SETNX/ZSET).
+// Low-frequency seeders (≥ 6h) and read-heavy caches route to
+// Cloudflare KV (1,000 writes/day, unlimited reads).
+
+// Upstash key prefixes — covers the canonical key base (before :v1 etc.)
+// plus key families (forecast:*, rl:*, oauth:*, brief:*).
+const UPSTASH_PREFIXES = new Set([
+  // ≤ 5 min
+  'market:quotes', 'market:crypto', 'market:hyperliquid:flow',
+  // 10 min
+  'market:stablecoins', 'market:gulf-quotes',
+  // 15 min
+  'seismology:earthquakes', 'market:etf-flows', 'market:fear-greed',
+  'market:wsb', 'energy:hormuz', 'military:flights', 'prediction:markets',
+  // 30 min
+  'market:breadth', 'market:defi-tokens',
+  // hourly
+  'energy:chokepoint-flows', 'economic:economic-calendar',
+  'natural:events', 'military:maritime-news',
+  'intelligence:social-velocity', 'intelligence:tech-events',
+  'intelligence:research', 'portwatch:disruptions:active',
+  // Key families (not tied to a single seeder frequency)
+  'forecast:', 'rl:', 'oauth:', 'brief:', 'digest-', 'mcp:',
+]);
+
+// Exact keys that don't match a prefix but must stay on Upstash.
+const EXACT_UPSTASH_KEYS = new Set([
+  'shared:fx-rates',        // written every 4h, read by many seeders
+  'health:failure-log-sig', // diagnostic, needs atomicity
+]);
+
+function _extractBasePrefix(key) {
+  const vMatch = key.match(/^(.+?):v\d+$/);
+  return vMatch ? vMatch[1] : key;
+}
+
+export function shouldUseUpstash(key) {
+  if (EXACT_UPSTASH_KEYS.has(_extractBasePrefix(key))) return true;
+  // Strip seed-meta:/seed-lock: prefix so metadata/locks follow their parent seeder's backend
+  let base = _extractBasePrefix(key);
+  base = base.replace(/^seed-(meta|lock):/, '');
+  for (const prefix of UPSTASH_PREFIXES) {
+    if (base === prefix || base.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+function _upstashCredentials() {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    console.error('Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN');
+    process.exit(1);
+  }
+  return { url, token };
+}
+
+async function _upstashGet(key) {
+  const { url, token } = _upstashCredentials();
+  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return data.result ?? null;
+}
+
+async function _upstashSet(key, value, ttlSeconds) {
+  const { url, token } = _upstashCredentials();
+  const cmd = ttlSeconds
+    ? ['SET', key, typeof value === 'string' ? value : JSON.stringify(value), 'EX', String(ttlSeconds)]
+    : ['SET', key, typeof value === 'string' ? value : JSON.stringify(value)];
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([cmd]),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Upstash SET ${key}: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+  }
+}
+
+async function _upstashDel(key) {
+  const { url, token } = _upstashCredentials();
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([['DEL', key]]),
+    signal: AbortSignal.timeout(5_000),
+  });
+  return { result: resp.ok ? 1 : 0 };
+}
+
+async function _upstashPipeline(commands) {
+  const { url, token } = _upstashCredentials();
+  if (commands.length === 0) return [];
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(commands),
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Upstash pipeline: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+  }
+  return resp.json();
+}
+
+async function _upstashRedisCommand(command) {
+  const [verb, key, ...rest] = command;
+  const upperVerb = String(verb).toUpperCase();
+  if (upperVerb === 'SET') {
+    const value = rest[0];
+    const exIdx = rest.indexOf('EX');
+    const pxIdx = rest.indexOf('PX');
+    const ttlSeconds = exIdx >= 0 ? Number(rest[exIdx + 1]) : pxIdx >= 0 ? Math.ceil(Number(rest[pxIdx + 1]) / 1000) : 0;
+    await _upstashSet(key, value, ttlSeconds);
+    return { result: 'OK' };
+  }
+  if (upperVerb === 'GET') {
+    const result = await _upstashGet(key);
+    return { result };
+  }
+  if (upperVerb === 'DEL') {
+    return _upstashDel(key);
+  }
+  return { result: null };
+}
+
 /** Returns { url, token } for direct Cloudflare KV API usage. */
 export function getRedisCredentials() {
   const { accountId, namespaceId, token } = _cfCredentials();
@@ -150,13 +285,16 @@ function kvBase(accountId, namespaceId) {
 }
 
 async function redisCommand(url, token, command) {
-  // Translate Redis commands to Cloudflare KV API calls
-  // url param is ignored (kept for call-site compat); creds come from env
+  // Dual-backend routing: high-freq keys → Upstash, low-freq → Cloudflare KV
+  const [verb, key, ...rest] = command;
+  const upperVerb = String(verb).toUpperCase();
+  if (shouldUseUpstash(key)) {
+    return _upstashRedisCommand(command);
+  }
+  // Cloudflare KV path
   const { accountId, namespaceId, token: cfToken } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const headers = { Authorization: `Bearer ${cfToken}` };
-  const [verb, key, ...rest] = command;
-  const upperVerb = String(verb).toUpperCase();
 
   try {
     if (upperVerb === 'SET') {
@@ -209,6 +347,13 @@ async function redisCommand(url, token, command) {
 }
 
 async function redisGet(url, token, key) {
+  if (shouldUseUpstash(key)) {
+    try {
+      const raw = await _upstashGet(key);
+      if (raw == null) return null;
+      return unwrapEnvelope(JSON.parse(raw)).data;
+    } catch { return null; }
+  }
   const { accountId, namespaceId, token: cfToken } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   try {
@@ -219,8 +364,6 @@ async function redisGet(url, token, key) {
     if (!resp.ok) return null;
     const text = await resp.text();
     if (!text) return null;
-    // Envelope-aware: returns inner `data` for seeded keys written in contract
-    // mode, passes through legacy (bare-shape) values unchanged.
     return unwrapEnvelope(JSON.parse(text)).data;
   } catch {
     return null;
@@ -228,6 +371,10 @@ async function redisGet(url, token, key) {
 }
 
 async function redisSet(url, token, key, value, ttlSeconds) {
+  if (shouldUseUpstash(key)) {
+    await _upstashSet(key, value, ttlSeconds);
+    return { result: 'OK' };
+  }
   const { accountId, namespaceId, token: cfToken } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const payload = JSON.stringify(value);
@@ -246,6 +393,9 @@ async function redisSet(url, token, key, value, ttlSeconds) {
 }
 
 async function redisDel(url, token, key) {
+  if (shouldUseUpstash(key)) {
+    return _upstashDel(key);
+  }
   const { accountId, namespaceId, token: cfToken } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
@@ -261,6 +411,10 @@ async function redisDel(url, token, key) {
  * previously called Upstash directly.
  */
 export async function kvSet(key, value, ttlSeconds) {
+  if (shouldUseUpstash(key)) {
+    await _upstashSet(key, value, ttlSeconds);
+    return;
+  }
   const { accountId, namespaceId, token } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const payload = typeof value === 'string' ? value : JSON.stringify(value);
@@ -282,6 +436,11 @@ export async function kvSet(key, value, ttlSeconds) {
  * previously called Upstash directly.
  */
 export async function kvGet(key) {
+  if (shouldUseUpstash(key)) {
+    const raw = await _upstashGet(key);
+    if (raw == null) return null;
+    try { return JSON.parse(raw); } catch { return raw; }
+  }
   const { accountId, namespaceId, token } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
   const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
@@ -319,40 +478,75 @@ export function getKvToken() {
  *   ['DEL', key]
  */
 export async function cfPipeline(commands) {
-  const { accountId, namespaceId, token } = _cfCredentials();
-  const base = kvBase(accountId, namespaceId);
-  const headers = { Authorization: `Bearer ${token}` };
-  return Promise.all(commands.map(async ([verb, key, value, exFlag, ttl]) => {
-    if (verb === 'GET') {
-      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
-        headers,
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!resp.ok) return { result: null };
-      const text = await resp.text();
-      return { result: text || null };
+  // Split commands by backend to batch efficiently
+  const upstashCmds = [];
+  const cfCmds = [];
+  for (let i = 0; i < commands.length; i++) {
+    const cmd = commands[i];
+    if (shouldUseUpstash(cmd[1])) {
+      upstashCmds.push({ idx: i, cmd });
+    } else {
+      cfCmds.push({ idx: i, cmd });
     }
-    if (verb === 'SET') {
-      const params = (exFlag === 'EX' && ttl) ? `?expiration_ttl=${ttl}` : '';
-      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}${params}`, {
-        method: 'PUT',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: typeof value === 'string' ? value : JSON.stringify(value),
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!resp.ok) throw new Error(`KV SET ${key}: HTTP ${resp.status}`);
-      return { result: 'OK' };
+  }
+
+  const results = new Array(commands.length);
+
+  // Execute Upstash batch
+  if (upstashCmds.length > 0) {
+    try {
+      const upstashResults = await _upstashPipeline(upstashCmds.map(c => c.cmd));
+      for (let j = 0; j < upstashCmds.length; j++) {
+        results[upstashCmds[j].idx] = upstashResults[j] || { result: null };
+      }
+    } catch {
+      for (const c of upstashCmds) results[c.idx] = { result: null };
     }
-    if (verb === 'DEL') {
-      const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
-        method: 'DELETE',
-        headers,
-        signal: AbortSignal.timeout(5_000),
-      });
-      return { result: resp.ok ? 1 : 0 };
+  }
+
+  // Execute Cloudflare KV batch
+  if (cfCmds.length > 0) {
+    const { accountId, namespaceId, token } = _cfCredentials();
+    const base = kvBase(accountId, namespaceId);
+    const headers = { Authorization: `Bearer ${token}` };
+    const cfResults = await Promise.all(cfCmds.map(async ({ idx, cmd }) => {
+      const [verb, key, value, exFlag, ttl] = cmd;
+      try {
+        if (verb === 'GET') {
+          const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+            headers,
+            signal: AbortSignal.timeout(5_000),
+          });
+          return resp.ok ? { result: await resp.text() || null } : { result: null };
+        }
+        if (verb === 'SET') {
+          const params = (exFlag === 'EX' && ttl) ? `?expiration_ttl=${ttl}` : '';
+          const resp = await fetch(`${base}/values/${encodeURIComponent(key)}${params}`, {
+            method: 'PUT',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: typeof value === 'string' ? value : JSON.stringify(value),
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (!resp.ok) throw new Error(`KV SET ${key}: HTTP ${resp.status}`);
+          return { result: 'OK' };
+        }
+        if (verb === 'DEL') {
+          const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+            method: 'DELETE',
+            headers,
+            signal: AbortSignal.timeout(5_000),
+          });
+          return { result: resp.ok ? 1 : 0 };
+        }
+        return { result: null };
+      } catch { return { result: null }; }
+    }));
+    for (let j = 0; j < cfCmds.length; j++) {
+      results[cfCmds[j].idx] = cfResults[j];
     }
-    return { result: null };
-  }));
+  }
+
+  return results;
 }
 
 // Upstash REST calls surface transient network issues through fetch/undici
@@ -367,10 +561,34 @@ export function isTransientRedisError(err) {
 }
 
 export async function acquireLock(domain, runId, ttlMs) {
+  const lockKey = `seed-lock:${domain}`;
+  const useUpstash = shouldUseUpstash(domain);
+
+  if (useUpstash) {
+    const { url, token } = _upstashCredentials();
+    try {
+      const existing = await fetch(`${url}/get/${encodeURIComponent(lockKey)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (existing.ok) {
+        const data = await existing.json();
+        if (data.result && data.result !== runId) return false;
+      }
+      const ttlSeconds = Math.ceil(ttlMs / 1000);
+      await fetch(`${url}/set/${encodeURIComponent(lockKey)}/${encodeURIComponent(runId)}?EX=${ttlSeconds}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5_000),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   const { accountId, namespaceId, token } = _cfCredentials();
   const base = kvBase(accountId, namespaceId);
-  const lockKey = `seed-lock:${domain}`;
-  // KV has no NX — check-then-set is good enough for seed coordination
   try {
     const existing = await fetch(`${base}/values/${encodeURIComponent(lockKey)}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -378,7 +596,7 @@ export async function acquireLock(domain, runId, ttlMs) {
     });
     if (existing.ok) {
       const text = await existing.text();
-      if (text && text !== runId) return false; // lock held by another run
+      if (text && text !== runId) return false;
     }
     const ttlSeconds = Math.ceil(ttlMs / 1000);
     await fetch(`${base}/values/${encodeURIComponent(lockKey)}?expiration_ttl=${ttlSeconds}`, {
@@ -408,15 +626,26 @@ export async function acquireLockSafely(domain, runId, ttlMs, opts = {}) {
 }
 
 export async function releaseLock(domain, _runId) {
-  const { accountId, namespaceId, token } = _cfCredentials();
-  const base = kvBase(accountId, namespaceId);
   const lockKey = `seed-lock:${domain}`;
+  const useUpstash = shouldUseUpstash(domain);
   try {
-    await fetch(`${base}/values/${encodeURIComponent(lockKey)}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
+    if (useUpstash) {
+      const { url, token } = _upstashCredentials();
+      await fetch(`${url}/pipeline`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify([['DEL', lockKey]]),
+        signal: AbortSignal.timeout(5_000),
+      });
+    } else {
+      const { accountId, namespaceId, token } = _cfCredentials();
+      const base = kvBase(accountId, namespaceId);
+      await fetch(`${base}/values/${encodeURIComponent(lockKey)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5_000),
+      });
+    }
   } catch {
     // Best-effort release; lock will expire via TTL
   }
@@ -511,17 +740,23 @@ export async function writeFreshnessMetadata(domain, resource, count, source, tt
  */
 export async function readCanonicalEnvelopeMeta(canonicalKey) {
   try {
-    const { accountId, namespaceId, token } = _cfCredentials();
-    const base = kvBase(accountId, namespaceId);
-    const resp = await fetch(`${base}/values/${encodeURIComponent(canonicalKey)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!resp.ok) return null;
-    const text = await resp.text();
-    if (!text) return null;
     let parsed;
-    try { parsed = JSON.parse(text); } catch { return null; }
+    if (shouldUseUpstash(canonicalKey)) {
+      const raw = await _upstashGet(canonicalKey);
+      if (raw == null) return null;
+      try { parsed = JSON.parse(raw); } catch { return null; }
+    } else {
+      const { accountId, namespaceId, token } = _cfCredentials();
+      const base = kvBase(accountId, namespaceId);
+      const resp = await fetch(`${base}/values/${encodeURIComponent(canonicalKey)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!resp.ok) return null;
+      const text = await resp.text();
+      if (!text) return null;
+      try { parsed = JSON.parse(text); } catch { return null; }
+    }
     if (!parsed || typeof parsed !== 'object') return null;
     const seed = parsed._seed;
     if (!seed || typeof seed !== 'object') return null;
@@ -655,34 +890,42 @@ export function shouldEnvelopeKey(key) {
 }
 
 export async function writeExtraKey(key, data, ttl, envelopeMeta) {
-  const url = getKvBase();
-  const token = getKvToken();
   const value = envelopeMeta && shouldEnvelopeKey(key) ? buildEnvelope({ ...envelopeMeta, data }) : data;
   const payload = JSON.stringify(value);
-  const params = ttl ? `?expiration_ttl=${ttl}` : '';
-  const resp = await fetch(`${url}/values/${encodeURIComponent(key)}${params}`, {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: payload,
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!resp.ok) throw new Error(`Extra key ${key}: write failed (HTTP ${resp.status})`);
+  if (shouldUseUpstash(key)) {
+    await _upstashSet(key, value, ttl || 0);
+  } else {
+    const url = getKvBase();
+    const token = getKvToken();
+    const params = ttl ? `?expiration_ttl=${ttl}` : '';
+    const resp = await fetch(`${url}/values/${encodeURIComponent(key)}${params}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: payload,
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!resp.ok) throw new Error(`Extra key ${key}: write failed (HTTP ${resp.status})`);
+  }
   console.log(`  Extra key ${key}: written`);
 }
 
 export async function writeSeedMeta(dataKey, recordCount, metaKeyOverride, metaTtlSeconds) {
-  const url = getKvBase();
-  const token = getKvToken();
   const metaKey = metaKeyOverride || `seed-meta:${dataKey.replace(/:v\d+$/, '')}`;
   const meta = { fetchedAt: Date.now(), recordCount: recordCount ?? 0 };
   const metaTtl = metaTtlSeconds ?? 86400 * 7;
-  const resp = await fetch(`${url}/values/${encodeURIComponent(metaKey)}?expiration_ttl=${metaTtl}`, {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(meta),
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!resp.ok) console.warn(`  seed-meta ${metaKey}: write failed`);
+  if (shouldUseUpstash(metaKey)) {
+    await _upstashSet(metaKey, meta, metaTtl);
+  } else {
+    const url = getKvBase();
+    const token = getKvToken();
+    const resp = await fetch(`${url}/values/${encodeURIComponent(metaKey)}?expiration_ttl=${metaTtl}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(meta),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!resp.ok) console.warn(`  seed-meta ${metaKey}: write failed`);
+  }
 }
 
 export async function writeExtraKeyWithMeta(key, data, ttl, recordCount, metaKeyOverride, metaTtlSeconds) {
@@ -691,28 +934,47 @@ export async function writeExtraKeyWithMeta(key, data, ttl, recordCount, metaKey
 }
 
 export async function extendExistingTtl(keys, ttlSeconds = 600) {
-  const { accountId, namespaceId, token } = _cfCredentials();
-  const base = kvBase(accountId, namespaceId);
-  const headers = { Authorization: `Bearer ${token}` };
   try {
-    // Cloudflare KV has no EXPIRE — re-write each key to refresh TTL.
     let extended = 0;
     let missing = 0;
     for (const key of keys) {
-      const getResp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
-        headers,
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!getResp.ok) { missing++; continue; }
-      const text = await getResp.text();
-      if (!text) { missing++; continue; }
-      const putResp = await fetch(`${base}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
-        method: 'PUT',
-        headers: { ...headers, 'Content-Type': getResp.headers.get('content-type') || 'application/json' },
-        body: text,
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (putResp.ok) extended++;
+      if (shouldUseUpstash(key)) {
+        // Upstash: use EXPIRE command via pipeline
+        const { url, token } = _upstashCredentials();
+        const getResp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (!getResp.ok) { missing++; continue; }
+        const data = await getResp.json();
+        if (!data.result) { missing++; continue; }
+        await fetch(`${url}/pipeline`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify([['EXPIRE', key, String(ttlSeconds)]]),
+          signal: AbortSignal.timeout(5_000),
+        });
+        extended++;
+      } else {
+        // Cloudflare KV: re-write to refresh TTL
+        const { accountId, namespaceId, token } = _cfCredentials();
+        const base = kvBase(accountId, namespaceId);
+        const headers = { Authorization: `Bearer ${token}` };
+        const getResp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+          headers,
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (!getResp.ok) { missing++; continue; }
+        const text = await getResp.text();
+        if (!text) { missing++; continue; }
+        const putResp = await fetch(`${base}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
+          method: 'PUT',
+          headers: { ...headers, 'Content-Type': getResp.headers.get('content-type') || 'application/json' },
+          body: text,
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (putResp.ok) extended++;
+      }
     }
     if (extended > 0) console.log(`  Extended TTL on ${extended} key(s) (${ttlSeconds}s)`);
     if (missing > 0) console.warn(`  WARNING: ${missing} key(s) were expired/missing — TTL extension skipped`);

@@ -3,6 +3,84 @@ import { buildUpstreamEvent, getUsageScope, sendToAxiom } from './usage';
 
 const KV_OP_TIMEOUT_MS = 180_000;
 
+// ── Dual-backend routing ─────────────────────────────────────────────
+// High-frequency (≤ hourly) seeders and atomic-dependent families → Upstash.
+// Low-frequency (≥ 6h) seeders and read-heavy caches → Cloudflare KV.
+
+const UPSTASH_PREFIXES = new Set([
+  'market:quotes', 'market:crypto', 'market:hyperliquid:flow',
+  'market:stablecoins', 'market:gulf-quotes',
+  'seismology:earthquakes', 'market:etf-flows', 'market:fear-greed',
+  'market:wsb', 'energy:hormuz', 'military:flights', 'prediction:markets',
+  'market:breadth', 'market:defi-tokens',
+  'energy:chokepoint-flows', 'economic:economic-calendar',
+  'natural:events', 'military:maritime-news',
+  'intelligence:social-velocity', 'intelligence:tech-events',
+  'intelligence:research', 'portwatch:disruptions:active',
+  'forecast:', 'rl:', 'oauth:', 'brief:', 'digest-', 'mcp:',
+]);
+
+const EXACT_UPSTASH_KEYS = new Set(['shared:fx-rates', 'health:failure-log-sig']);
+
+function extractBasePrefix(key: string): string {
+  const vMatch = key.match(/^(.+?):v\d+$/);
+  return vMatch ? vMatch[1] : key;
+}
+
+function shouldUseUpstash(key: string): boolean {
+  if (EXACT_UPSTASH_KEYS.has(extractBasePrefix(key))) return true;
+  let base = extractBasePrefix(key);
+  base = base.replace(/^seed-(meta|lock):/, '');
+  for (const prefix of UPSTASH_PREFIXES) {
+    if (base === prefix || base.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+function getUpstashCredentials(): { url: string; token: string } | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  return { url, token };
+}
+
+async function upstashGetRaw(key: string): Promise<string | null> {
+  const creds = getUpstashCredentials();
+  if (!creds) return null;
+  const resp = await fetch(`${creds.url}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${creds.token}` },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!resp.ok) return null;
+  const data = await resp.json();
+  return data.result ?? null;
+}
+
+async function upstashSet(key: string, value: unknown, ttlSeconds: number): Promise<void> {
+  const creds = getUpstashCredentials();
+  if (!creds) return;
+  const cmd = ttlSeconds > 0
+    ? ['SET', key, typeof value === 'string' ? value : JSON.stringify(value), 'EX', String(ttlSeconds)]
+    : ['SET', key, typeof value === 'string' ? value : JSON.stringify(value)];
+  await fetch(`${creds.url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${creds.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([cmd]),
+    signal: AbortSignal.timeout(10_000),
+  });
+}
+
+async function upstashDel(key: string): Promise<void> {
+  const creds = getUpstashCredentials();
+  if (!creds) return;
+  await fetch(`${creds.url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${creds.token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([['DEL', key]]),
+    signal: AbortSignal.timeout(10_000),
+  });
+}
+
 // ── Cloudflare KV helpers ───────────────────────────────────────────
 
 interface KvCredentials {
@@ -95,6 +173,11 @@ export async function getRawJson(key: string): Promise<unknown | null> {
     const { sidecarCacheGet } = await import('./sidecar-cache');
     return sidecarCacheGet(key);
   }
+  if (shouldUseUpstash(key)) {
+    const raw = await upstashGetRaw(key);
+    if (raw == null) return null;
+    return unwrapEnvelope(JSON.parse(raw)).data;
+  }
   const creds = getKvCredentials();
   if (!creds) throw new Error('Cloudflare KV credentials not configured');
   const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(key)}`, {
@@ -104,8 +187,6 @@ export async function getRawJson(key: string): Promise<unknown | null> {
   if (!resp.ok) throw new Error(`KV HTTP ${resp.status}`);
   const text = await resp.text();
   if (!text) return null;
-  // Envelope-aware: contract-mode canonical keys are stored as {_seed, data}.
-  // unwrapEnvelope is a no-op on legacy (non-envelope) shapes.
   return unwrapEnvelope(JSON.parse(text)).data;
 }
 
@@ -124,6 +205,9 @@ export async function getCachedRawString(key: string): Promise<string | null> {
     const { sidecarCacheGet } = await import('./sidecar-cache');
     const v = sidecarCacheGet(key);
     return typeof v === 'string' ? v : null;
+  }
+  if (shouldUseUpstash(key)) {
+    return upstashGetRaw(key);
   }
   const creds = getKvCredentials();
   if (!creds) return null;
@@ -149,13 +233,26 @@ export async function getCachedJson(key: string, raw = false): Promise<unknown |
     return sidecarCacheGet(key);
   }
 
-  const creds = getKvCredentials();
-  if (!creds) return null;
-
   // In-process cache — skip KV for recently-fetched keys
   const cacheKey = raw ? `raw:${key}` : key;
   const localHit = localCacheGet(cacheKey);
   if (localHit.hit) return localHit.value;
+
+  if (shouldUseUpstash(key)) {
+    try {
+      const rawVal = await upstashGetRaw(key);
+      if (rawVal == null) return null;
+      const parsed = unwrapEnvelope(JSON.parse(rawVal)).data;
+      localCacheSet(cacheKey, parsed);
+      return parsed;
+    } catch (err) {
+      console.warn('[upstash] getCachedJson failed:', errMsg(err));
+      return null;
+    }
+  }
+
+  const creds = getKvCredentials();
+  if (!creds) return null;
 
   try {
     const finalKey = raw ? key : prefixKey(key);
@@ -166,9 +263,6 @@ export async function getCachedJson(key: string, raw = false): Promise<unknown |
     if (!resp.ok) return null;
     const text = await resp.text();
     if (!text) return null;
-    // Envelope-aware by default — RPC consumers get the bare payload regardless
-    // of whether the writer has migrated to contract mode. Legacy shapes pass
-    // through unchanged (unwrapEnvelope returns {_seed: null, data: raw}).
     const parsed = unwrapEnvelope(JSON.parse(text)).data;
     localCacheSet(cacheKey, parsed);
     return parsed;
@@ -190,12 +284,20 @@ export async function setCachedJson(key: string, value: unknown, ttlSeconds: num
     return;
   }
 
-  const creds = getKvCredentials();
-  if (!creds) return;
-
-  // Invalidate local cache so next getCachedJson hits KV
   const cacheKey = raw ? `raw:${key}` : key;
   localCacheInvalidate(cacheKey);
+
+  if (shouldUseUpstash(key)) {
+    try {
+      await upstashSet(key, value, ttlSeconds);
+    } catch (err) {
+      console.warn('[upstash] setCachedJson failed:', errMsg(err));
+    }
+    return;
+  }
+
+  const creds = getKvCredentials();
+  if (!creds) return;
 
   try {
     const finalKey = raw ? key : prefixKey(key);
@@ -221,26 +323,44 @@ export async function getCachedJsonBatch(keys: string[], raw = false): Promise<M
   const result = new Map<string, unknown>();
   if (keys.length === 0) return result;
 
+  // Split keys by backend
+  const upstashKeys: string[] = [];
+  const cfKeys: string[] = [];
+  for (const k of keys) {
+    (shouldUseUpstash(k) ? upstashKeys : cfKeys).push(k);
+  }
+
+  // Upstash reads
+  const upstashReads = upstashKeys.map(async (k) => {
+    try {
+      const rawVal = await upstashGetRaw(k);
+      if (rawVal == null) return;
+      const parsed = JSON.parse(rawVal);
+      if (parsed === NEG_SENTINEL) return;
+      result.set(k, unwrapEnvelope(parsed).data);
+    } catch { /* skip malformed */ }
+  });
+
+  // Cloudflare reads
   const creds = getKvCredentials();
-  if (!creds) return result;
+  const cfReads = creds ? cfKeys.map(async (k) => {
+    const finalKey = raw ? k : prefixKey(k);
+    try {
+      const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}`, {
+        headers: kvHeaders(creds.token),
+        signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
+      });
+      if (!resp.ok) return;
+      const text = await resp.text();
+      if (!text) return;
+      const parsed = JSON.parse(text);
+      if (parsed === NEG_SENTINEL) return;
+      result.set(k, unwrapEnvelope(parsed).data);
+    } catch { /* skip malformed */ }
+  }) : [];
 
   try {
-    const reads = keys.map(async (k) => {
-      const finalKey = raw ? k : prefixKey(k);
-      try {
-        const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}`, {
-          headers: kvHeaders(creds.token),
-          signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
-        });
-        if (!resp.ok) return;
-        const text = await resp.text();
-        if (!text) return;
-        const parsed = JSON.parse(text);
-        if (parsed === NEG_SENTINEL) return;
-        result.set(k, unwrapEnvelope(parsed).data);
-      } catch { /* skip malformed */ }
-    });
-    await Promise.all(reads);
+    await Promise.all([...upstashReads, ...cfReads]);
   } catch (err) {
     console.warn('[kv] getCachedJsonBatch failed:', errMsg(err));
   }
@@ -260,25 +380,64 @@ export async function runRedisPipeline(
   if (process.env.LOCAL_API_MODE === 'tauri-sidecar') return [];
   if (commands.length === 0) return [];
 
-  const creds = getKvCredentials();
-  if (!creds) return [];
+  const results: Array<{ result?: unknown }> = new Array(commands.length);
 
-  const results: Array<{ result?: unknown }> = [];
-
-  for (const cmd of commands) {
-    const [verb, key, ...rest] = cmd;
-    if (typeof verb !== 'string' || typeof key !== 'string') {
-      results.push({});
+  // Split commands by backend
+  const upstashIdx: number[] = [];
+  const cfIdx: number[] = [];
+  for (let i = 0; i < commands.length; i++) {
+    const cmd = commands[i];
+    if (typeof cmd[0] !== 'string' || typeof cmd[1] !== 'string') {
+      results[i] = {};
       continue;
     }
+    (shouldUseUpstash(cmd[1] as string) ? upstashIdx : cfIdx).push(i);
+  }
+
+  // Upstash batch
+  if (upstashIdx.length > 0) {
+    try {
+      const upstashCmds = upstashIdx.map(i => commands[i]);
+      const creds = getUpstashCredentials();
+      if (creds) {
+        const resp = await fetch(`${creds.url}/pipeline`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${creds.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(upstashCmds),
+          signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          for (let j = 0; j < upstashIdx.length; j++) {
+            results[upstashIdx[j]] = data[j] || {};
+          }
+        } else {
+          for (const i of upstashIdx) results[i] = {};
+        }
+      } else {
+        for (const i of upstashIdx) results[i] = {};
+      }
+    } catch (err) {
+      console.warn('[upstash] runRedisPipeline failed:', errMsg(err));
+      for (const i of upstashIdx) results[i] = {};
+    }
+  }
+
+  // Cloudflare KV batch
+  const creds = getKvCredentials();
+  for (const i of cfIdx) {
+    const cmd = commands[i];
+    const [verb, key, ...rest] = cmd;
+    if (typeof verb !== 'string' || typeof key !== 'string') { results[i] = {}; continue; }
     const finalKey = raw ? key : prefixKey(key);
     try {
+      if (!creds) { results[i] = {}; continue; }
       if (verb.toUpperCase() === 'GET') {
         const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}`, {
           headers: kvHeaders(creds.token),
           signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
         });
-        results.push({ result: resp.ok ? await resp.text() : null });
+        results[i] = { result: resp.ok ? await resp.text() : null };
       } else if (verb.toUpperCase() === 'SET') {
         const value = rest[0];
         const ttlIdx = rest.indexOf('EX');
@@ -290,13 +449,13 @@ export async function runRedisPipeline(
           body: typeof value === 'string' ? value : JSON.stringify(value),
           signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
         });
-        results.push({ result: 'OK' });
+        results[i] = { result: 'OK' };
       } else {
-        results.push({});
+        results[i] = {};
       }
     } catch (err) {
       console.warn(`[kv] runRedisPipeline ${verb} failed:`, errMsg(err));
-      results.push({});
+      results[i] = {};
     }
   }
   return results;
@@ -306,6 +465,15 @@ export async function runRedisPipeline(
  * Deletes a single key from Cloudflare KV.
  */
 export async function deleteRedisKey(key: string, raw = false): Promise<void> {
+  if (shouldUseUpstash(key)) {
+    try {
+      await upstashDel(key);
+    } catch (err) {
+      console.warn('[upstash] deleteRedisKey failed:', errMsg(err));
+    }
+    return;
+  }
+
   const creds = getKvCredentials();
   if (!creds) return;
 
