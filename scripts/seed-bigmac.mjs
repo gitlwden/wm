@@ -443,3 +443,4 @@ await runSeed('economic', 'bigmac', CANONICAL_KEY, () => fetchBigMacPrices(prevS
     ttl: CACHE_TTL * 2,
     declareRecords,
   }] : undefined,
+});

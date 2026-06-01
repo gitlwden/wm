@@ -78,8 +78,8 @@ import { emitCooldownShadowLog } from './lib/digest-cooldown-shadow-log.mjs';
 
 import { cfPipeline } from './_seed-utils.mjs';
 
-const UPSTASH_URL = '';
-const UPSTASH_TOKEN = '';
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL ?? '';
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? '';
 const CONVEX_SITE_URL =
   (process.env.CONVEX_SITE_URL ??
   (process.env.CONVEX_URL ?? '').replace('.convex.cloud', '.convex.site')).replace(/\/+$/, '');
