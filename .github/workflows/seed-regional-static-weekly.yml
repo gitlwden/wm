@@ -25,6 +25,12 @@ jobs:
 
       - run: npm ci
 
+      - name: Prepare military bases data
+        run: |
+          node scripts/_fetch-osm-military.mjs
+          node scripts/build-military-bases-final.mjs
+        continue-on-error: true
+
       - name: Seed static ref bundle
         run: node scripts/seed-bundle-static-ref.mjs
         continue-on-error: true
