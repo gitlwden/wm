@@ -2,7 +2,7 @@
 // Seed USPTO PatentsView defense/dual-use patent filings (issue #2047).
 // Weekly cron — top 20 recent filings per strategic CPC category.
 
-import { loadEnvFile, CHROME_UA, runSeed, sleep } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, sleep, resolveProxy, httpsProxyFetchRaw } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -45,13 +45,22 @@ async function fetchCategoryPatents(category) {
   url.searchParams.set('o', JSON.stringify({ size: MAX_PER_CATEGORY }));
   url.searchParams.set('s', JSON.stringify([{ patent_date: 'desc' }]));
 
-  const resp = await fetch(url.toString(), {
-    headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
-    signal: AbortSignal.timeout(20_000),
-  });
+  const urlStr = url.toString();
+  const proxyAuth = resolveProxy();
 
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const data = await resp.json();
+  let data;
+  try {
+    const resp = await fetch(urlStr, {
+      headers: { 'User-Agent': CHROME_UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    data = await resp.json();
+  } catch (directErr) {
+    if (!proxyAuth) throw directErr;
+    const proxied = await httpsProxyFetchRaw(urlStr, proxyAuth, { accept: 'application/json', timeoutMs: 20_000 });
+    data = JSON.parse(proxied.buffer.toString('utf8'));
+  }
 
   return (data.patents ?? []).map((p) => ({
     patentId: String(p.patent_id ?? ''),

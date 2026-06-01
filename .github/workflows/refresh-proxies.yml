@@ -1,0 +1,37 @@
+name: Refresh Free Proxies
+
+on:
+  schedule:
+    - cron: '0 0,12 * * *'   # Every 12 hours
+  workflow_dispatch:
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Fetch and test proxies
+        id: proxies
+        run: |
+          node scripts/refresh-proxies.mjs 2>&1 | tee proxy-output.log
+          # Extract JSON from output
+          PROXY_URL=$(grep '__JSON__' proxy-output.log | sed 's/.*__JSON__//;s/__JSON__.*//' | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));console.log(d.proxy_url)")
+          PROXY_POOL=$(grep '__JSON__' proxy-output.log | sed 's/.*__JSON__//;s/__JSON__.*//' | node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));console.log(JSON.stringify(d.pool))")
+          echo "proxy_url=$PROXY_URL" >> "$GITHUB_OUTPUT"
+          echo "proxy_pool=$PROXY_POOL" >> "$GITHUB_OUTPUT"
+
+      - name: Update repo variable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh variable set PROXY_URL --body "${{ steps.proxies.outputs.proxy_url }}"
+          gh variable set PROXY_POOL --body '${{ steps.proxies.outputs.proxy_pool }}'
+          echo "Updated PROXY_URL=${{ steps.proxies.outputs.proxy_url }}"

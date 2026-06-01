@@ -13,6 +13,7 @@ jobs:
 
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      PROXY_URL: ${{ vars.PROXY_URL }}
     steps:
       - uses: actions/checkout@v4
 
