@@ -1,14 +1,18 @@
 #!/usr/bin/env node
-// Seed USPTO PatentsView defense/dual-use patent filings (issue #2047).
+// Seed defense/dual-use patent filings from Google Patents.
 // Weekly cron — top 20 recent filings per strategic CPC category.
 
-import { loadEnvFile, CHROME_UA, runSeed, sleep, httpsProxyFetchRaw } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, sleep, httpsProxyFetchRaw } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'patents:defense:latest';
+const CACHE_TTL = 1_814_400; // 21 days (3× weekly interval)
+const GOOGLE_PATENTS_XHR = 'https://patents.google.com/xhr/query';
+const INTER_CATEGORY_DELAY_MS = 5_000;
+const MAX_PER_CATEGORY = 20;
 
-// Proxy pool — try multiple free proxies since they're unreliable
+// Proxy support for CI environments where Google rate-limits direct requests
 let _proxyPool = null;
 function getProxyPool() {
   if (_proxyPool) return _proxyPool;
@@ -18,19 +22,16 @@ function getProxyPool() {
 }
 
 async function fetchWithProxy(urlStr, headers, timeoutMs) {
-  // Try direct first
   try {
-    const resp = await fetch(urlStr, { headers, signal: AbortSignal.timeout(8_000) });
+    const resp = await fetch(urlStr, { headers, signal: AbortSignal.timeout(timeoutMs) });
     if (resp.ok) return resp;
   } catch { /* fall through to proxy */ }
-
-  // Try up to 3 proxies with 8s timeout each
   const pool = getProxyPool().slice(0, 3);
   for (const proxy of pool) {
     try {
       const proxied = await httpsProxyFetchRaw(urlStr, proxy, {
         accept: headers.Accept || 'application/json',
-        timeoutMs: 8_000,
+        timeoutMs,
       });
       return {
         ok: true,
@@ -38,12 +39,8 @@ async function fetchWithProxy(urlStr, headers, timeoutMs) {
       };
     } catch { continue; }
   }
-  throw new Error('All proxies failed');
+  throw new Error('All fetch methods failed');
 }
-const CACHE_TTL = 1_814_400; // 21 days (3× weekly interval)
-const PATENTSVIEW_API = 'https://search.patentsview.org/api/v1/patent/';
-const INTER_CATEGORY_DELAY_MS = 3_000;
-const MAX_PER_CATEGORY = 20;
 
 // Key defense/dual-use assignees
 const DEFENSE_ASSIGNEES = [
@@ -60,38 +57,58 @@ const CPC_CATEGORIES = [
   { code: 'C12N', desc: 'Microorganisms / Biotechnology' },
 ];
 
-function buildQuery(cpcCode) {
-  return JSON.stringify({
-    _and: [
-      { _begins: { 'cpc_at_issue.cpc_subclass_id': cpcCode } },
-      {
-        _or: DEFENSE_ASSIGNEES.map((a) => ({ _text_phrase: { 'assignees.assignee_organization': a } })),
-      },
-    ],
-  });
+function isDefenseAssignee(assignee) {
+  if (!assignee) return false;
+  const lower = assignee.toLowerCase();
+  return DEFENSE_ASSIGNEES.some((a) => lower.includes(a.toLowerCase()));
 }
 
 async function fetchCategoryPatents(category) {
-  const url = new URL(PATENTSVIEW_API);
-  url.searchParams.set('q', buildQuery(category.code));
-  url.searchParams.set('f', JSON.stringify(['patent_id', 'patent_title', 'patent_date', 'patent_abstract', 'assignees.assignee_organization', 'cpc_at_issue.cpc_subclass_id']));
-  url.searchParams.set('o', JSON.stringify({ size: MAX_PER_CATEGORY }));
-  url.searchParams.set('s', JSON.stringify([{ patent_date: 'desc' }]));
+  // Query one assignee at a time to avoid Google rate-limiting long queries
+  const allPatents = [];
+  for (const assignee of DEFENSE_ASSIGNEES) {
+    const q = `CPC=${category.code} AND assignee=${assignee}`;
+    const url = `${GOOGLE_PATENTS_XHR}?url=${encodeURIComponent(q)}&exp=&tags=`;
 
-  const resp = await fetchWithProxy(url.toString(), { 'User-Agent': CHROME_UA, Accept: 'application/json' }, 20_000);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const data = await resp.json();
+    try {
+      const resp = await fetchWithProxy(url, {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Accept: 'application/json',
+      }, 15_000);
 
-  return (data.patents ?? []).map((p) => ({
-    patentId: String(p.patent_id ?? ''),
-    title: String(p.patent_title ?? '').slice(0, 300),
-    date: String(p.patent_date ?? ''),
-    assignee: String(p.assignees?.[0]?.assignee_organization ?? '').slice(0, 200),
-    cpcCode: category.code,
-    cpcDesc: category.desc,
-    abstract: String(p.patent_abstract ?? '').slice(0, 500),
-    url: p.patent_id ? `https://patents.google.com/patent/US${p.patent_id}` : '',
-  })).filter((p) => p.patentId && p.date);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const results = data.results?.cluster?.[0]?.result ?? [];
+
+      for (const r of results) {
+        const p = r.patent ?? {};
+        const patentId = (p.publication_number ?? '').replace(/[^A-Z0-9]/gi, '');
+        if (!patentId) continue;
+        allPatents.push({
+          patentId,
+          title: String(p.title ?? '').trim().slice(0, 300),
+          date: String(p.grant_date || p.publication_date || p.filing_date || ''),
+          assignee: String(p.assignee ?? '').slice(0, 200),
+          cpcCode: category.code,
+          cpcDesc: category.desc,
+          abstract: String(p.snippet ?? '').replace(/&hellip;/g, '…').slice(0, 500),
+          url: patentId ? `https://patents.google.com/patent/${p.publication_number}/en` : '',
+        });
+      }
+    } catch { /* skip failed assignee */ }
+    await sleep(1_000); // Be gentle with Google
+  }
+
+  // Deduplicate, filter, and limit
+  const seen = new Set();
+  return allPatents
+    .filter((p) => {
+      if (!p.patentId || !p.date || seen.has(p.patentId)) return false;
+      seen.add(p.patentId);
+      return true;
+    })
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, MAX_PER_CATEGORY);
 }
 
 async function fetchAllPatents() {
@@ -133,7 +150,7 @@ export function declareRecords(data) {
 runSeed('military', 'defense-patents', CANONICAL_KEY, fetchAllPatents, {
   validateFn: validate,
   ttlSeconds: CACHE_TTL,
-  sourceVersion: 'patentsview-v1',
+  sourceVersion: 'google-patents-v1',
   recordCount: (d) => d?.patents?.length ?? 0,
   declareRecords,
   schemaVersion: 1,
