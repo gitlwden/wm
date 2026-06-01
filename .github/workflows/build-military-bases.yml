@@ -1,0 +1,53 @@
+name: Build & Upload Military Bases Data
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Fetch OSM military data
+        run: node scripts/_fetch-osm-military.mjs
+
+      - name: Build military-bases-final.json
+        run: node scripts/build-military-bases-final.mjs
+
+      - name: Upload to R2
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node -e "
+          const fs = require('fs');
+          const acct = process.env.CLOUDFLARE_ACCOUNT_ID;
+          const token = process.env.CLOUDFLARE_API_TOKEN;
+          const data = fs.readFileSync('scripts/data/military-bases-final.json');
+          console.log('Uploading', (data.length/1024/1024).toFixed(1), 'MB to R2...');
+          fetch('https://api.cloudflare.com/client/v4/accounts/' + acct + '/r2/buckets/wm-seed-data/objects/seed-data/military-bases-final.json', {
+            method: 'PUT',
+            headers: {
+              'Authorization': 'Bearer ' + token,
+              'Content-Type': 'application/json',
+            },
+            body: data,
+            signal: AbortSignal.timeout(120000),
+          }).then(r => {
+            console.log('Status:', r.status);
+            return r.json();
+          }).then(d => {
+            if (d.success) console.log('Upload successful!');
+            else console.log('Upload failed:', JSON.stringify(d));
+          }).catch(e => console.error(e.message));
+          "

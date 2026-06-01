@@ -7,7 +7,7 @@ import { getKvBase, getKvToken } from './_seed-utils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const R2_BUCKET_URL = 'https://api.cloudflare.com/client/v4/accounts/{acct}/r2/buckets/worldmonitor-data/objects/seed-data/military-bases-final.json';
+const R2_BUCKET_URL = 'https://api.cloudflare.com/client/v4/accounts/{acct}/r2/buckets/wm-seed-data/objects/seed-data/military-bases-final.json';
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 1000;
 const GRACE_PERIOD_MS = 5 * 60 * 1000;
