@@ -163,8 +163,21 @@ export async function listMilitaryBases(
       cacheKey, 3600,
       async () => {
         // Load all bases as JSON array and filter client-side
-        let allData = await getCachedJson(dataKey, true) as Array<Record<string, unknown>> | null;
-        if (!allData) allData = await getCachedJson(dataKey) as Array<Record<string, unknown>> | null;
+        // Support chunked storage (15K entries per chunk) and legacy single-key
+        let allData: Array<Record<string, unknown>> | null = null;
+        const numChunks = await getCachedJson(`${dataKey}:chunks`, true) as number | null;
+        if (numChunks && numChunks > 0) {
+          const parts: Array<Record<string, unknown>>[] = [];
+          for (let i = 0; i < numChunks; i++) {
+            const chunk = await getCachedJson(`${dataKey}:part${i}`, true) as Array<Record<string, unknown>> | null;
+            if (chunk) parts.push(chunk);
+          }
+          allData = parts.flat();
+        }
+        if (!allData || allData.length === 0) {
+          allData = await getCachedJson(dataKey, true) as Array<Record<string, unknown>> | null;
+          if (!allData) allData = await getCachedJson(dataKey) as Array<Record<string, unknown>> | null;
+        }
         if (!allData || allData.length === 0) return { bases: [], clusters: [], totalInView: 0, truncated: false };
 
         // Bounding box filter

@@ -119,11 +119,41 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+const CHUNK_SIZE = 15_000; // ~4MB per chunk (well under 5MB KV limit)
+
 async function seedData(base, token, dataKey, entries) {
-  // Store all entries as a JSON array under a single KV key
-  await kvPut(base, token, dataKey, entries);
-  console.log(`  DATA: ${entries.length.toLocaleString()} entries written`);
+  const chunks = [];
+  for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+    chunks.push(entries.slice(i, i + CHUNK_SIZE));
+  }
+
+  // Write chunk count index key
+  const indexKey = `${dataKey}:chunks`;
+  await kvPut(base, token, indexKey, chunks.length, 7 * 24 * 3600);
+  console.log(`  DATA: ${entries.length.toLocaleString()} entries → ${chunks.length} chunks`);
+
+  // Write each chunk
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkKey = `${dataKey}:part${i}`;
+    await kvPut(base, token, chunkKey, chunks[i]);
+    console.log(`  CHUNK ${i + 1}/${chunks.length}: ${chunks[i].length.toLocaleString()} entries`);
+  }
   return entries.length;
+}
+
+async function readChunkedData(base, token, dataKey) {
+  const indexKey = `${dataKey}:chunks`;
+  const numChunks = await kvGet(base, token, indexKey);
+  if (!numChunks || numChunks < 1) {
+    // Fallback: try reading as single key (legacy format)
+    return await kvGet(base, token, dataKey);
+  }
+  const allEntries = [];
+  for (let i = 0; i < numChunks; i++) {
+    const chunk = await kvGet(base, token, `${dataKey}:part${i}`);
+    if (Array.isArray(chunk)) allEntries.push(...chunk);
+  }
+  return allEntries;
 }
 
 async function validate(base, token, prefix, version, expectedCount) {
@@ -131,7 +161,7 @@ async function validate(base, token, prefix, version, expectedCount) {
 
   console.log('\nValidating seeded data...');
 
-  const data = await kvGet(base, token, dataKey);
+  const data = await readChunkedData(base, token, dataKey);
   const count = Array.isArray(data) ? data.length : 0;
 
   console.log(`  ${dataKey} = ${count} entries (expected >= ${expectedCount})`);
@@ -170,6 +200,18 @@ async function cleanupOldVersion(base, token, prefix, newVersion) {
 
   const oldVersion = currentActive;
   const oldDataKey = `${prefix}military:bases:data:${oldVersion}`;
+
+  // Clean up chunked keys
+  const oldIndexKey = `${oldDataKey}:chunks`;
+  const oldChunks = await kvGet(base, token, oldIndexKey);
+  if (oldChunks && oldChunks > 0) {
+    for (let i = 0; i < oldChunks; i++) {
+      await kvDelete(base, token, `${oldDataKey}:part${i}`);
+    }
+    await kvDelete(base, token, oldIndexKey);
+  }
+  // Also delete legacy single key
+  await kvDelete(base, token, oldDataKey);
 
   return { oldVersion, oldDataKey };
 }
