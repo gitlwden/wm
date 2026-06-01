@@ -7,21 +7,11 @@ const KV_OP_TIMEOUT_MS = 180_000;
 // High-frequency (≤ hourly) seeders and atomic-dependent families → Upstash.
 // Low-frequency (≥ 6h) seeders and read-heavy caches → Cloudflare KV.
 
-const UPSTASH_PREFIXES = new Set([
-  'market:quotes', 'market:crypto', 'market:hyperliquid:flow',
-  'market:stablecoins', 'market:gulf-quotes',
-  'seismology:earthquakes', 'market:etf-flows', 'market:fear-greed',
-  'market:wsb', 'energy:hormuz', 'military:flights', 'prediction:markets',
-  'market:breadth', 'market:defi-tokens',
-  'energy:chokepoint-flows', 'economic:economic-calendar',
-  'natural:events', 'military:maritime-news',
-  'intelligence:social-velocity', 'intelligence:tech-events',
-  'intelligence:research', 'portwatch:disruptions:active',
-  'forecast:', 'rl:', 'oauth:', 'brief:', 'digest-', 'mcp:',
-  'fred:series:', 'bls:series:',
+const CF_PREFIXES = new Set([
+  'entitlements:', 'classify:', 'intelligence:energy-shock:',
+  'intelligence:route-impact:', 'webcam:list-cache:', 'aviation:delays-bootstrap:',
+  'sidecar:',
 ]);
-
-const EXACT_UPSTASH_KEYS = new Set(['shared:fx-rates', 'health:failure-log-sig']);
 
 function extractBasePrefix(key: string): string {
   const vMatch = key.match(/^(.+?):v\d+$/);
@@ -29,13 +19,12 @@ function extractBasePrefix(key: string): string {
 }
 
 function shouldUseUpstash(key: string): boolean {
-  if (EXACT_UPSTASH_KEYS.has(extractBasePrefix(key))) return true;
   let base = extractBasePrefix(key);
   base = base.replace(/^seed-(meta|lock):/, '');
-  for (const prefix of UPSTASH_PREFIXES) {
-    if (base === prefix || base.startsWith(prefix)) return true;
+  for (const prefix of CF_PREFIXES) {
+    if (base === prefix || base.startsWith(prefix)) return false;
   }
-  return false;
+  return true;
 }
 
 function getUpstashCredentials(): { url: string; token: string } | null {

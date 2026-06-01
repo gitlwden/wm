@@ -145,33 +145,14 @@ function _cfCredentials() {
 // Low-frequency seeders (≥ 6h) and read-heavy caches route to
 // Cloudflare KV (1,000 writes/day, unlimited reads).
 
-// Upstash key prefixes — covers the canonical key base (before :v1 etc.)
-// plus key families (forecast:*, rl:*, oauth:*, brief:*).
-const UPSTASH_PREFIXES = new Set([
-  // ≤ 5 min
-  'market:quotes', 'market:crypto', 'market:hyperliquid:flow',
-  // 10 min
-  'market:stablecoins', 'market:gulf-quotes',
-  // 15 min
-  'seismology:earthquakes', 'market:etf-flows', 'market:fear-greed',
-  'market:wsb', 'energy:hormuz', 'military:flights', 'prediction:markets',
-  // 30 min
-  'market:breadth', 'market:defi-tokens',
-  // hourly
-  'energy:chokepoint-flows', 'economic:economic-calendar',
-  'natural:events', 'military:maritime-news',
-  'intelligence:social-velocity', 'intelligence:tech-events',
-  'intelligence:research', 'portwatch:disruptions:active',
-  // Key families (not tied to a single seeder frequency)
-  'forecast:', 'rl:', 'oauth:', 'brief:', 'digest-', 'mcp:',
-  // Per-series keys — each seeder run writes N keys (fred:series:*, bls:series:*)
-  'fred:series:', 'bls:series:',
-]);
-
-// Exact keys that don't match a prefix but must stay on Upstash.
-const EXACT_UPSTASH_KEYS = new Set([
-  'shared:fx-rates',        // written every 4h, read by many seeders
-  'health:failure-log-sig', // diagnostic, needs atomicity
+// Cloudflare KV prefixes — only API read-through caches that benefit from
+// CF's unlimited reads and edge caching. Everything else goes to Upstash.
+const CF_PREFIXES = new Set([
+  // API computed caches (written on cache miss, read by many users)
+  'entitlements:', 'classify:', 'intelligence:energy-shock:',
+  'intelligence:route-impact:', 'webcam:list-cache:', 'aviation:delays-bootstrap:',
+  // Tauri sidecar / local dev caches
+  'sidecar:',
 ]);
 
 function _extractBasePrefix(key) {
@@ -180,14 +161,14 @@ function _extractBasePrefix(key) {
 }
 
 export function shouldUseUpstash(key) {
-  if (EXACT_UPSTASH_KEYS.has(_extractBasePrefix(key))) return true;
-  // Strip seed-meta:/seed-lock: prefix so metadata/locks follow their parent seeder's backend
+  // Strip seed-meta:/seed-lock: prefix for matching
   let base = _extractBasePrefix(key);
   base = base.replace(/^seed-(meta|lock):/, '');
-  for (const prefix of UPSTASH_PREFIXES) {
-    if (base === prefix || base.startsWith(prefix)) return true;
+  // Default to Upstash; only API read-through caches go to Cloudflare KV
+  for (const prefix of CF_PREFIXES) {
+    if (base === prefix || base.startsWith(prefix)) return false;
   }
-  return false;
+  return true;
 }
 
 function _upstashCredentials() {
