@@ -3,13 +3,57 @@
  * Fetches free proxy lists from multiple GitHub repos, tests HTTPS
  * connectivity, and outputs working proxies.
  *
- * Used by refresh-proxies.yml workflow to populate PROXY_URL / PROXY_POOL
- * repo variables for seeder workflows.
+ * Caches results to .proxy-cache.json (12h TTL). Subsequent runs
+ * within the TTL window skip the fetch/test and return cached proxies.
  *
  * Usage:
  *   node scripts/refresh-proxies.mjs              # stdout JSON
+ *   node scripts/refresh-proxies.mjs --force      # ignore cache
  *   node scripts/refresh-proxies.mjs --set-env     # write to $GITHUB_ENV
  */
+
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const CACHE_PATH = join(__dirname, '..', '.proxy-cache.json');
+const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+function readCache() {
+  try {
+    if (!existsSync(CACHE_PATH)) return null;
+    const cache = JSON.parse(readFileSync(CACHE_PATH, 'utf8'));
+    if (Date.now() - cache.ts < CACHE_TTL_MS && cache.proxy_url) return cache;
+    return null;
+  } catch { return null; }
+}
+
+function writeCache(data) {
+  writeFileSync(CACHE_PATH, JSON.stringify({ ...data, ts: Date.now() }));
+}
+
+function outputResults(proxyUrl, pool) {
+  console.log(`\nPrimary: ${proxyUrl}`);
+  console.log(`Pool: ${JSON.stringify(pool)}`);
+  const setEnv = process.argv.includes('--set-env');
+  if (setEnv && process.env.GITHUB_ENV) {
+    writeFileSync(process.env.GITHUB_ENV, `PROXY_URL=${proxyUrl}\n`, { flag: 'a' });
+    writeFileSync(process.env.GITHUB_ENV, `PROXY_POOL=${JSON.stringify(pool)}\n`, { flag: 'a' });
+    console.log('\nWritten to $GITHUB_ENV');
+  }
+  console.log(`\n__JSON__${JSON.stringify({ proxy_url: proxyUrl, pool, count: pool.length })}__JSON__`);
+}
+
+// Check cache first (unless --force)
+if (!process.argv.includes('--force')) {
+  const cached = readCache();
+  if (cached) {
+    console.log(`Using cached proxies (${cached.count} available, cached ${Math.round((Date.now() - cached.ts) / 60000)}min ago)`);
+    outputResults(cached.proxy_url, cached.pool);
+    process.exit(0);
+  }
+}
 
 const PROXY_SOURCES = [
   'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt',
@@ -110,23 +154,10 @@ async function main() {
 
   console.log(`Found ${working.length} working proxies`);
 
-  const primary = working[0];
-  const pool = JSON.stringify(working);
+  // Cache results
+  writeCache({ proxy_url: working[0], pool: working, count: working.length });
 
-  console.log(`\nPrimary: ${primary}`);
-  console.log(`Pool: ${pool}`);
-
-  // Output for GitHub Actions
-  const setEnv = process.argv.includes('--set-env');
-  if (setEnv && process.env.GITHUB_ENV) {
-    const fs = await import('node:fs');
-    fs.appendFileSync(process.env.GITHUB_ENV, `PROXY_URL=${primary}\n`);
-    fs.appendFileSync(process.env.GITHUB_ENV, `PROXY_POOL=${pool}\n`);
-    console.log('\nWritten to $GITHUB_ENV');
-  }
-
-  // Also output as JSON for programmatic consumption
-  console.log(`\n__JSON__${JSON.stringify({ proxy_url: primary, pool: working, count: working.length })}__JSON__`);
+  outputResults(working[0], working);
 }
 
 main().catch(err => {
