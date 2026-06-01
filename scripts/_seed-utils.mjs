@@ -740,8 +740,24 @@ export async function readCanonicalEnvelopeMeta(canonicalKey) {
     let parsed;
     if (shouldUseUpstash(canonicalKey)) {
       const raw = await _upstashGet(canonicalKey);
-      if (raw == null) return null;
-      try { parsed = JSON.parse(raw); } catch { return null; }
+      if (raw != null) {
+        try { parsed = JSON.parse(raw); } catch { return null; }
+      } else {
+        // CF KV fallback for migration window (routing inversion 388e96a7)
+        try {
+          const { accountId, namespaceId, token } = _cfCredentials();
+          const base = kvBase(accountId, namespaceId);
+          const resp = await fetch(`${base}/values/${encodeURIComponent(canonicalKey)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(5_000),
+          });
+          if (resp.ok) {
+            const text = await resp.text();
+            if (text) { try { parsed = JSON.parse(text); } catch { return null; } }
+          }
+        } catch { return null; }
+        if (!parsed) return null;
+      }
     } else {
       const { accountId, namespaceId, token } = _cfCredentials();
       const base = kvBase(accountId, namespaceId);
