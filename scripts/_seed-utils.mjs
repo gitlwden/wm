@@ -153,6 +153,8 @@ const CF_PREFIXES = new Set([
   'intelligence:route-impact:', 'webcam:list-cache:', 'aviation:delays-bootstrap:',
   // Tauri sidecar / local dev caches
   'sidecar:',
+  // Brief data — read by many users, benefits from CF edge caching
+  'brief:',
 ]);
 
 function _extractBasePrefix(key) {
