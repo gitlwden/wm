@@ -43,6 +43,13 @@ function parseProxyConfig(raw) {
     if (host && port && user) return { host, port, auth: `${user}:${pass}`, tls: true };
   }
 
+  // Bare host:port (no auth — free proxies)
+  if (parts.length === 2) {
+    const host = parts[0];
+    const port = parseInt(parts[1], 10);
+    if (host && port) return { host, port, auth: null, tls: false };
+  }
+
   return null;
 }
 
