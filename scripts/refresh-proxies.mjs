@@ -45,15 +45,6 @@ function outputResults(proxyUrl, pool) {
   console.log(`\n__JSON__${JSON.stringify({ proxy_url: proxyUrl, pool, count: pool.length })}__JSON__`);
 }
 
-// Check cache first (unless --force)
-if (!process.argv.includes('--force')) {
-  const cached = readCache();
-  if (cached) {
-    console.log(`Using cached proxies (${cached.count} available, cached ${Math.round((Date.now() - cached.ts) / 60000)}min ago)`);
-    outputResults(cached.proxy_url, cached.pool);
-    process.exit(0);
-  }
-}
 
 const PROXY_SOURCES = [
   'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt',
@@ -123,6 +114,21 @@ async function testBatch(proxies) {
 }
 
 async function main() {
+  // Check cache first (unless --force)
+  if (!process.argv.includes('--force')) {
+    const cached = readCache();
+    if (cached) {
+      console.log(`Cache hit (${cached.count} proxies, ${Math.round((Date.now() - cached.ts) / 60000)}min ago). Testing...`);
+      const quickTest = await testBatch(cached.pool.slice(0, 3));
+      if (quickTest.length > 0) {
+        console.log(`  ${quickTest.length}/${Math.min(3, cached.pool.length)} cached proxies still working — using cache`);
+        outputResults(cached.proxy_url, cached.pool);
+        return;
+      }
+      console.log('  Cached proxies all dead — refreshing...');
+    }
+  }
+
   console.log(`Fetching proxies from ${PROXY_SOURCES.length} sources...`);
 
   const allLists = await Promise.allSettled(PROXY_SOURCES.map(fetchProxyList));
