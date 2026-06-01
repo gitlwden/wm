@@ -182,30 +182,38 @@ async function main() {
   let dataPath = existsSync(volumePath) ? volumePath : existsSync(localPath) ? localPath : null;
 
   if (!dataPath) {
-    const cfToken = process.env.CLOUDFLARE_R2_API_TOKEN || process.env.CLOUDFLARE_R2_TOKEN || process.env.CLOUDFLARE_API_TOKEN || '';
     const cfAccountId = process.env.CLOUDFLARE_R2_ACCOUNT_ID || '';
-    if (cfToken && cfAccountId) {
+    const bucket = process.env.CLOUDFLARE_R2_BUCKET || 'wm-seed-data';
+    // Try tokens in order: R2-specific, then main API token (matches upload token)
+    const tokens = [
+      process.env.CLOUDFLARE_R2_API_TOKEN,
+      process.env.CLOUDFLARE_API_TOKEN,
+    ].filter(Boolean);
+
+    if (cfAccountId && tokens.length > 0) {
       console.log('  Local file not found — downloading from R2...');
-      try {
-        const r2Url = R2_BUCKET_URL.replace('{acct}', cfAccountId);
-        const resp = await fetch(r2Url, {
-          headers: { Authorization: `Bearer ${cfToken}` },
-          signal: AbortSignal.timeout(60_000),
-        });
-        if (resp.ok) {
-          const body = await resp.text();
-          mkdirSync(join(__dirname, 'data'), { recursive: true });
-          writeFileSync(localPath, body);
-          dataPath = localPath;
-          console.log(`  Downloaded ${(body.length / 1024 / 1024).toFixed(1)}MB from R2`);
-        } else {
-          console.log(`  R2 download failed: HTTP ${resp.status}`);
+      const r2Url = `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/r2/buckets/${bucket}/objects/seed-data/military-bases-final.json`;
+      for (const token of tokens) {
+        try {
+          const resp = await fetch(r2Url, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(60_000),
+          });
+          if (resp.ok) {
+            const body = await resp.text();
+            mkdirSync(join(__dirname, 'data'), { recursive: true });
+            writeFileSync(localPath, body);
+            dataPath = localPath;
+            console.log(`  Downloaded ${(body.length / 1024 / 1024).toFixed(1)}MB from R2`);
+            break;
+          } else {
+            console.log(`  R2 download: HTTP ${resp.status} (trying next token...)`);
+          }
+        } catch (err) {
+          console.log(`  R2 download: ${err.message} (trying next token...)`);
         }
-      } catch (err) {
-        console.log(`  R2 download failed: ${err.message}`);
       }
-    } else if (cfToken) {
-      console.log('  R2 download skipped: missing CLOUDFLARE_R2_ACCOUNT_ID');
+      if (!dataPath) console.log('  R2 download failed with all tokens');
     }
   }
 

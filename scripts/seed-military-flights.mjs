@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, CHROME_UA, getRedisCredentials, acquireLockSafely, releaseLock, withRetry, writeFreshnessMetadata, logSeedResult, verifySeedKey, extendExistingTtl } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, acquireLockSafely, releaseLock, withRetry, writeFreshnessMetadata, logSeedResult, verifySeedKey, extendExistingTtl } from './_seed-utils.mjs';
 import { summarizeMilitaryTheaters, buildMilitarySurges, appendMilitaryHistory } from './_military-surges.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 import { pathToFileURL } from 'node:url';
@@ -1168,34 +1168,21 @@ function calculateTheaterPostures(flights) {
   });
 }
 
-// ── Redis Write ────────────────────────────────────────────
-async function redisSet(url, token, key, value, ttl) {
-  const payload = JSON.stringify(value);
-  const cmd = ttl ? ['SET', key, payload, 'EX', ttl] : ['SET', key, payload];
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(cmd),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!resp.ok) throw new Error(`Redis SET ${key} failed: HTTP ${resp.status}`);
+// ── Redis Write (routed via kvSet/kvGet) ────────────────────
+async function redisSet(_url, _token, key, value, ttl) {
+  const { kvSet } = await import('./_seed-utils.mjs');
+  await kvSet(key, value, ttl || 0);
+  return { result: 'OK' };
 }
 
-async function redisGet(url, token, key) {
-  const resp = await fetch(`${url}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!resp.ok) return null;
-  const data = await resp.json();
-  if (!data?.result) return null;
-  try { return unwrapEnvelope(JSON.parse(data.result)).data; } catch { return null; }
+async function redisGet(_url, _token, key) {
+  const { kvGet } = await import('./_seed-utils.mjs');
+  return kvGet(key);
 }
 
 async function requestForecastRefreshIfEnabled(runId, assessedAt, source) {
   if (!CHAIN_FORECAST_SEED) return;
 
-  const { url, token } = getRedisCredentials();
   const request = {
     requestedAt: assessedAt,
     requestedAtIso: new Date(assessedAt).toISOString(),
@@ -1204,7 +1191,7 @@ async function requestForecastRefreshIfEnabled(runId, assessedAt, source) {
     requesterRunId: runId,
     sourceVersion: source || '',
   };
-  await redisSet(url, token, FORECAST_REFRESH_REQUEST_KEY, request, FORECAST_REFRESH_REQUEST_TTL);
+  await redisSet(null, null, FORECAST_REFRESH_REQUEST_KEY, request, FORECAST_REFRESH_REQUEST_TTL);
   console.log('  Forecast refresh requested after military publish');
   console.log('  Forecast execution is delegated to the forecast service runtime');
 }
@@ -1213,7 +1200,7 @@ async function requestForecastRefreshIfEnabled(runId, assessedAt, source) {
 async function main() {
   const startMs = Date.now();
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const { url, token } = getRedisCredentials();
+  const url = null, token = null; // KV routing handled by kvSet/kvGet
   let lockReleased = false;
 
   console.log(`=== military:flights Seed (proxy: ${PROXY_ENABLED ? 'enabled' : 'direct'}) ===`);
