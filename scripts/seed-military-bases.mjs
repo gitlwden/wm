@@ -182,7 +182,7 @@ async function main() {
   let dataPath = existsSync(volumePath) ? volumePath : existsSync(localPath) ? localPath : null;
 
   if (!dataPath) {
-    const cfToken = process.env.CLOUDFLARE_R2_TOKEN || process.env.CLOUDFLARE_API_TOKEN || '';
+    const cfToken = process.env.CLOUDFLARE_R2_API_TOKEN || process.env.CLOUDFLARE_R2_TOKEN || process.env.CLOUDFLARE_API_TOKEN || '';
     const cfAccountId = process.env.CLOUDFLARE_R2_ACCOUNT_ID || '';
     if (cfToken && cfAccountId) {
       console.log('  Local file not found — downloading from R2...');
