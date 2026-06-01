@@ -19,7 +19,7 @@ const PROXY_SOURCES = [
   'https://raw.githubusercontent.com/VPSLabCloud/VPSLab-Free-Proxy-List/main/http_proxies.txt',
 ];
 
-const TEST_URL = 'https://httpbin.org/ip';
+const TEST_URL_HTTPS = 'https://httpbin.org/ip';
 const CONCURRENCY = 50;
 const TIMEOUT_MS = 5_000;
 const TARGET_WORKING = 10;
@@ -41,22 +41,26 @@ async function fetchProxyList(url) {
   }
 }
 
+import { createRequire } from 'node:module';
+const { proxyFetch, parseProxyConfig } = createRequire(import.meta.url)('./_proxy-utils.cjs');
+
 async function testProxy(proxy) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const proxyUrl = `http://${proxy}`;
+  const config = parseProxyConfig(proxyUrl);
+  if (!config) return null;
+
   try {
-    const resp = await fetch(TEST_URL, {
-      signal: controller.signal,
+    const result = await proxyFetch(TEST_URL_HTTPS, config, {
+      accept: 'application/json',
+      timeoutMs: TIMEOUT_MS,
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });
-    clearTimeout(timer);
-    if (!resp.ok) return null;
-    await resp.json();
-    return `http://${proxy}`;
-  } catch {
-    clearTimeout(timer);
-    return null;
-  }
+    if (result.ok) {
+      JSON.parse(result.buffer.toString('utf8'));
+      return proxyUrl;
+    }
+  } catch { /* skip */ }
+  return null;
 }
 
 async function testBatch(proxies) {
