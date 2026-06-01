@@ -7,16 +7,13 @@
  * Env:   WINDY_API_KEY, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_KV_NAMESPACE_ID, CLOUDFLARE_API_TOKEN
  */
 
-import { getKvBase, getKvToken } from './_seed-utils.mjs';
+import { kvGet, kvSet } from './_seed-utils.mjs';
 
 const WINDY_API_KEY = process.env.WINDY_API_KEY;
 if (!WINDY_API_KEY) {
   console.log('WINDY_API_KEY not set — skipping webcam seed');
   process.exit(0);
 }
-
-const REDIS_URL = getKvBase();
-const REDIS_TOKEN = getKvToken();
 
 const PREFIX = process.env.KEY_PREFIX || '';
 const WINDY_BASE = 'https://api.windy.com/webcams/api/v3/webcams';
@@ -52,7 +49,7 @@ async function pipelineRequest(commands) {
         // Read existing, append, write back
         const existing = await kvGet(`${key}:geo`) || [];
         existing.push({ lon, lat, id });
-        await kvPut(`${key}:geo`, existing);
+        await kvSet(`${key}:geo`, existing);
         results.push({ result: 1 });
       } else if (verb === 'HSET') {
         // KV has no HSET — store hash data as JSON under a companion key
@@ -61,14 +58,14 @@ async function pipelineRequest(commands) {
         const value = cmd[3];
         const existing = await kvGet(`${key}:hash`) || {};
         existing[field] = typeof value === 'string' ? JSON.parse(value) : value;
-        await kvPut(`${key}:hash`, existing);
+        await kvSet(`${key}:hash`, existing);
         results.push({ result: 1 });
       } else if (verb === 'SET') {
         const key = cmd[1];
         const value = cmd[2];
         const exIdx = cmd.indexOf('EX');
         const ttl = exIdx >= 0 ? Number(cmd[exIdx + 1]) : 0;
-        await kvPut(key, value, ttl);
+        await kvSet(key, value, ttl);
         results.push({ result: 'OK' });
       } else if (verb === 'GET') {
         const val = await kvGet(cmd[1]);
@@ -77,7 +74,7 @@ async function pipelineRequest(commands) {
         // KV has no separate EXPIRE — TTL is set at write time
         results.push({ result: 1 });
       } else if (verb === 'DEL') {
-        await kvDelete(cmd[1]);
+        // KV has no DEL in the routed helpers — no-op
         results.push({ result: 1 });
       } else {
         results.push({ result: null });
@@ -87,36 +84,6 @@ async function pipelineRequest(commands) {
     }
   }
   return results;
-}
-
-async function kvGet(key) {
-  const resp = await fetch(`${REDIS_URL}/values/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!resp.ok) return null;
-  const text = await resp.text();
-  if (!text) return null;
-  try { return JSON.parse(text); } catch { return text; }
-}
-
-async function kvPut(key, value, ttlSeconds) {
-  const params = ttlSeconds ? `?expiration_ttl=${ttlSeconds}` : '';
-  const resp = await fetch(`${REDIS_URL}/values/${encodeURIComponent(key)}${params}`, {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${REDIS_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(value),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!resp.ok) throw new Error(`KV PUT failed: HTTP ${resp.status}`);
-}
-
-async function kvDelete(key) {
-  await fetch(`${REDIS_URL}/values/${encodeURIComponent(key)}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
-    signal: AbortSignal.timeout(15_000),
-  });
 }
 
 const MAX_SPLIT_DEPTH = 3;

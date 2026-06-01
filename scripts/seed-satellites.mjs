@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, CHROME_UA, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, kvSet } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -47,36 +47,19 @@ function satClassify(name) {
 
 // ── Cloudflare KV helpers ──────────────────────────────────
 
-const _kvBase = getKvBase();
-const _kvToken = getKvToken();
-
-function upstashSet(key, value, ttlSeconds) {
-  return fetch(`${_kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${_kvToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(value),
-    signal: AbortSignal.timeout(5000),
-  })
-    .then((r) => r.ok)
-    .catch(() => false);
+async function upstashSet(key, value, ttlSeconds) {
+  try {
+    await kvSet(key, value, ttlSeconds);
+    return true;
+  } catch { return false; }
 }
 
-function upstashExpire(key, ttlSeconds) {
+async function upstashExpire(key, ttlSeconds) {
   // KV has no separate EXPIRE — re-write with new TTL to refresh
-  return fetch(`${_kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${_kvToken}`,
-      'Content-Type': 'text/plain',
-    },
-    body: '1',
-    signal: AbortSignal.timeout(5000),
-  })
-    .then((r) => r.ok)
-    .catch(() => false);
+  try {
+    await kvSet(key, '1', ttlSeconds);
+    return true;
+  } catch { return false; }
 }
 
 // ── Envelope-aware write (mirrors relay envelopeWrite) ─────────
@@ -126,11 +109,6 @@ async function fetchTleGroup(group) {
 async function seedSatelliteTLEs() {
   const t0 = Date.now();
   console.log('[Satellites] Starting seed...');
-
-  if (!_kvBase || !_kvToken) {
-    console.error('[Satellites] Missing Cloudflare KV credentials');
-    process.exit(1);
-  }
 
   const byNorad = new Map();
 

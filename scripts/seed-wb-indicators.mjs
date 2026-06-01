@@ -13,7 +13,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { getKvBase, getKvToken } from './_seed-utils.mjs';
+import { kvGet, kvSet, cfPipeline } from './_seed-utils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -129,44 +129,9 @@ async function fetchWithRetry(url, attempt = 1) {
   }
 }
 
-async function redisPipeline(redisUrl, token, commands) {
-  // Convert pipeline to individual KV calls
-  const results = [];
-  for (const cmd of commands) {
-    const verb = String(cmd[0]).toUpperCase();
-    try {
-      if (verb === 'GET') {
-        const resp = await fetch(`${redisUrl}/values/${encodeURIComponent(cmd[1])}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: AbortSignal.timeout(15_000),
-        });
-        if (!resp.ok) { results.push({ result: null }); continue; }
-        const text = await resp.text();
-        results.push({ result: text || null });
-      } else if (verb === 'SET') {
-        const key = cmd[1];
-        const value = cmd[2];
-        const exIdx = cmd.indexOf('EX');
-        const ttl = exIdx >= 0 ? Number(cmd[exIdx + 1]) : 0;
-        const params = ttl > 0 ? `?expiration_ttl=${ttl}` : '';
-        const resp = await fetch(`${redisUrl}/values/${encodeURIComponent(key)}${params}`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: value,
-          signal: AbortSignal.timeout(15_000),
-        });
-        results.push({ result: resp.ok ? 'OK' : null });
-      } else if (verb === 'EXPIRE') {
-        // KV has no separate EXPIRE — skip (TTL is set at write time)
-        results.push({ result: 1 });
-      } else {
-        results.push({ result: null });
-      }
-    } catch {
-      results.push({ result: null });
-    }
-  }
-  return results;
+async function redisPipeline(_redisUrl, _token, commands) {
+  // Route through cfPipeline which handles Upstash/Cloudflare routing
+  return cfPipeline(commands);
 }
 
 // ---------------------------------------------------------------------------
@@ -403,8 +368,8 @@ async function main() {
   const { env, sha } = parseArgs();
   const prefix = getKeyPrefix(env, sha);
 
-  const redisUrl = getKvBase();
-  const redisToken = getKvToken();
+  const redisUrl = '';
+  const redisToken = '';
 
   const fullKey = `${prefix}${BOOTSTRAP_KEY}`;
   const progressKey = `${prefix}${PROGRESS_KEY}`;

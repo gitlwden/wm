@@ -4,7 +4,7 @@
  * Replaces Reddit scraping (blocked from datacenter IPs).
  * Writes to Redis key: intelligence:wsb-tickers:v1
  */
-import { loadEnvFile, CHROME_UA, runSeed, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, kvSet } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -12,14 +12,6 @@ loadEnvFile(import.meta.url);
 const REDIS_KEY = 'intelligence:wsb-tickers:v1';
 const CACHE_TTL = 10800; // 3h
 const TRENDING_URL = 'https://query1.finance.yahoo.com/v1/finance/trending/US?count=50';
-
-async function redisSet(url, token, key, value, ttlSeconds) {
-  const resp = await fetch(
-    `${url}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`,
-    { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(value), signal: AbortSignal.timeout(15000) },
-  );
-  return resp.ok;
-}
 
 async function fetchTrendingTickers() {
   const resp = await fetch(TRENDING_URL, {
@@ -60,8 +52,6 @@ async function enrichTickers(quotes) {
 }
 
 async function seedWsbTickers() {
-  const url = getKvBase();
-  const token = getKvToken();
   console.log('[WsbTickers] Fetching Yahoo trending...');
   const t0 = Date.now();
 
@@ -73,10 +63,14 @@ async function seedWsbTickers() {
 
   const payload = { tickers: top, fetchedAt: Date.now(), subredditsScanned: 1, postsScanned: quotes.length };
   const envelope = buildEnvelope({ fetchedAt: Date.now(), recordCount: top.length, sourceVersion: 'yahoo-trending-v1', schemaVersion: 1, state: 'OK', data: payload });
-  const writeOk = await redisSet(url, token, REDIS_KEY, envelope, CACHE_TTL);
+  let writeOk = false;
+  try {
+    await kvSet(REDIS_KEY, envelope, CACHE_TTL);
+    writeOk = true;
+  } catch { /* fail */ }
 
   if (writeOk) {
-    await redisSet(url, token, 'seed-meta:intelligence:wsb-tickers', { fetchedAt: Date.now(), recordCount: top.length }, 604800);
+    await kvSet('seed-meta:intelligence:wsb-tickers', { fetchedAt: Date.now(), recordCount: top.length }, 604800);
   }
 
   console.log(`[WsbTickers] Seeded ${top.length} tickers from ${quotes.length} trending (redis: ${writeOk ? 'OK' : 'FAIL'}) in ${((Date.now() - t0) / 1000).toFixed(1)}s`);

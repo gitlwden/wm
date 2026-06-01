@@ -8,30 +8,18 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
-import { loadEnvFile, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, kvSet, kvGet } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
 // ── KV helpers ─────────────────────────────────────────────────────────
 
-const kvBase = getKvBase();
-const kvToken = getKvToken();
-
 async function redisSet(key, value, ttlSeconds, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const resp = await fetch(`${kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(value),
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!resp.ok) {
-        if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
-        return false;
-      }
+      await kvSet(key, value, ttlSeconds);
       return true;
-    } catch (e) {
+    } catch {
       if (attempt < retries - 1) { await new Promise(r => setTimeout(r, 500 * (attempt + 1))); continue; }
       return false;
     }
@@ -44,14 +32,7 @@ async function redisMGet(keys, retries = 3) {
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const results = await Promise.all(keys.map(async (k) => {
-        const resp = await fetch(`${kvBase}/values/${encodeURIComponent(k)}`, {
-          headers: { Authorization: `Bearer ${kvToken}` },
-          signal: AbortSignal.timeout(15_000),
-        });
-        if (!resp.ok) return null;
-        const text = await resp.text();
-        if (!text) return null;
-        try { return JSON.parse(text); } catch { return null; }
+        try { return await kvGet(k); } catch { return null; }
       }));
       return results;
     } catch {

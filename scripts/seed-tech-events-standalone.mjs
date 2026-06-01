@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, runSeed, sleep, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, sleep, kvSet } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -23,17 +23,11 @@ const TECH_EVENTS_CURATED = [
 
 // ─── KV helpers ───
 
-function redisSet(key, value, ttlSeconds) {
-  const base = getKvBase();
-  const token = getKvToken();
-  return fetch(`${base}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(value),
-    signal: AbortSignal.timeout(10_000),
-  })
-    .then((r) => r.ok)
-    .catch(() => false);
+async function redisSet(key, value, ttlSeconds) {
+  try {
+    await kvSet(key, value, ttlSeconds);
+    return true;
+  } catch { return false; }
 }
 
 async function envelopeWrite(key, data, ttlSeconds, meta) {

@@ -76,10 +76,10 @@ import { emitCooldownShadowLog } from './lib/digest-cooldown-shadow-log.mjs';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-import { getKvBase, getKvToken } from './_seed-utils.mjs';
+import { cfPipeline } from './_seed-utils.mjs';
 
-const UPSTASH_URL = getKvBase();
-const UPSTASH_TOKEN = getKvToken();
+const UPSTASH_URL = '';
+const UPSTASH_TOKEN = '';
 const CONVEX_SITE_URL =
   (process.env.CONVEX_SITE_URL ??
   (process.env.CONVEX_URL ?? '').replace('.convex.cloud', '.convex.site')).replace(/\/+$/, '');
@@ -287,37 +287,25 @@ async function upstashRest(...args) {
   try {
     if (verb === 'GET') {
       const key = args[1];
-      const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}`, {
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'User-Agent': 'worldmonitor-digest/1.0' },
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!res.ok) return null;
-      const text = await res.text();
-      return text || null;
+      const results = await cfPipeline([['GET', key]]);
+      const raw = results[0]?.result;
+      if (raw == null) return null;
+      return typeof raw === 'string' ? raw : JSON.stringify(raw);
     } else if (verb === 'SET') {
       const key = args[1];
       const value = args[2];
       const exIdx = args.indexOf('EX');
       const ttl = exIdx >= 0 ? Number(args[exIdx + 1]) : 0;
-      const params = ttl > 0 ? `?expiration_ttl=${ttl}` : '';
-      const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}${params}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json', 'User-Agent': 'worldmonitor-digest/1.0' },
-        body: value,
-        signal: AbortSignal.timeout(10000),
-      });
-      return res.ok ? 'OK' : null;
+      // Build command — preserve raw value (callers pre-stringify)
+      const cmd = ttl > 0 ? ['SET', key, value, 'EX', String(ttl)] : ['SET', key, value];
+      const results = await cfPipeline([cmd]);
+      return results[0]?.result != null ? 'OK' : null;
     } else if (verb === 'SETEX') {
       const key = args[1];
       const ttl = Number(args[2]);
       const value = args[3];
-      const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}?expiration_ttl=${ttl}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json', 'User-Agent': 'worldmonitor-digest/1.0' },
-        body: value,
-        signal: AbortSignal.timeout(10000),
-      });
-      return res.ok ? 'OK' : null;
+      const results = await cfPipeline([['SET', key, value, 'EX', String(ttl)]]);
+      return results[0]?.result != null ? 'OK' : null;
     } else {
       console.warn(`[digest] Unsupported command ${verb} for KV`);
       return null;
@@ -330,54 +318,39 @@ async function upstashRest(...args) {
 
 async function upstashPipeline(commands) {
   if (commands.length === 0) return [];
-  // Convert pipeline to individual KV calls
-  const results = [];
-  for (const cmd of commands) {
+  // Normalize commands for cfPipeline (SETEX → SET+EX, unsupported → stub)
+  const normalized = [];
+  const passthrough = []; // indices with passthrough results (SMEMBERS, ZRANGEBYSCORE, etc.)
+  for (let i = 0; i < commands.length; i++) {
+    const cmd = commands[i];
     const verb = String(cmd[0]).toUpperCase();
-    try {
-      if (verb === 'GET') {
-        const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(cmd[1])}`, {
-          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'User-Agent': 'worldmonitor-digest/1.0' },
-          signal: AbortSignal.timeout(10000),
-        });
-        if (!res.ok) { results.push({ result: null }); continue; }
-        const text = await res.text();
-        results.push({ result: text || null });
-      } else if (verb === 'SET') {
-        const key = cmd[1];
-        const value = cmd[2];
-        const exIdx = cmd.indexOf('EX');
-        const ttl = exIdx >= 0 ? Number(cmd[exIdx + 1]) : 0;
-        const params = ttl > 0 ? `?expiration_ttl=${ttl}` : '';
-        const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}${params}`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json', 'User-Agent': 'worldmonitor-digest/1.0' },
-          body: value,
-          signal: AbortSignal.timeout(10000),
-        });
-        results.push({ result: res.ok ? 'OK' : null });
-      } else if (verb === 'SETEX') {
-        const key = cmd[1];
-        const ttl = Number(cmd[2]);
-        const value = cmd[3];
-        const res = await fetch(`${UPSTASH_URL}/values/${encodeURIComponent(key)}?expiration_ttl=${ttl}`, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json', 'User-Agent': 'worldmonitor-digest/1.0' },
-          body: value,
-          signal: AbortSignal.timeout(10000),
-        });
-        results.push({ result: res.ok ? 'OK' : null });
-      } else if (verb === 'SMEMBERS') {
-        // KV has no SMEMBERS
-        results.push({ result: [] });
-      } else if (verb === 'ZRANGEBYSCORE') {
-        // KV has no sorted sets
-        results.push({ result: null });
-      } else {
-        results.push({ result: null });
+    if (verb === 'SETEX') {
+      normalized.push(['SET', cmd[1], cmd[3], 'EX', String(cmd[2])]);
+    } else if (verb === 'SMEMBERS' || verb === 'ZRANGEBYSCORE') {
+      // Unsupported in KV — return stub
+      passthrough.push({ idx: i, result: verb === 'SMEMBERS' ? { result: [] } : { result: null } });
+      continue;
+    } else {
+      normalized.push(cmd);
+    }
+    passthrough.push(null);
+  }
+  // Execute supported commands via cfPipeline
+  const pipelineResults = normalized.length > 0 ? await cfPipeline(normalized) : [];
+  // Merge passthrough stubs with pipeline results
+  const results = [];
+  let pipelineIdx = 0;
+  for (let i = 0; i < commands.length; i++) {
+    if (passthrough[i] !== null) {
+      results.push(passthrough[i].result);
+    } else {
+      const r = pipelineResults[pipelineIdx] || { result: null };
+      // Normalize GET results to raw text format (callers expect strings)
+      if (String(commands[i][0]).toUpperCase() === 'GET' && r.result != null && typeof r.result !== 'string') {
+        r.result = JSON.stringify(r.result);
       }
-    } catch {
-      results.push({ result: null });
+      results.push(r);
+      pipelineIdx++;
     }
   }
   return results;

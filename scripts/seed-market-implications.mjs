@@ -4,7 +4,7 @@
  * Fetches market data, sends to LLM, stores analysis.
  * Writes to Redis key: intelligence:market-implications:v1
  */
-import { loadEnvFile, CHROME_UA, runSeed, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, kvSet } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -17,12 +17,6 @@ const AI_PROVIDERS = [
   { name: 'cerebras', envKey: 'CEREBRAS_API_KEY', apiUrl: 'https://api.cerebras.ai/v1/chat/completions', model: 'llama3.1-8b', timeout: 20_000 },
   { name: 'sambanova', envKey: 'SAMBANOVA_API_KEY', apiUrl: 'https://api.sambanova.ai/v1/chat/completions', model: 'Meta-Llama-3.1-8B-Instruct', timeout: 20_000 },
 ];
-
-function redisSet(url, token, key, value, ttlSeconds) {
-  return fetch(`${url}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`,
-    { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(value), signal: AbortSignal.timeout(15000) })
-    .then(r => r.ok);
-}
 
 async function fetchMarketData() {
   const sectors = ['SPY', 'QQQ', 'XLF', 'XLE', 'XLK', 'XLV', 'XLU', 'GLD', 'TLT', 'VIX'];

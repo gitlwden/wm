@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
-import { getKvBase, getKvToken } from './_seed-utils.mjs';
+import { kvSet, kvGet } from './_seed-utils.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -101,13 +101,9 @@ function getMaxDateMs(events) {
 async function main() {
   loadEnvFile();
 
-  const redisUrl = getKvBase();
-  const redisToken = getKvToken();
   const ucdpToken = (process.env.UCDP_ACCESS_TOKEN || process.env.UC_DP_KEY || '').trim();
 
   console.log('=== UCDP Events Seed ===');
-  console.log(`  KV Base:      ${redisUrl}`);
-  console.log(`  KV Token:     ${maskToken(redisToken)}`);
   console.log(`  UCDP Token: ${ucdpToken ? maskToken(ucdpToken) : '(none — unauthenticated)'}`);
   console.log();
 
@@ -182,21 +178,9 @@ async function main() {
     console.warn(`  0 events after processing — extending existing key TTL (preserving last good data)`);
     try {
       // KV has no separate EXPIRE — re-write to refresh TTL
-      const r1 = await fetch(`${redisUrl}/values/${encodeURIComponent(REDIS_KEY)}?expiration_ttl=86400`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'text/plain' },
-        body: '1',
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!r1.ok) console.warn(`  TTL refresh ${REDIS_KEY} failed: HTTP ${r1.status}`);
-      const r2 = await fetch(`${redisUrl}/values/${encodeURIComponent('seed-meta:conflict:ucdp-events')}?expiration_ttl=604800`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'text/plain' },
-        body: '1',
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!r2.ok) console.warn(`  TTL refresh seed-meta failed: HTTP ${r2.status}`);
-      if (r1.ok && r2.ok) console.log(`  Extended TTL on ${REDIS_KEY} and seed-meta`);
+      await kvSet(REDIS_KEY, '1', 86400);
+      await kvSet('seed-meta:conflict:ucdp-events', '1', 604800);
+      console.log(`  Extended TTL on ${REDIS_KEY} and seed-meta`);
     } catch (e) { console.warn(`  TTL extension failed: ${e.message}`); }
     process.exit(0);
   }
@@ -215,19 +199,10 @@ async function main() {
   }
   console.log();
 
-  const resp = await fetch(`${redisUrl}/values/${encodeURIComponent(REDIS_KEY)}?expiration_ttl=86400`, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${redisToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    console.error(`KV SET failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+  try {
+    await kvSet(REDIS_KEY, payload, 86400);
+  } catch (e) {
+    console.error(`KV SET failed: ${e.message}`);
     process.exit(1);
   }
 
@@ -236,26 +211,19 @@ async function main() {
   // Write seed-meta for health endpoint freshness tracking
   const metaKey = 'seed-meta:conflict:ucdp-events';
   const meta = { fetchedAt: Date.now(), recordCount: capped.length };
-  await fetch(`${redisUrl}/values/${encodeURIComponent(metaKey)}?expiration_ttl=604800`, {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(meta),
-    signal: AbortSignal.timeout(5_000),
-  }).catch(() => console.error('  seed-meta write failed'));
-  console.log(`  Wrote seed-meta: ${metaKey}`);
+  try {
+    await kvSet(metaKey, meta, 604800);
+    console.log(`  Wrote seed-meta: ${metaKey}`);
+  } catch { console.error('  seed-meta write failed'); }
 
-  const getResp = await fetch(`${redisUrl}/values/${encodeURIComponent(REDIS_KEY)}`, {
-    headers: { Authorization: `Bearer ${redisToken}` },
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (getResp.ok) {
-    const text = await getResp.text();
-    if (text) {
-      const parsed = unwrapEnvelope(JSON.parse(text)).data;
+  try {
+    const raw = await kvGet(REDIS_KEY);
+    if (raw) {
+      const parsed = unwrapEnvelope(raw).data;
       console.log(`\n  Verified: ${parsed.events?.length} events in KV`);
       console.log(`  Version: ${parsed.version} | fetchedAt: ${new Date(parsed.fetchedAt).toISOString()}`);
     }
-  }
+  } catch { /* verify failed */ }
 
   console.log('\n=== Done ===');
 }

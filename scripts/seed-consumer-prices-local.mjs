@@ -7,22 +7,18 @@
  * Usage: node scripts/seed-consumer-prices-local.mjs
  */
 
-import { loadEnvFile, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, kvSet } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
-
-const kvBase = getKvBase();
-const kvToken = getKvToken();
 
 const now = new Date().toISOString();
 
 async function redisSet(key, value, ttlSeconds) {
-  const resp = await fetch(`${kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
-    method: 'PUT',
-    headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(value),
-  });
-  if (!resp.ok) console.error(`  FAIL ${key}: ${resp.status} ${await resp.text()}`);
+  try {
+    await kvSet(key, value, ttlSeconds);
+  } catch (e) {
+    console.error(`  FAIL ${key}: ${e.message}`);
+  }
 }
 
 function sparkline(base, variance, points = 14) {

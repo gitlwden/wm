@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, CHROME_UA, runSeed, readSeedSnapshot, sleep, resolveProxyForConnect, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, readSeedSnapshot, sleep, resolveProxyForConnect, kvGet } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 loadEnvFile(import.meta.url);
 
@@ -128,17 +128,10 @@ async function fetchAAII() {
 
 // --- FRED KV reads ---
 async function readFred(seriesId) {
-  const base = getKvBase();
-  const token = getKvToken();
   try {
-    const resp = await fetch(`${base}/values/${encodeURIComponent(`${FRED_PREFIX}:${seriesId}:0`)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!resp.ok) return null;
-    const text = await resp.text();
-    if (!text) return null;
-    const parsed = unwrapEnvelope(JSON.parse(text)).data;
+    const raw = await kvGet(`${FRED_PREFIX}:${seriesId}:0`);
+    if (!raw) return null;
+    const parsed = unwrapEnvelope(raw).data;
     const obs = parsed?.series?.observations;
     if (!obs?.length) return null;
     return obs;
@@ -146,16 +139,9 @@ async function readFred(seriesId) {
 }
 
 async function readMacroSignals() {
-  const base = getKvBase();
-  const token = getKvToken();
   try {
-    const resp = await fetch(`${base}/values/${encodeURIComponent('economic:macro-signals:v1')}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!resp.ok) return null;
-    const text = await resp.text();
-    return text ? unwrapEnvelope(JSON.parse(text)).data : null;
+    const raw = await kvGet('economic:macro-signals:v1');
+    return raw ? unwrapEnvelope(raw).data : null;
   } catch { return null; }
 }
 

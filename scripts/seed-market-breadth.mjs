@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, CHROME_UA, runSeed, sleep, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, runSeed, sleep, kvGet } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 loadEnvFile(import.meta.url);
 
@@ -40,16 +40,10 @@ async function fetchBarchartPrice(encodedSymbol, label) {
 }
 
 async function readExistingHistory() {
-  const base = getKvBase();
-  const token = getKvToken();
   try {
-    const resp = await fetch(`${base}/values/${encodeURIComponent(BREADTH_KEY)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!resp.ok) return null;
-    const text = await resp.text();
-    return text ? unwrapEnvelope(JSON.parse(text)).data : null;
+    const raw = await kvGet(BREADTH_KEY);
+    if (!raw) return null;
+    return unwrapEnvelope(raw).data;
   } catch {
     return null;
   }

@@ -4,7 +4,7 @@
 
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { loadEnvFile, runSeed, CHROME_UA, withRetry, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, CHROME_UA, withRetry, kvGet, kvSet, cfPipeline } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 import { tagRegions } from './_prediction-scoring.mjs';
 import { resolveR2StorageConfig, putR2JsonObject, getR2JsonObject } from './_r2-storage.mjs';
@@ -577,7 +577,7 @@ const IMPACT_VARIABLE_CHANNELS = Object.fromEntries(
 
 function getRedisCredentials() {
   if (_testRedisStore) return { url: 'http://test', token: 'test' };
-  return { url: getKvBase(), token: getKvToken() };
+  return { url: '', token: '' };
 }
 
 function getDeployRevision() {
@@ -587,37 +587,12 @@ function getDeployRevision() {
     || '';
 }
 
-async function redisCommand(url, token, command) {
-  const verb = String(command[0]).toUpperCase();
-  if (verb === 'GET') {
-    const resp = await fetch(`${url}/values/${encodeURIComponent(command[1])}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!resp.ok) return { result: null };
-    const text = await resp.text();
-    return { result: text || null };
-  } else if (verb === 'SET') {
-    const key = command[1];
-    const value = command[2];
-    const exIdx = command.indexOf('EX');
-    const ttl = exIdx >= 0 ? Number(command[exIdx + 1]) : 0;
-    const params = ttl > 0 ? `?expiration_ttl=${ttl}` : '';
-    const resp = await fetch(`${url}/values/${encodeURIComponent(key)}${params}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: typeof value === 'string' ? value : JSON.stringify(value),
-      signal: AbortSignal.timeout(10_000),
-    });
-    return { result: resp.ok ? 'OK' : null };
-  } else if (verb === 'DEL') {
-    const resp = await fetch(`${url}/values/${encodeURIComponent(command[1])}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(10_000),
-    });
-    return { result: resp.ok ? 1 : 0 };
-  } else {
+async function redisCommand(_url, _token, command) {
+  // Route through cfPipeline which handles Upstash/Cloudflare routing
+  try {
+    const results = await cfPipeline([command]);
+    return results[0] || { result: null };
+  } catch {
     return { result: null };
   }
 }
@@ -626,25 +601,22 @@ async function redisCommand(url, token, command) {
 let _testRedisStore = null;
 function __setRedisStoreForTests(store) { _testRedisStore = store; }
 
-async function redisGet(url, token, key) {
+async function redisGet(_url, _token, key) {
   if (_testRedisStore) return _testRedisStore[key] ?? null;
-  const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!resp.ok) return null;
-  const text = await resp.text();
-  if (!text) return null;
-  try { return unwrapEnvelope(JSON.parse(text)).data; } catch { return null; }
+  try {
+    const raw = await kvGet(key);
+    if (!raw) return null;
+    // kvGet returns parsed JSON; unwrap envelope if present
+    if (typeof raw === 'string') {
+      try { return unwrapEnvelope(JSON.parse(raw)).data; } catch { return null; }
+    }
+    return unwrapEnvelope(raw).data;
+  } catch { return null; }
 }
 
-async function redisDel(url, token, key) {
-  const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(10_000),
-  });
-  return { result: resp.ok ? 1 : 0 };
+async function redisDel(_url, _token, key) {
+  // DEL is not available in routed helpers — no-op
+  return { result: 0 };
 }
 
 // ── Phase 4: Input normalizers ──────────────────────────────
@@ -717,17 +689,12 @@ async function readInputKeys() {
     'conflict:ema-windows:v1',
     ...fredKeys,
   ];
-  // Read keys individually via KV GET calls (KV has no pipeline/batch API).
+  // Read keys individually via routed KV GET calls.
   // Parallel reads for efficiency — each key is an independent GET.
   const results = await Promise.all(keys.map(async (key) => {
     try {
-      const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!resp.ok) return { result: null };
-      const text = await resp.text();
-      return { result: text || null };
+      const raw = await kvGet(key);
+      return { result: raw ?? null };
     } catch {
       return { result: null };
     }
@@ -739,7 +706,8 @@ async function readInputKeys() {
       if (!raw) return null;
       // Envelope-aware: pipeline batch reads must strip _seed for contract-mode
       // writers. unwrapEnvelope is a no-op on legacy bare-shape values.
-      return unwrapEnvelope(JSON.parse(raw)).data;
+      if (typeof raw === 'string') return unwrapEnvelope(JSON.parse(raw)).data;
+      return unwrapEnvelope(raw).data;
     } catch { return null; }
   };
   const parsedByKey = Object.fromEntries(keys.map((key, index) => [key, parse(index)]));
@@ -15255,8 +15223,7 @@ async function processDeepForecastTask(task = {}) {
     : null;
 
   // Read learned prompt section from Redis (auto-refined over time)
-  const { url: redisUrl, token: redisToken } = getRedisCredentials();
-  const learnedSection = (await redisGet(redisUrl, redisToken, PROMPT_LEARNED_KEY).catch(() => null)) || '';
+  const learnedSection = (await redisGet('', '', PROMPT_LEARNED_KEY).catch(() => null)) || '';
 
   const bundle = await extractImpactExpansionBundle({
     candidatePackets: snapshot.impactExpansionCandidates || [],

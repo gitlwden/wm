@@ -5,24 +5,16 @@
 // Extracted from ais-relay.cjs startCorridorRiskSeedLoop / seedCorridorRisk.
 
 import { buildEnvelope } from './_seed-envelope-source.mjs';
-import { loadEnvFile, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, kvSet } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
 // ── KV helpers ─────────────────────────────────────────────────────────
 
-const kvBase = getKvBase();
-const kvToken = getKvToken();
-
 async function redisSet(key, value, ttlSeconds) {
   try {
-    const resp = await fetch(`${kvBase}/values/${encodeURIComponent(key)}?expiration_ttl=${ttlSeconds}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${kvToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(value),
-      signal: AbortSignal.timeout(5_000),
-    });
-    return resp.ok;
+    await kvSet(key, value, ttlSeconds);
+    return true;
   } catch { return false; }
 }
 
