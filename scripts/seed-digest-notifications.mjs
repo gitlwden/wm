@@ -76,7 +76,7 @@ import { emitCooldownShadowLog } from './lib/digest-cooldown-shadow-log.mjs';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-import { cfPipeline } from './_seed-utils.mjs';
+import { cfPipeline, _upstashPipeline, shouldUseUpstash } from './_seed-utils.mjs';
 
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL ?? '';
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? '';
@@ -296,7 +296,6 @@ async function upstashRest(...args) {
       const value = args[2];
       const exIdx = args.indexOf('EX');
       const ttl = exIdx >= 0 ? Number(args[exIdx + 1]) : 0;
-      // Build command — preserve raw value (callers pre-stringify)
       const cmd = ttl > 0 ? ['SET', key, value, 'EX', String(ttl)] : ['SET', key, value];
       const results = await cfPipeline([cmd]);
       return results[0]?.result != null ? 'OK' : null;
@@ -306,8 +305,15 @@ async function upstashRest(...args) {
       const value = args[3];
       const results = await cfPipeline([['SET', key, value, 'EX', String(ttl)]]);
       return results[0]?.result != null ? 'OK' : null;
+    } else if (verb === 'SMEMBERS' || verb === 'ZRANGEBYSCORE') {
+      // Sorted-set / set-member commands require Upstash (not supported in CF KV).
+      const cmd = args;
+      const results = await _upstashPipeline([cmd]).catch(() => [{ result: null }]);
+      const raw = results[0]?.result;
+      if (raw == null) return verb === 'SMEMBERS' ? [] : null;
+      return raw;
     } else {
-      console.warn(`[digest] Unsupported command ${verb} for KV`);
+      console.warn(`[digest] Unsupported command ${verb}`);
       return null;
     }
   } catch {
@@ -318,39 +324,49 @@ async function upstashRest(...args) {
 
 async function upstashPipeline(commands) {
   if (commands.length === 0) return [];
-  // Normalize commands for cfPipeline (SETEX → SET+EX, unsupported → stub)
-  const normalized = [];
-  const passthrough = []; // indices with passthrough results (SMEMBERS, ZRANGEBYSCORE, etc.)
+  // Split commands: Upstash-only (sorted/set-member ops) vs routed (cfPipeline)
+  const upstashOnly = [];
+  const routed = [];
+  const routedIndices = [];
   for (let i = 0; i < commands.length; i++) {
     const cmd = commands[i];
     const verb = String(cmd[0]).toUpperCase();
     if (verb === 'SETEX') {
-      normalized.push(['SET', cmd[1], cmd[3], 'EX', String(cmd[2])]);
+      routed.push(['SET', cmd[1], cmd[3], 'EX', String(cmd[2])]);
+      routedIndices.push(i);
     } else if (verb === 'SMEMBERS' || verb === 'ZRANGEBYSCORE') {
-      // Unsupported in KV — return stub
-      passthrough.push({ idx: i, result: verb === 'SMEMBERS' ? { result: [] } : { result: null } });
-      continue;
+      // Sorted-set / set-member commands require Upstash — not supported in CF KV.
+      // Always send directly to Upstash regardless of key prefix.
+      upstashOnly.push({ idx: i, cmd });
     } else {
-      normalized.push(cmd);
+      routed.push(cmd);
+      routedIndices.push(i);
     }
-    passthrough.push(null);
   }
-  // Execute supported commands via cfPipeline
-  const pipelineResults = normalized.length > 0 ? await cfPipeline(normalized) : [];
-  // Merge passthrough stubs with pipeline results
-  const results = [];
-  let pipelineIdx = 0;
+
+  // Execute routed commands via cfPipeline (dual-backend)
+  const routedResults = routed.length > 0 ? await cfPipeline(routed) : [];
+  // Execute Upstash-only commands via _upstashPipeline
+  const upstashResults = upstashOnly.length > 0
+    ? await _upstashPipeline(upstashOnly.map(u => u.cmd)).catch(() => upstashOnly.map(() => ({ result: null })))
+    : [];
+
+  // Merge results in original order
+  const results = new Array(commands.length);
+  let routedIdx = 0;
+  let upstashIdx = 0;
   for (let i = 0; i < commands.length; i++) {
-    if (passthrough[i] !== null) {
-      results.push(passthrough[i].result);
+    if (upstashOnly[upstashIdx]?.idx === i) {
+      results[i] = upstashResults[upstashIdx] || { result: null };
+      upstashIdx++;
     } else {
-      const r = pipelineResults[pipelineIdx] || { result: null };
+      const r = routedResults[routedIdx] || { result: null };
       // Normalize GET results to raw text format (callers expect strings)
       if (String(commands[i][0]).toUpperCase() === 'GET' && r.result != null && typeof r.result !== 'string') {
         r.result = JSON.stringify(r.result);
       }
-      results.push(r);
-      pipelineIdx++;
+      results[i] = r;
+      routedIdx++;
     }
   }
   return results;

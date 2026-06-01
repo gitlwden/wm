@@ -220,7 +220,7 @@ async function _upstashDel(key) {
   return { result: resp.ok ? 1 : 0 };
 }
 
-async function _upstashPipeline(commands) {
+export async function _upstashPipeline(commands) {
   const { url, token } = _upstashCredentials();
   if (commands.length === 0) return [];
   const resp = await fetch(`${url}/pipeline`, {

@@ -10,7 +10,7 @@ const KV_OP_TIMEOUT_MS = 180_000;
 const CF_PREFIXES = new Set([
   'entitlements:', 'classify:', 'intelligence:energy-shock:',
   'intelligence:route-impact:', 'webcam:list-cache:', 'aviation:delays-bootstrap:',
-  'sidecar:',
+  'sidecar:', 'brief:',
 ]);
 
 function extractBasePrefix(key: string): string {

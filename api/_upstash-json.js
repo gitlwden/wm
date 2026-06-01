@@ -1,5 +1,28 @@
 import { unwrapEnvelope } from './_seed-envelope.js';
 
+// ── Cloudflare KV reader (fallback for migrated keys) ────────────────
+
+function getCfKvCredentials() {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const namespaceId = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !namespaceId || !token) return null;
+  return { accountId, namespaceId, token };
+}
+
+async function cfKvGet(key, timeoutMs = 3_000) {
+  const creds = getCfKvCredentials();
+  if (!creds) return null;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${creds.accountId}/storage/kv/namespaces/${creds.namespaceId}/values/${encodeURIComponent(key)}`;
+  const resp = await fetch(url, {
+    headers: { Authorization: `Bearer ${creds.token}` },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!resp.ok) return null;
+  const text = await resp.text();
+  return text || null;
+}
+
 export async function readJsonFromUpstash(key, timeoutMs = 3_000) {
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -12,14 +35,19 @@ export async function readJsonFromUpstash(key, timeoutMs = 3_000) {
   if (!resp.ok) return null;
 
   const data = await resp.json();
-  if (!data.result) return null;
+  if (data.result) {
+    try {
+      return unwrapEnvelope(JSON.parse(data.result)).data;
+    } catch {
+      return null;
+    }
+  }
 
+  // Upstash miss — try Cloudflare KV fallback
+  const cfRaw = await cfKvGet(key, timeoutMs);
+  if (!cfRaw) return null;
   try {
-    // Envelope-aware: contract-mode canonical keys are stored as {_seed, data}.
-    // MCP tool outputs and RPC consumers must see the bare payload only.
-    // unwrapEnvelope is a no-op on legacy bare-shape values and on seed-meta
-    // keys (which remain top-level {fetchedAt, recordCount, ...}).
-    return unwrapEnvelope(JSON.parse(data.result)).data;
+    return unwrapEnvelope(JSON.parse(cfRaw)).data;
   } catch {
     return null;
   }
@@ -60,12 +88,24 @@ export async function readRawJsonFromUpstash(key, timeoutMs = 3_000) {
     throw new Error(`readRawJsonFromUpstash: Upstash GET ${key} returned HTTP ${resp.status}`);
   }
   const data = await resp.json();
-  if (data.result == null) return null; // genuine miss
+  if (data.result != null) {
+    try {
+      return JSON.parse(data.result);
+    } catch (err) {
+      throw new Error(
+        `readRawJsonFromUpstash: JSON.parse failed for ${key}: ${(err instanceof Error ? err.message : String(err))}`,
+      );
+    }
+  }
+
+  // Upstash miss — try Cloudflare KV fallback
+  const cfRaw = await cfKvGet(key, timeoutMs);
+  if (!cfRaw) return null;
   try {
-    return JSON.parse(data.result);
+    return JSON.parse(cfRaw);
   } catch (err) {
     throw new Error(
-      `readRawJsonFromUpstash: JSON.parse failed for ${key}: ${(err instanceof Error ? err.message : String(err))}`,
+      `readRawJsonFromUpstash: JSON.parse failed for CF KV ${key}: ${(err instanceof Error ? err.message : String(err))}`,
     );
   }
 }
