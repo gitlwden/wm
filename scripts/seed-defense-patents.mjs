@@ -20,17 +20,17 @@ function getProxyPool() {
 async function fetchWithProxy(urlStr, headers, timeoutMs) {
   // Try direct first
   try {
-    const resp = await fetch(urlStr, { headers, signal: AbortSignal.timeout(timeoutMs) });
+    const resp = await fetch(urlStr, { headers, signal: AbortSignal.timeout(8_000) });
     if (resp.ok) return resp;
   } catch { /* fall through to proxy */ }
 
-  // Try each proxy in the pool
-  const pool = getProxyPool();
+  // Try up to 3 proxies with 8s timeout each
+  const pool = getProxyPool().slice(0, 3);
   for (const proxy of pool) {
     try {
       const proxied = await httpsProxyFetchRaw(urlStr, proxy, {
         accept: headers.Accept || 'application/json',
-        timeoutMs,
+        timeoutMs: 8_000,
       });
       return {
         ok: true,
