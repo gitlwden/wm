@@ -36,7 +36,7 @@ jobs:
 
       - name: Update repo variable
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           gh variable set PROXY_URL --body "${{ steps.proxies.outputs.proxy_url }}"
           gh variable set PROXY_POOL --body '${{ steps.proxies.outputs.proxy_pool }}'
