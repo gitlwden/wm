@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { pathToFileURL , cfPipeline } from 'node:url';
+import { cfPipeline } from './_seed-utils.mjs';
 
 import { loadEnvFile, getRedisCredentials, writeExtraKeyWithMeta } from './_seed-utils.mjs';
 // @ts-check
