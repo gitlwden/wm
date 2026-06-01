@@ -3,9 +3,8 @@
  * Seed Social Velocity data from Google Trends
  * Fetches trending topics related to geopolitics, conflicts, and global events.
  */
-import { loadEnvFile, CHROME_UA, getKvBase, getKvToken } from './_seed-utils.mjs';
+import { loadEnvFile, CHROME_UA, kvSet } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
-import { resolveRecordCount } from './_seed-contract.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -75,8 +74,6 @@ async function seedSocialVelocity() {
     const payload = { posts: top, fetchedAt: Date.now() };
 
     // Write to KV using envelope format
-    const url = getKvBase();
-    const token = getKvToken();
     const envelope = buildEnvelope({
       fetchedAt: Date.now(),
       recordCount: top.length,
@@ -86,26 +83,13 @@ async function seedSocialVelocity() {
       data: payload,
     });
 
-    const setResp = await fetch(`${url}/values/${encodeURIComponent(CANONICAL_KEY)}?expiration_ttl=${CACHE_TTL}`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(envelope),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!setResp.ok) {
-      throw new Error(`KV SET failed: HTTP ${setResp.status}`);
-    }
+    await kvSet(CANONICAL_KEY, envelope, CACHE_TTL);
 
     // Write seed metadata
     const metaPayload = { fetchedAt: Date.now(), recordCount: top.length };
-    await fetch(`${url}/values/${encodeURIComponent(SEED_META_KEY)}?expiration_ttl=604800`, {
-      method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(metaPayload),
-      signal: AbortSignal.timeout(5000),
-    });
+    await kvSet(SEED_META_KEY, metaPayload, 604800);
 
-    console.log(`[SocialVelocity] Seeded ${top.length} posts in ${((Date.now() - t0) / 1000).toFixed(1)}s (kv: ${setResp.ok ? 'OK' : 'FAIL'})`);
+    console.log(`[SocialVelocity] Seeded ${top.length} posts in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 
     if (!validate(payload)) {
       throw new Error('Validation failed');
