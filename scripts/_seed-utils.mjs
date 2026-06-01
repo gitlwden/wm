@@ -164,6 +164,8 @@ const UPSTASH_PREFIXES = new Set([
   'intelligence:research', 'portwatch:disruptions:active',
   // Key families (not tied to a single seeder frequency)
   'forecast:', 'rl:', 'oauth:', 'brief:', 'digest-', 'mcp:',
+  // Per-series keys — each seeder run writes N keys (fred:series:*, bls:series:*)
+  'fred:series:', 'bls:series:',
 ]);
 
 // Exact keys that don't match a prefix but must stay on Upstash.

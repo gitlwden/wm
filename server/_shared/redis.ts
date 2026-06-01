@@ -18,6 +18,7 @@ const UPSTASH_PREFIXES = new Set([
   'intelligence:social-velocity', 'intelligence:tech-events',
   'intelligence:research', 'portwatch:disruptions:active',
   'forecast:', 'rl:', 'oauth:', 'brief:', 'digest-', 'mcp:',
+  'fred:series:', 'bls:series:',
 ]);
 
 const EXACT_UPSTASH_KEYS = new Set(['shared:fx-rates', 'health:failure-log-sig']);
