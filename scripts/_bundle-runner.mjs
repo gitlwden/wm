@@ -197,6 +197,7 @@ function spawnSeed(scriptPath, { timeoutMs, label, bundleStartedAtMs }) {
  *   intervalMs: number,
  *   timeoutMs?: number,
  *   dependsOn?: string[],    // labels that MUST run earlier in the array
+ *   softFail?: boolean,      // failure won't cause bundle exit 1
  * }>} sections
  * @param {{ maxBundleMs?: number }} [opts]
  */
@@ -228,7 +229,7 @@ export async function runBundle(label, sections, opts = {}) {
   const budgetLabel = Number.isFinite(maxBundleMs) ? `, budget ${Math.round(maxBundleMs / 1000)}s` : '';
   console.log(`[Bundle:${label}] Starting (${sections.length} sections${budgetLabel})`);
 
-  let ran = 0, skipped = 0, deferred = 0, failed = 0;
+  let ran = 0, skipped = 0, deferred = 0, failed = 0, softFailed = 0;
 
   for (const section of sections) {
     const scriptPath = join(__dirname, section.script);
@@ -284,12 +285,13 @@ export async function runBundle(label, sections, opts = {}) {
       // appear before those stderr lines when consumers concatenate
       // stdout+stderr, breaking tests (and log readers) that rely on
       // signal-escalation ordering.
-      console.error(`[Bundle:${label}] section=${section.label} status=FAILED elapsed=${result.elapsed}s reason=${(result.reason || 'unknown').replace(/\s+/g, ' ')}`);
-      failed++;
+      console.error(`[Bundle:${label}] section=${section.label} status=${section.softFail ? 'SOFT_FAIL' : 'FAILED'} elapsed=${result.elapsed}s reason=${(result.reason || 'unknown').replace(/\s+/g, ' ')}`);
+      if (section.softFail) softFailed++; else failed++;
     }
   }
 
   const totalSec = ((Date.now() - t0) / 1000).toFixed(1);
-  console.log(`[Bundle:${label}] Finished in ${totalSec}s, ran:${ran} skipped:${skipped} deferred:${deferred} failed:${failed}`);
+  const softNote = softFailed > 0 ? ` softFail:${softFailed}` : '';
+  console.log(`[Bundle:${label}] Finished in ${totalSec}s, ran:${ran} skipped:${skipped} deferred:${deferred} failed:${failed}${softNote}`);
   process.exit(failed > 0 ? 1 : 0);
 }
