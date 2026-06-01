@@ -23,6 +23,22 @@ jobs:
 
       - run: npm ci
 
+      - name: Refresh proxies
+        id: proxy
+        run: |
+          node scripts/refresh-proxies.mjs 2>&1 | tee proxy-output.log
+          node -e "
+          const fs = require('fs');
+          const lines = fs.readFileSync('proxy-output.log','utf8').split('\n');
+          const jsonLine = lines.find(l => l.startsWith('__JSON__'));
+          if (!jsonLine) { console.log('No proxy found, using existing'); process.exit(0); }
+          const d = JSON.parse(jsonLine.replace(/__JSON__/g, ''));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'proxy_url=' + d.proxy_url + '\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, 'proxy_pool=' + JSON.stringify(d.pool) + '\n');
+          "
+        continue-on-error: true
+        timeout-minutes: 3
+
       - name: Seed economy (EIA prices + FRED + crude/natgas inventories + macro signals)
         run: node scripts/seed-economy.mjs
         continue-on-error: true
