@@ -961,6 +961,228 @@ export default defineConfig(({ mode }) => {
       __BUILD_HASH__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev'),
     },
     plugins: [
+      // Widget Agent — Full implementation with LLM support (no relay needed)
+      {
+        name: 'wm-widget-agent',
+        configureServer(server) {
+          // Import LLM functions inline
+          const fs = require('fs');
+          const path = require('path');
+
+          // LLM Provider configuration
+          const LLM_PROVIDERS = [
+            { name: 'groq', url: 'https://api.groq.com/openai/v1/chat/completions', envKey: 'GROQ_API_KEY', model: 'llama-3.3-70b-versatile' },
+            { name: 'nvidia', url: 'https://integrate.api.nvidia.com/v1/chat/completions', envKey: 'NVIDIA_NIM_API_KEY', model: 'meta/llama-3.3-70b-instruct' },
+            { name: 'cerebras', url: 'https://api.cerebras.ai/v1/chat/completions', envKey: 'CEREBRAS_API_KEY', model: 'llama3.1-8b' },
+            { name: 'sambanova', url: 'https://api.sambanova.ai/v1/chat/completions', envKey: 'SAMBANOVA_API_KEY', model: 'Meta-Llama-3.1-8B-Instruct' },
+          ];
+
+          // Cache file
+          const CACHE_PATH = path.join(process.cwd(), '.llm-provider-cache.json');
+          let llmCache = null;
+
+          // Load cache
+          function loadCache() {
+            try {
+              if (fs.existsSync(CACHE_PATH)) {
+                const data = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf8'));
+                if (data.timestamp && Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
+                  return data;
+                }
+              }
+            } catch {}
+            return null;
+          }
+
+          // Save cache
+          function saveCache(data) {
+            try {
+              fs.writeFileSync(CACHE_PATH, JSON.stringify(data, null, 2));
+            } catch {}
+          }
+
+          // Get best provider
+          async function getBestProvider() {
+            if (llmCache) return llmCache;
+
+            llmCache = loadCache();
+            if (llmCache) {
+              console.log(`[widget-agent] Using cached provider: ${llmCache.provider}/${llmCache.model}`);
+              return llmCache;
+            }
+
+            console.log('[widget-agent] Benchmarking LLM providers...');
+            const available = LLM_PROVIDERS.filter(p => process.env[p.envKey]);
+
+            const results = await Promise.all(available.map(async (provider) => {
+              const start = Date.now();
+              try {
+                const resp = await fetch(provider.url, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${process.env[provider.envKey]}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ model: provider.model, messages: [{ role: 'user', content: 'ok' }], max_tokens: 5 }),
+                  signal: AbortSignal.timeout(10000),
+                });
+                if (resp.ok) {
+                  return { ...provider, latencyMs: Date.now() - start, success: true };
+                }
+              } catch {}
+              return null;
+            }));
+
+            const winner = results.filter(Boolean).sort((a, b) => a.latencyMs - b.latencyMs)[0];
+            if (winner) {
+              llmCache = { provider: winner.name, model: winner.model, latencyMs: winner.latencyMs, timestamp: Date.now() };
+              saveCache(llmCache);
+              console.log(`[widget-agent] Winner: ${winner.name}/${winner.model} (${winner.latencyMs}ms)`);
+              return llmCache;
+            }
+
+            throw new Error('No LLM provider available');
+          }
+
+          // Call LLM
+          async function callLlm(messages, tools) {
+            const provider = await getBestProvider();
+            const apiKey = process.env[LLM_PROVIDERS.find(p => p.name === provider.provider).envKey];
+
+            const openaiTools = tools.map(t => ({
+              type: 'function',
+              function: { name: t.name, description: t.description, parameters: t.input_schema },
+            }));
+
+            const resp = await fetch(LLM_PROVIDERS.find(p => p.name === provider.provider).url, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: provider.model, messages, max_tokens: 4096, tools: openaiTools, tool_choice: 'auto' }),
+              signal: AbortSignal.timeout(60000),
+            });
+
+            if (!resp.ok) throw new Error(`LLM error: ${resp.status}`);
+            const data = await resp.json();
+            const choice = data.choices?.[0];
+            if (!choice) throw new Error('Empty LLM response');
+
+            const content = [];
+            if (choice.message.content) content.push({ type: 'text', text: choice.message.content });
+            if (choice.message.tool_calls) {
+              for (const tc of choice.message.tool_calls) {
+                content.push({ type: 'tool_use', id: tc.id, name: tc.function.name, input: JSON.parse(tc.function.arguments || '{}') });
+              }
+            }
+
+            return { stop_reason: choice.finish_reason === 'tool_calls' ? 'tool_use' : 'end_turn', content };
+          }
+
+          // Health check
+          server.middlewares.use('/widget-agent/health', async (req, res) => {
+            res.setHeader('Content-Type', 'application/json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            try {
+              const provider = await getBestProvider();
+              res.end(JSON.stringify({ ok: true, agentEnabled: true, llmProviderConfigured: true, llmProvider: provider.provider }));
+            } catch (err) {
+              res.end(JSON.stringify({ ok: false, error: err.message }));
+            }
+          });
+
+          // Widget agent POST
+          server.middlewares.use('/widget-agent', (req, res, next) => {
+            if (req.method === 'OPTIONS') {
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+              res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+              res.writeHead(204);
+              return res.end();
+            }
+
+            if (req.method !== 'POST') return next();
+
+            res.setHeader('Content-Type', 'text/event-stream');
+            res.setHeader('Cache-Control', 'no-cache');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+
+            const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', async () => {
+              try {
+                const { prompt, mode, tier, currentHtml, conversationHistory } = JSON.parse(body);
+
+                // Load system prompt from ais-relay.cjs
+                const relayCode = fs.readFileSync(path.join(process.cwd(), 'scripts/ais-relay.cjs'), 'utf8');
+                const promptMatch = relayCode.match(/const WIDGET_SYSTEM_PROMPT = `([\s\S]*?)`;/);
+                const systemPrompt = promptMatch ? promptMatch[1] : 'You are a widget builder. Generate HTML widgets.';
+
+                const messages = [{ role: 'system', content: systemPrompt }];
+                if (conversationHistory) {
+                  messages.push(...conversationHistory.slice(-10).map(m => ({ role: m.role, content: String(m.content).slice(0, 500) })));
+                }
+                if (mode === 'modify' && currentHtml) {
+                  messages.push({ role: 'user', content: `Current HTML:\n${currentHtml}\n\nModify as requested.` });
+                  messages.push({ role: 'assistant', content: 'I will modify the widget as requested.' });
+                }
+                messages.push({ role: 'user', content: prompt.slice(0, 2000) });
+
+                const tools = [
+                  { name: 'fetch_worldmonitor_data', description: 'Fetch data from WorldMonitor API', input_schema: { type: 'object', properties: { endpoint: { type: 'string' } }, required: ['endpoint'] } },
+                  { name: 'search_web', description: 'Search the web', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+                ];
+
+                let completed = false;
+                for (let turn = 0; turn < 6; turn++) {
+                  const response = await callLlm(messages, tools);
+
+                  if (response.stop_reason === 'end_turn') {
+                    const text = response.content.find(b => b.type === 'text')?.text || '';
+                    const htmlMatch = text.match(/<!--\s*widget-html\s*-->([\s\S]*?)<!--\s*\/widget-html\s*-->/);
+                    const html = htmlMatch?.[1] || text;
+                    const titleMatch = text.match(/<!--\s*title:\s*([^\n]+?)\s*-->/);
+                    send({ type: 'html_complete', html: html.slice(0, 50000) });
+                    send({ type: 'done', title: titleMatch?.[1]?.trim() || 'Custom Widget' });
+                    completed = true;
+                    break;
+                  }
+
+                  if (response.stop_reason === 'tool_use') {
+                    const toolResults = [];
+                    for (const block of response.content.filter(b => b.type === 'tool_use')) {
+                      send({ type: 'tool_call', endpoint: block.name });
+
+                      if (block.name === 'fetch_worldmonitor_data') {
+                        try {
+                          const url = new URL(block.input.endpoint, 'http://localhost:5173');
+                          const dataRes = await fetch(url.toString());
+                          const data = await dataRes.text();
+                          toolResults.push({ role: 'tool', tool_call_id: block.id, content: data.slice(0, 10000) });
+                        } catch (err) {
+                          toolResults.push({ role: 'tool', tool_call_id: block.id, content: `Error: ${err.message}` });
+                        }
+                      } else {
+                        toolResults.push({ role: 'tool', tool_call_id: block.id, content: 'Search not implemented in dev mode' });
+                      }
+                    }
+
+                    const toolCalls = response.content.filter(b => b.type === 'tool_use').map(b => ({
+                      id: b.id, type: 'function', function: { name: b.name, arguments: JSON.stringify(b.input) },
+                    }));
+                    messages.push({ role: 'assistant', content: null, tool_calls: toolCalls });
+                    messages.push(...toolResults);
+                  }
+                }
+
+                if (!completed) {
+                  send({ type: 'error', message: 'Widget generation incomplete' });
+                }
+              } catch (err) {
+                send({ type: 'error', message: err.message });
+              }
+              res.end();
+            });
+          });
+        },
+      },
       // Emit dist/build-hash.txt with the deployed SHA so the running bundle
       // can fetch /build-hash.txt at tab-focus time and force-reload itself
       // if it's running an older bundle (see src/bootstrap/stale-bundle-check.ts).
@@ -1244,11 +1466,7 @@ export default defineConfig(({ mode }) => {
           target: 'https://api.worldmonitor.app',
           changeOrigin: true,
         },
-        // Widget agent — forward to Railway relay for SSE streaming
-        '/widget-agent': {
-          target: 'https://proxy.worldmonitor.app',
-          changeOrigin: true,
-        },
+        // Widget agent handled by wm-widget-agent plugin (no proxy needed)
         // Yahoo Finance API
         '/api/yahoo': {
           target: 'https://query1.finance.yahoo.com',
