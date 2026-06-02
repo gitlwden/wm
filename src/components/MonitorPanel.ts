@@ -31,31 +31,6 @@ export class MonitorPanel extends Panel {
     this.renderInput();
   }
 
-  /** Attach pointer-event-based click to an interactive element. */
-  private bindPointerClick(el: HTMLElement, handler: () => void): void {
-    let pending = false;
-    const trigger = (e: PointerEvent) => {
-      if (e.button !== 0) return;          // primary button only
-      if (pending) return;
-      pending = true;
-      handler();
-      setTimeout(() => { pending = false; }, 250);
-    };
-    // pointerdown: block propagation so makeDraggable never activates
-    el.addEventListener('pointerdown', (e) => {
-      e.stopPropagation();
-    });
-    // pointerup: the actual "click"
-    el.addEventListener('pointerup', (e) => {
-      e.preventDefault();
-      trigger(e as PointerEvent);
-    });
-    // Keep a native click handler as well for non-WebKitGTK browsers
-    el.addEventListener('click', (e) => {
-      trigger(e as unknown as PointerEvent);
-    });
-  }
-
   private renderInput(): void {
     clearChildren(this.content);
 
@@ -76,12 +51,13 @@ export class MonitorPanel extends Panel {
       className: 'monitor-add-btn',
       id: 'addMonitorBtn',
       type: 'button',
+      onClick: () => this.addMonitor(),
     },
       t('components.monitor.add'),
     );
 
-    // Wire the button via pointer events (see class-level JSDoc)
-    this.bindPointerClick(addBtn, () => this.addMonitor());
+    // Block pointerdown so panel drag handler (makeDraggable) never intercepts
+    addBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
 
     const inputContainer = h('div', { className: 'monitor-input-container' },
       this.inputEl,
@@ -132,8 +108,9 @@ export class MonitorPanel extends Panel {
       ...this.monitors.map((m) => {
         const removeBtn = h('span', {
           className: 'monitor-tag-remove',
+          onClick: () => this.removeMonitor(m.id),
         }, '×');
-        this.bindPointerClick(removeBtn, () => this.removeMonitor(m.id));
+        removeBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
 
         return h('span', { className: 'monitor-tag' },
           h('span', { className: 'monitor-tag-color', style: { background: m.color } }),
