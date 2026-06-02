@@ -8,7 +8,7 @@ import { climateNewsContentMeta, CLIMATE_NEWS_MAX_CONTENT_AGE_MIN } from './_cli
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'climate:news-intelligence:v1';
-const CACHE_TTL = 5400; // 90min = 3× 30-min relay interval (gold standard: TTL ≥ 3× interval)
+const CACHE_TTL = 172_800; // 48h — daily cron, keep data alive between runs
 const MAX_ITEMS = 100;
 const RSS_MAX_BYTES = 500_000;
 

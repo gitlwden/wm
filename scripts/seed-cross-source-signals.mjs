@@ -4,7 +4,7 @@ import { loadEnvFile, runSeed, getRedisCredentials , cfPipeline } from './_seed-
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'intelligence:cross-source-signals:v1';
-const CACHE_TTL = 1800; // 30min TTL, 15min cron cadence
+const CACHE_TTL = 172_800; // 48h — daily cron, keep data alive between runs
 
 // ── Source Redis keys ─────────────────────────────────────────────────────────
 const SOURCE_KEYS = [

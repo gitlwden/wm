@@ -35,6 +35,10 @@ jobs:
         run: node scripts/seed-usa-spending.mjs
         continue-on-error: true
 
+      - name: Seed portwatch
+        run: node scripts/seed-portwatch.mjs
+        continue-on-error: true
+
       - name: Seed chokepoint flows
         run: node scripts/seed-chokepoint-flows.mjs
         continue-on-error: true
@@ -45,4 +49,12 @@ jobs:
 
       - name: Seed corridor risk
         run: node scripts/seed-corridor-risk.mjs
+        continue-on-error: true
+
+      - name: Seed climate news
+        run: node scripts/seed-climate-news.mjs
+        continue-on-error: true
+
+      - name: Seed cross-source signals
+        run: node scripts/seed-cross-source-signals.mjs
         continue-on-error: true
