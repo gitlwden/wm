@@ -136,7 +136,7 @@ function brotliPrecompressPlugin(): Plugin {
   };
 }
 
-function htmlVariantPlugin(activeMeta: VariantMeta, activeVariant: string, isDesktopBuild: boolean): Plugin {
+function htmlVariantPlugin(activeMeta: VariantMeta, activeVariant: string, isDesktopBuild: boolean, isDev = false): Plugin {
   return {
     name: 'html-variant',
     transformIndexHtml(html) {
@@ -194,7 +194,7 @@ function htmlVariantPlugin(activeMeta: VariantMeta, activeVariant: string, isDes
       }
 
       // Dev mode: relax connect-src CSP for LAN access (CSP doesn't support IP wildcards)
-      if (!isProd && !isDesktopBuild) {
+      if (isDev && !isDesktopBuild) {
         result = result.replace(
           /connect-src 'self'/,
           "connect-src 'self' http:"
@@ -947,7 +947,7 @@ export default defineConfig(({ mode }) => {
           });
         },
       },
-      htmlVariantPlugin(activeMeta, activeVariant, isDesktopBuild),
+      htmlVariantPlugin(activeMeta, activeVariant, isDesktopBuild, mode === 'development'),
       polymarketPlugin(),
       rssProxyPlugin(),
       youtubeLivePlugin(),
