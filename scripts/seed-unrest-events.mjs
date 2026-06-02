@@ -6,7 +6,7 @@ loadEnvFile(import.meta.url);
 
 const GDELT_GKG_URL = 'https://api.gdeltproject.org/api/v1/gkg_geojson';
 const CANONICAL_KEY = 'unrest:events:v1';
-const CACHE_TTL = 16200; // 4.5h
+const CACHE_TTL = 172_800; // 48h — daily cron, keep data alive between runs
 const MAX_SOURCE_URLS = 5;
 
 // ---------- Severity Classification ----------

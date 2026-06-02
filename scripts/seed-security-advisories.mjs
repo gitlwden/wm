@@ -6,7 +6,7 @@ loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'intelligence:advisories:v1';
 const BOOTSTRAP_KEY = 'intelligence:advisories-bootstrap:v1';
-const TTL = 10800; // 180min — 2h buffer over 1h cron cadence (was 120min = exactly 1h buffer)
+const TTL = 172_800; // 48h — daily cron, keep data alive between runs
 
 const ALLOWED_DOMAINS = new Set(loadSharedConfig('rss-allowed-domains.json'));
 

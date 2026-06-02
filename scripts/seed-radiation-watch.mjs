@@ -5,7 +5,7 @@ import { loadEnvFile, CHROME_UA, runSeed } from './_seed-utils.mjs';
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'radiation:observations:v1';
-const CACHE_TTL = 7200;
+const CACHE_TTL = 172_800; // 48h — daily cron, keep data alive between runs
 const EPA_TIMEOUT_MS = 20_000;
 const SAFECAST_TIMEOUT_MS = 20_000;
 const BASELINE_WINDOW_SIZE = 168;

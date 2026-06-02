@@ -7,7 +7,7 @@ loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'thermal:escalation:v1';
 const HISTORY_KEY = 'thermal:escalation:history:v1';
-const CACHE_TTL = 6 * 60 * 60; // 6h — cron runs every 2h; 3x interval so one missed run does not expire the key (was 3h = 1.5x, too tight)
+const CACHE_TTL = 172_800; // 48h — daily cron, keep data alive between runs
 const SOURCE_VERSION = 'thermal-escalation-v1';
 let latestHistoryPayload = { updatedAt: '', cells: {} };
 
