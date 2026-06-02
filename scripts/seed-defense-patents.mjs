@@ -99,7 +99,7 @@ async function fetchCategoryPatents(category) {
     await sleep(1_000); // Be gentle with Google
   }
 
-  // Deduplicate, filter, and limit
+  // Deduplicate within this category only (same patent can appear in multiple categories)
   const seen = new Set();
   return allPatents
     .filter((p) => {
@@ -107,7 +107,6 @@ async function fetchCategoryPatents(category) {
       seen.add(p.patentId);
       return true;
     })
-    .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, MAX_PER_CATEGORY);
 }
 
@@ -128,15 +127,10 @@ async function fetchAllPatents() {
     }
   }
 
-  // Deduplicate by patentId and sort newest first
-  const seen = new Set();
-  const deduped = all.filter((p) => {
-    if (seen.has(p.patentId)) return false;
-    seen.add(p.patentId);
-    return true;
-  }).sort((a, b) => b.date.localeCompare(a.date));
+  // Sort newest first — no cross-category dedup so each tab has its own data
+  all.sort((a, b) => b.date.localeCompare(a.date));
 
-  return { patents: deduped, total: deduped.length, fetchedAt: new Date().toISOString() };
+  return { patents: all, total: all.length, fetchedAt: new Date().toISOString() };
 }
 
 function validate(data) {
