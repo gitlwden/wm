@@ -7,7 +7,7 @@ loadEnvFile(import.meta.url);
 const _proxyAuth = resolveProxyForConnect();
 
 const FEAR_GREED_KEY = 'market:fear-greed:v1';
-const FEAR_GREED_TTL = 64800; // 18h = 3x 6h interval
+const FEAR_GREED_TTL = 172_800; // 48h — daily cron, keep data alive between runs
 
 const FRED_PREFIX = 'economic:fred:v1';
 
