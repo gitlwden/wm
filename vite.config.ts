@@ -193,6 +193,14 @@ function htmlVariantPlugin(activeMeta: VariantMeta, activeVariant: string, isDes
           );
       }
 
+      // Dev mode: relax connect-src CSP for LAN access (CSP doesn't support IP wildcards)
+      if (!isProd && !isDesktopBuild) {
+        result = result.replace(
+          /connect-src 'self'/,
+          "connect-src 'self' http:"
+        );
+      }
+
       // Desktop builds: replace favicon paths with variant-specific subdirectory.
       // Web builds use 'full' favicons in HTML; runtime JS swaps them per hostname.
       if (activeVariant !== 'full') {
