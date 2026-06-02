@@ -83,7 +83,7 @@ function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
 
-const CHUNK_SIZE = 15_000; // ~4MB per chunk (well under 5MB KV limit)
+const CHUNK_SIZE = 5_000; // ~1.3MB per chunk — smaller chunks avoid Upstash timeout on large payloads
 
 async function seedData(dataKey, entries) {
   const chunks = [];
