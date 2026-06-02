@@ -60,6 +60,11 @@ jobs:
           CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
+      - name: Scrape Iran events
+        run: node scripts/scrape-iran-events.mjs
+        continue-on-error: true
+        timeout-minutes: 2
+
       - name: Seed Iran events
         run: node scripts/seed-iran-events.mjs
         continue-on-error: true

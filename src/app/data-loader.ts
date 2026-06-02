@@ -3400,12 +3400,11 @@ export class DataLoaderManager implements AppModule {
   async loadRadiationWatch(): Promise<void> {
     try {
       const result = await fetchRadiationWatch();
-      const anomalies = result.observations.filter((observation) => observation.severity !== 'normal');
       this.callPanel('radiation-watch', 'setData', result);
       this.ctx.intelligenceCache.radiation = result;
       signalAggregator.ingestRadiationObservations(result.observations);
-      this.ctx.map?.setRadiationObservations(anomalies);
-      this.ctx.map?.setLayerReady('radiationWatch', anomalies.length > 0);
+      this.ctx.map?.setRadiationObservations(result.observations);
+      this.ctx.map?.setLayerReady('radiationWatch', result.observations.length > 0);
       if (result.observations.length > 0) {
         dataFreshness.recordUpdate('radiation', result.observations.length);
       }
