@@ -158,26 +158,19 @@ async function fetchRegion(bounds, regionName, depth = 0) {
 }
 
 async function seedGeo(geoKey, cameras) {
-  for (let i = 0; i < cameras.length; i += BATCH_SIZE) {
-    const batch = cameras.slice(i, i + BATCH_SIZE);
-    const args = [];
-    for (const c of batch) {
-      args.push(String(c.lng), String(c.lat), c.webcamId);
-    }
-    await pipelineRequest([['GEOADD', geoKey, ...args]]);
-  }
+  // Write all geo data in one shot — no read-modify-write race
+  const geoArray = cameras.map(c => ({ lon: c.lng, lat: c.lat, id: c.webcamId }));
+  await kvSet(geoKey, geoArray, GEO_TTL);
 }
 
 async function seedMeta(metaKey, cameras) {
-  for (let i = 0; i < cameras.length; i += BATCH_SIZE) {
-    const batch = cameras.slice(i, i + BATCH_SIZE);
-    const args = [];
-    for (const c of batch) {
-      const { webcamId, ...meta } = c;
-      args.push(webcamId, JSON.stringify(meta));
-    }
-    await pipelineRequest([['HSET', metaKey, ...args]]);
+  // Write all metadata in one shot
+  const metaObj = {};
+  for (const c of cameras) {
+    const { webcamId, ...meta } = c;
+    metaObj[webcamId] = meta;
   }
+  await kvSet(metaKey, metaObj, GEO_TTL);
 }
 
 async function main() {
