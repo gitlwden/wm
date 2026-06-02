@@ -382,6 +382,26 @@ function sebufApiPlugin(): Plugin {
       import('./src/generated/server/worldmonitor/webcam/v1/service_server'),
       import('./server/worldmonitor/webcam/v1/handler'),
     ]);
+    const [radiationServerMod, radiationHandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/radiation/v1/service_server'),
+      import('./server/worldmonitor/radiation/v1/handler'),
+    ]);
+    const [healthServerMod, healthHandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/health/v1/service_server'),
+      import('./server/worldmonitor/health/v1/handler'),
+    ]);
+    const [sanctionsServerMod, sanctionsHandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/sanctions/v1/service_server'),
+      import('./server/worldmonitor/sanctions/v1/handler'),
+    ]);
+    const [thermalServerMod, thermalHandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/thermal/v1/service_server'),
+      import('./server/worldmonitor/thermal/v1/handler'),
+    ]);
+    const [imageryServerMod, imageryHandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/imagery/v1/service_server'),
+      import('./server/worldmonitor/imagery/v1/handler'),
+    ]);
 
     const serverOptions = { onError: errorMod.mapErrorToResponse };
     const allRoutes = [
@@ -414,6 +434,11 @@ function sebufApiPlugin(): Plugin {
       ...forecastServerMod.createForecastServiceRoutes(forecastHandlerMod.forecastHandler, serverOptions),
       ...consumerPricesServerMod.createConsumerPricesServiceRoutes(consumerPricesHandlerMod.consumerPricesHandler, serverOptions),
       ...webcamServerMod.createWebcamServiceRoutes(webcamHandlerMod.webcamHandler, serverOptions),
+      ...radiationServerMod.createRadiationServiceRoutes(radiationHandlerMod.radiationHandler, serverOptions),
+      ...healthServerMod.createHealthServiceRoutes(healthHandlerMod.healthHandler, serverOptions),
+      ...sanctionsServerMod.createSanctionsServiceRoutes(sanctionsHandlerMod.sanctionsHandler, serverOptions),
+      ...thermalServerMod.createThermalServiceRoutes(thermalHandlerMod.thermalHandler, serverOptions),
+      ...imageryServerMod.createImageryServiceRoutes(imageryHandlerMod.imageryHandler, serverOptions),
     ];
     cachedCorsMod = corsMod;
     return routerMod.createRouter(allRoutes);

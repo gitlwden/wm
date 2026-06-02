@@ -7,7 +7,7 @@ loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'intelligence:satellites:tle:v1';
 const SEED_META_KEY = 'seed-meta:intelligence:satellites';
-const CACHE_TTL = 21_600; // 6h — survives 3 missed cycles before data expires
+const CACHE_TTL = 172_800; // 48h — daily cron, keep data alive between runs
 const META_TTL = 604_800; // 7d
 const CELESTRAK_TIMEOUT_MS = 15_000;
 const MAX_PAYLOAD_BYTES = 2 * 1024 * 1024; // 2MB per group
