@@ -31,8 +31,41 @@ const EPA_SITES = [
 
 const SAFECAST_SITES = [
   ...EPA_SITES.map(({ anchorId, name, country, lat, lon }) => ({ anchorId, name, country, lat, lon })),
+  // Asia-Pacific
   { anchorId: 'jp-tokyo', name: 'Tokyo', country: 'Japan', lat: 35.6895, lon: 139.6917 },
   { anchorId: 'jp-fukushima', name: 'Fukushima', country: 'Japan', lat: 37.7608, lon: 140.4747 },
+  { anchorId: 'jp-osaka', name: 'Osaka', country: 'Japan', lat: 34.6937, lon: 135.5023 },
+  { anchorId: 'kr-seoul', name: 'Seoul', country: 'South Korea', lat: 37.5665, lon: 126.9780 },
+  { anchorId: 'cn-beijing', name: 'Beijing', country: 'China', lat: 39.9042, lon: 116.4074 },
+  { anchorId: 'in-mumbai', name: 'Mumbai', country: 'India', lat: 19.0760, lon: 72.8777 },
+  { anchorId: 'au-sydney', name: 'Sydney', country: 'Australia', lat: -33.8688, lon: 151.2093 },
+  // Europe
+  { anchorId: 'gb-london', name: 'London', country: 'United Kingdom', lat: 51.5074, lon: -0.1278 },
+  { anchorId: 'fr-paris', name: 'Paris', country: 'France', lat: 48.8566, lon: 2.3522 },
+  { anchorId: 'de-berlin', name: 'Berlin', country: 'Germany', lat: 52.5200, lon: 13.4050 },
+  { anchorId: 'de-munich', name: 'Munich', country: 'Germany', lat: 48.1351, lon: 11.5820 },
+  { anchorId: 'it-rome', name: 'Rome', country: 'Italy', lat: 41.9028, lon: 12.4964 },
+  { anchorId: 'es-madrid', name: 'Madrid', country: 'Spain', lat: 40.4168, lon: -3.7038 },
+  { anchorId: 'pl-warsaw', name: 'Warsaw', country: 'Poland', lat: 52.2297, lon: 21.0122 },
+  { anchorId: 'ua-kyiv', name: 'Kyiv', country: 'Ukraine', lat: 50.4501, lon: 30.5234 },
+  { anchorId: 'fi-helsinki', name: 'Helsinki', country: 'Finland', lat: 60.1699, lon: 24.9384 },
+  { anchorId: 'se-stockholm', name: 'Stockholm', country: 'Sweden', lat: 59.3293, lon: 18.0686 },
+  // Middle East
+  { anchorId: 'il-tel-aviv', name: 'Tel Aviv', country: 'Israel', lat: 32.0853, lon: 34.7818 },
+  { anchorId: 'tr-istanbul', name: 'Istanbul', country: 'Turkey', lat: 41.0082, lon: 28.9784 },
+  { anchorId: 'ae-dubai', name: 'Dubai', country: 'UAE', lat: 25.2048, lon: 55.2708 },
+  { anchorId: 'sa-riyadh', name: 'Riyadh', country: 'Saudi Arabia', lat: 24.7136, lon: 46.6753 },
+  // Russia / Central Asia
+  { anchorId: 'ru-moscow', name: 'Moscow', country: 'Russia', lat: 55.7558, lon: 37.6173 },
+  { anchorId: 'kz-astana', name: 'Astana', country: 'Kazakhstan', lat: 51.1694, lon: 71.4491 },
+  // Americas (non-US)
+  { anchorId: 'br-sao-paulo', name: 'São Paulo', country: 'Brazil', lat: -23.5505, lon: -46.6333 },
+  { anchorId: 'mx-mexico-city', name: 'Mexico City', country: 'Mexico', lat: 19.4326, lon: -99.1332 },
+  { anchorId: 'ca-toronto', name: 'Toronto', country: 'Canada', lat: 43.6532, lon: -79.3832 },
+  // Africa
+  { anchorId: 'za-cape-town', name: 'Cape Town', country: 'South Africa', lat: -33.9249, lon: 18.4241 },
+  { anchorId: 'ng-lagos', name: 'Lagos', country: 'Nigeria', lat: 6.5244, lon: 3.3792 },
+  { anchorId: 'eg-cairo', name: 'Cairo', country: 'Egypt', lat: 30.0444, lon: 31.2357 },
 ];
 
 function round(value, digits = 1) {
