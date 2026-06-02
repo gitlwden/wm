@@ -73,22 +73,18 @@ async function readLatestSnapshot(_url, _token, regionId) {
  * @param {string} regionId
  * @returns {Promise<object[] | null>} null = upstream failure, [] = genuinely no transitions
  */
-async function readRecentTransitions(url, token, regionId) {
+async function readRecentTransitions(_url, _token, regionId) {
   try {
     const key = `${REGIME_HISTORY_KEY_PREFIX}${regionId}`;
-    const resp = await fetch(`${url}/lrange/${encodeURIComponent(key)}/0/49`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    if (!Array.isArray(data?.result)) return null;
+    const results = await cfPipeline([['LRANGE', key, '0', '49']]);
+    const raw = results?.[0]?.result;
+    if (!Array.isArray(raw)) return [];
     const cutoff = Date.now() - SEVEN_DAYS_MS;
-    return data.result
-      .map((raw) => { try { return JSON.parse(raw); } catch { return null; } })
+    return raw
+      .map((entry) => { try { return typeof entry === 'string' ? JSON.parse(entry) : entry; } catch { return null; } })
       .filter((t) => t && typeof t === 'object' && (t.transitioned_at ?? 0) >= cutoff);
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -100,19 +96,11 @@ async function readRecentTransitions(url, token, regionId) {
  * @param {object} brief
  * @returns {Promise<boolean>}
  */
-async function writeBrief(url, token, regionId, brief) {
+async function writeBrief(_url, _token, regionId, brief) {
   const key = `${BRIEF_KEY_PREFIX}${regionId}`;
-  const payload = JSON.stringify(brief);
   try {
-    // TTL via path segment, NOT query string. Upstash REST ignores query
-    // params for SET options — ?EX=N would silently produce keys that
-    // never expire. Greptile P1 on PR #2989.
-    const resp = await fetch(`${url}/set/${encodeURIComponent(key)}/${encodeURIComponent(payload)}/EX/${BRIEF_TTL}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    return resp.ok;
+    await cfPipeline([['SET', key, JSON.stringify(brief), 'EX', String(BRIEF_TTL)]]);
+    return true;
   } catch {
     return false;
   }
