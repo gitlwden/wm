@@ -7,7 +7,9 @@
  * Env:   WINDY_API_KEY, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_KV_NAMESPACE_ID, CLOUDFLARE_API_TOKEN
  */
 
-import { kvGet, kvSet } from './_seed-utils.mjs';
+import { loadEnvFile, kvGet, kvSet } from './_seed-utils.mjs';
+
+loadEnvFile(import.meta.url);
 
 const WINDY_API_KEY = process.env.WINDY_API_KEY;
 if (!WINDY_API_KEY) {
@@ -41,24 +43,23 @@ async function pipelineRequest(commands) {
     const verb = String(cmd[0]).toUpperCase();
     try {
       if (verb === 'GEOADD') {
-        // KV has no GEOADD — store geo data as JSON under a companion key
+        // KV has no GEOADD — store geo data as JSON array under the same key
         const key = cmd[1];
         const lon = Number(cmd[2]);
         const lat = Number(cmd[3]);
         const id = cmd[4];
-        // Read existing, append, write back
-        const existing = await kvGet(`${key}:geo`) || [];
+        const existing = await kvGet(key) || [];
         existing.push({ lon, lat, id });
-        await kvSet(`${key}:geo`, existing);
+        await kvSet(key, existing, GEO_TTL);
         results.push({ result: 1 });
       } else if (verb === 'HSET') {
-        // KV has no HSET — store hash data as JSON under a companion key
+        // KV has no HSET — store hash data as JSON object under the same key
         const key = cmd[1];
         const field = cmd[2];
         const value = cmd[3];
-        const existing = await kvGet(`${key}:hash`) || {};
+        const existing = await kvGet(key) || {};
         existing[field] = typeof value === 'string' ? JSON.parse(value) : value;
-        await kvSet(`${key}:hash`, existing);
+        await kvSet(key, existing, GEO_TTL);
         results.push({ result: 1 });
       } else if (verb === 'SET') {
         const key = cmd[1];
