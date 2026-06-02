@@ -1188,6 +1188,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: true,   // 监听 0.0.0.0，允许局域网/外网访问（PM2 场景下 CLI --host 可能无法透传）
+      allowedHosts: true, // 允许所有 host（局域网 IP 访问）
       port: 3008,       // 强制将默认端口改为 3008
       strictPort: true, // 如果 3008 被占用直接报错，防止它悄悄变成 3009
       open: !isE2E,
