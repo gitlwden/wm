@@ -9,9 +9,9 @@ const CF_RADAR_BASE = 'https://api.cloudflare.com/client/v4';
 const CANONICAL_KEY = 'infra:outages:v1';
 const DDOS_KEY = 'cf:radar:ddos:v1';
 const TRAFFIC_ANOMALIES_KEY = 'cf:radar:traffic-anomalies:v1';
-const CACHE_TTL = 10800; // 3h — 6x the 30 min cron interval (was 1x = key expired on any missed run)
-const DDOS_TTL = 10800;
-const ANOMALIES_TTL = 3600;
+const CACHE_TTL = 172_800; // 48h — daily cron, keep data alive between runs
+const DDOS_TTL = 172_800;
+const ANOMALIES_TTL = 172_800;
 
 const COUNTRY_COORDS = {
   AF:[33.94,67.71],AL:[41.15,20.17],DZ:[28.03,1.66],AO:[-11.20,17.87],
