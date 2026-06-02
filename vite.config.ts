@@ -378,6 +378,10 @@ function sebufApiPlugin(): Plugin {
       import('./src/generated/server/worldmonitor/consumer_prices/v1/service_server'),
       import('./server/worldmonitor/consumer-prices/v1/handler'),
     ]);
+    const [webcamServerMod, webcamHandlerMod] = await Promise.all([
+      import('./src/generated/server/worldmonitor/webcam/v1/service_server'),
+      import('./server/worldmonitor/webcam/v1/handler'),
+    ]);
 
     const serverOptions = { onError: errorMod.mapErrorToResponse };
     const allRoutes = [
@@ -409,6 +413,7 @@ function sebufApiPlugin(): Plugin {
       ...shippingV2ServerMod.createShippingV2ServiceRoutes(shippingV2HandlerMod.shippingV2Handler, serverOptions),
       ...forecastServerMod.createForecastServiceRoutes(forecastHandlerMod.forecastHandler, serverOptions),
       ...consumerPricesServerMod.createConsumerPricesServiceRoutes(consumerPricesHandlerMod.consumerPricesHandler, serverOptions),
+      ...webcamServerMod.createWebcamServiceRoutes(webcamHandlerMod.webcamHandler, serverOptions),
     ];
     cachedCorsMod = corsMod;
     return routerMod.createRouter(allRoutes);
