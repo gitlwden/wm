@@ -1512,7 +1512,9 @@ export class DeckGLMap {
     // freshness at write time. PR #3593: production saw 50 valid records
     // cached but 0 rendered because the newest CDC item was 11d old.
     const filteredDiseaseOutbreaks = mapLayers.diseaseOutbreaks ? this.diseaseOutbreaks : [];
-    const filteredRadiationObservations = mapLayers.radiationWatch ? this.filterByTimeCached(this.radiationObservations, (obs) => obs.observedAt) : [];
+    // Radiation monitoring sites are sparse globally — skip time filter
+    // so international stations with older readings still appear on the map
+    const filteredRadiationObservations = mapLayers.radiationWatch ? this.radiationObservations : [];
     const filteredPositiveEvents = mapLayers.positiveEvents ? this.filterByTimeCached(this.positiveEvents, (e) => e.timestamp) : [];
     const filteredIranEvents = mapLayers.iranAttacks ? this.filterByTimeCached(this.iranEvents, (e) => e.timestamp) : [];
     const filteredFirmsFireData = mapLayers.fires ? this.filterByTimeCached(this.firmsFireData, (d) => d.acq_date) : [];
