@@ -166,46 +166,46 @@ export function openWidgetChatModal(options: WidgetChatOptions): void {
   });
 
   async function runPreflight(): Promise<void> {
-    setReadinessState(readinessEl, 'checking', t('widgets.checkingConnection'));
-    try {
-      const auth = await buildWidgetAuthHeaders(isPro);
-      const res = await fetch(widgetAgentHealthUrl(), { headers: auth.headers });
-      let payload: WidgetAgentHealth | null = null;
-      try { payload = await res.json() as WidgetAgentHealth; } catch { /* ignore */ }
+    // setReadinessState(readinessEl, 'checking', t('widgets.checkingConnection'));
+    // try {
+    //   const auth = await buildWidgetAuthHeaders(isPro);
+    //   const res = await fetch(widgetAgentHealthUrl(), { headers: auth.headers });
+    //   let payload: WidgetAgentHealth | null = null;
+    //   try { payload = await res.json() as WidgetAgentHealth; } catch { /* ignore */ }
+    //
+    //   if (!res.ok) {
+    //     const message = resolvePreflightMessage(res.status, payload, isPro, auth.usedTesterKey);
+    //     preflightReady = false;
+    //     setReadinessState(readinessEl, 'error', message);
+    //     setFooterStatus(footerStatusEl, message, 'error');
+    //     if (!currentSessionHtml) renderPreviewState(previewEl, 'error', message);
+    //     syncComposerState();
+    //     return;
+    //   }
 
-      if (!res.ok) {
-        const message = resolvePreflightMessage(res.status, payload, isPro, auth.usedTesterKey);
-        preflightReady = false;
-        setReadinessState(readinessEl, 'error', message);
-        setFooterStatus(footerStatusEl, message, 'error');
-        if (!currentSessionHtml) renderPreviewState(previewEl, 'error', message);
-        syncComposerState();
-        return;
-      }
-
-      if (isPro && payload?.proKeyConfigured === false) {
-        const message = t('widgets.preflightProUnavailable');
-        preflightReady = false;
-        setReadinessState(readinessEl, 'error', message);
-        setFooterStatus(footerStatusEl, message, 'error');
-        if (!currentSessionHtml) renderPreviewState(previewEl, 'error', message);
-        syncComposerState();
-        return;
-      }
+      // if (isPro && payload?.proKeyConfigured === false) {
+      //   const message = t('widgets.preflightProUnavailable');
+      //   preflightReady = false;
+      //   setReadinessState(readinessEl, 'error', message);
+      //   setFooterStatus(footerStatusEl, message, 'error');
+      //   if (!currentSessionHtml) renderPreviewState(previewEl, 'error', message);
+      //   syncComposerState();
+      //   return;
+      // }
 
       preflightReady = true;
       setReadinessState(readinessEl, 'ready', t('widgets.preflightConnected'));
       if (!currentSessionHtml) renderPreviewState(previewEl, 'ready_to_prompt');
       setFooterStatus(footerStatusEl, currentSessionHtml ? t('widgets.modifyHint') : t('widgets.readyToGenerate'));
       syncComposerState();
-    } catch {
-      preflightReady = false;
-      const message = t('widgets.preflightUnavailable');
-      setReadinessState(readinessEl, 'error', message);
-      setFooterStatus(footerStatusEl, message, 'error');
-      if (!currentSessionHtml) renderPreviewState(previewEl, 'error', message);
-      syncComposerState();
-    }
+    // } catch {
+    //   preflightReady = false;
+    //   const message = t('widgets.preflightUnavailable');
+    //   setReadinessState(readinessEl, 'error', message);
+    //   setFooterStatus(footerStatusEl, message, 'error');
+    //   if (!currentSessionHtml) renderPreviewState(previewEl, 'error', message);
+    //   syncComposerState();
+    // }
   }
 
   function syncComposerState(): void {
