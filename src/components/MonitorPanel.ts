@@ -6,18 +6,6 @@ import { generateId, formatTime, getCSSColor } from '@/utils';
 import { sanitizeUrl } from '@/utils/sanitize';
 import { h, replaceChildren, clearChildren } from '@/utils/dom-utils';
 
-/**
- * WebKitGTK (Linux/Tauri) ignores click events on children when a parent has
- * `user-select: none`.  The `.panel-content` div carries that rule globally.
- * Rather than fighting CSS at the event level we use Pointer Events, which
- * fire reliably regardless of user-select state.
- *
- * PointerEvent guards:
- *   - only primary button (button === 0)
- *   - debounce 250 ms to collapse pointerdown → pointerup → click duplicates
- *   - stopPropagation on pointerdown so the panel drag handler never sees it
- */
-
 export class MonitorPanel extends Panel {
   private monitors: Monitor[] = [];
   private onMonitorsChange?: (monitors: Monitor[]) => void;
@@ -42,24 +30,19 @@ export class MonitorPanel extends Panel {
       onKeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') this.addMonitor(); },
     }) as HTMLInputElement;
 
-    // Block pointerdown so the panel drag handler (makeDraggable) never
-    // intercepts events on the input — also prevents user-select:none
-    // on .panel-content from suppressing focus/click on WebKitGTK.
-    this.inputEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+    const addBtn = document.createElement('button');
+    addBtn.className = 'monitor-add-btn';
+    addBtn.id = 'addMonitorBtn';
+    addBtn.type = 'button';
+    addBtn.textContent = t('components.monitor.add');
+    addBtn.style.cssText = 'pointer-events:auto!important;user-select:auto!important;cursor:pointer!important;';
+    addBtn.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); this.addMonitor(); });
+    addBtn.addEventListener('click', (e) => { e.stopPropagation(); this.addMonitor(); });
 
-    const addBtn = h('button', {
-      className: 'monitor-add-btn',
-      id: 'addMonitorBtn',
-      type: 'button',
-      onClick: () => this.addMonitor(),
+    const inputContainer = h('div', {
+      className: 'monitor-input-container',
+      style: 'user-select:auto;-webkit-user-select:auto;',
     },
-      t('components.monitor.add'),
-    );
-
-    // Block pointerdown so panel drag handler (makeDraggable) never intercepts
-    addBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
-
-    const inputContainer = h('div', { className: 'monitor-input-container' },
       this.inputEl,
       addBtn,
     );
@@ -110,7 +93,6 @@ export class MonitorPanel extends Panel {
           className: 'monitor-tag-remove',
           onClick: () => this.removeMonitor(m.id),
         }, '×');
-        removeBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
 
         return h('span', { className: 'monitor-tag' },
           h('span', { className: 'monitor-tag-color', style: { background: m.color } }),
