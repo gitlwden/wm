@@ -1386,14 +1386,14 @@ function ucdpFetchPage(version, page) {
     const headers = { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
     if (UCDP_ACCESS_TOKEN) headers['x-ucdp-access-token'] = UCDP_ACCESS_TOKEN;
     const req = https.request(pageUrl, { method: 'GET', headers, timeout: 30000 }, (resp) => {
-      if (resp.statusCode === 401 || resp.statusCode === 403) {
-        resp.resume();
-        return reject(new Error(`UCDP ${version} page ${page}: HTTP ${resp.statusCode} — API token required (set UCDP_ACCESS_TOKEN env var)`));
-      }
-      if (resp.statusCode < 200 || resp.statusCode >= 300) {
-        resp.resume();
-        return reject(new Error(`UCDP ${version} page ${page}: HTTP ${resp.statusCode}`));
-      }
+      // if (resp.statusCode === 401 || resp.statusCode === 403) {
+      //   resp.resume();
+      //   return reject(new Error(`UCDP ${version} page ${page}: HTTP ${resp.statusCode} — API token required (set UCDP_ACCESS_TOKEN env var)`));
+      // }
+      // if (resp.statusCode < 200 || resp.statusCode >= 300) {
+      //   resp.resume();
+      //   return reject(new Error(`UCDP ${version} page ${page}: HTTP ${resp.statusCode}`));
+      // }
       let data = '';
       resp.on('data', (chunk) => { data += chunk; });
       resp.on('end', () => {
