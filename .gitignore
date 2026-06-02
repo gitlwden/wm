@@ -13,6 +13,7 @@ api/\[domain\]/v1/\[rpc\].js
 api/\[\[...path\]\].js
 .claude/
 .cursor/
+.cache/
 .env.vercel-backup
 .env.vercel-export
 .agent/
