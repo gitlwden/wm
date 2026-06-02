@@ -140,12 +140,10 @@ export default async function handler(req: Request): Promise<Response> {
   const relayHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': 'worldmonitor-widget-edge/1.0',
-    ...(WIDGET_AGENT_KEY ? { 'X-Widget-Key': WIDGET_AGENT_KEY } : {}),
+    // Skip auth keys for local development
+    // ...(WIDGET_AGENT_KEY ? { 'X-Widget-Key': WIDGET_AGENT_KEY } : {}),
+    // ...(isPro && PRO_WIDGET_KEY ? { 'X-Pro-Key': PRO_WIDGET_KEY } : {}),
   };
-  // if (isPro && PRO_WIDGET_KEY) {
-  //   relayHeaders['X-Pro-Key'] = PRO_WIDGET_KEY;
-  // }
-  relayHeaders['X-Pro-Key'] = PRO_WIDGET_KEY;
   // ── Health check (GET) ────────────────────────────────────────────────────
   if (req.method === 'GET') {
     const healthRes = await fetch(`${RELAY_BASE}/widget-agent/health`, {
