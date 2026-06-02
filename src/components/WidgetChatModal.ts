@@ -1,6 +1,4 @@
 import type { CustomWidgetSpec } from '@/services/widget-store';
-import { getBrowserTesterKey, getWidgetAgentKey, getProWidgetKey } from '@/services/widget-store';
-import { getClerkToken } from '@/services/clerk';
 import { t } from '@/services/i18n';
 import { escapeHtml } from '@/utils/sanitize';
 import { widgetAgentUrl } from '@/utils/proxy';
@@ -38,30 +36,9 @@ let overlay: HTMLElement | null = null;
 let abortController: AbortController | null = null;
 let clientTimeout: ReturnType<typeof setTimeout> | null = null;
 
-interface BuiltAuthHeaders {
-  headers: Record<string, string>;
-  /** True when the request is authenticated with a tester key (wm-widget-key /
-   *  wm-pro-key / wm-worldmonitor-key) rather than a Clerk JWT. Used to pick
-   *  the right 403 error message — the "Update wm-pro-key" hint is misleading
-   *  for normal paying users who have no tester key. */
-  usedTesterKey: boolean;
-}
-
-async function buildWidgetAuthHeaders(isPro: boolean): Promise<BuiltAuthHeaders> {
-  const testerKey = getBrowserTesterKey();
-  const widgetKey = getWidgetAgentKey();
-  const proKey = getProWidgetKey();
-  if (testerKey || widgetKey || proKey) {
-    const headers: Record<string, string> = {};
-    if (testerKey) headers['X-WorldMonitor-Key'] = testerKey;
-    if (widgetKey) headers['X-Widget-Key'] = widgetKey;
-    if (isPro && proKey) headers['X-Pro-Key'] = proKey;
-    return { headers, usedTesterKey: true };
-  }
-  const token = await getClerkToken();
-  if (token) return { headers: { 'Authorization': `Bearer ${token}` }, usedTesterKey: false };
-  return { headers: {}, usedTesterKey: false };
-}
+// Auth headers skipped for local development
+// interface BuiltAuthHeaders { ... }
+// async function buildWidgetAuthHeaders(isPro: boolean): Promise<BuiltAuthHeaders> { ... }
 
 export function openWidgetChatModal(options: WidgetChatOptions): void {
   closeWidgetChatModal();
@@ -243,10 +220,11 @@ export function openWidgetChatModal(options: WidgetChatOptions): void {
     }, timeoutMs);
 
     try {
-      const auth = await buildWidgetAuthHeaders(isPro);
+      // Skip auth headers for local development
+      // const auth = await buildWidgetAuthHeaders(isPro);
       const reqHeaders: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...auth.headers,
+        // ...auth.headers,
       };
 
       const res = await fetch(widgetAgentUrl(), {
