@@ -131,7 +131,7 @@ async function main() {
 
   await runSeed('wildfire', 'fires', CANONICAL_KEY, () => fetchAllRegions(apiKey), {
     validateFn: (data) => Array.isArray(data?.fireDetections) && data.fireDetections.length > 0,
-    ttlSeconds: 7200,
+    ttlSeconds: 172_800, // 48h — daily cron, keep data alive between runs
     lockTtlMs: 2_400_000, // 40 min — 27 slots × ~72s worst case (30s timeout + 6s backoff + 30s retry + 6s pace) ≈ 32.4 min; pad headroom. Next cron tick sees lock held and safely skips.
     sourceVersion: FIRMS_SOURCES.join('+'),
     declareRecords,
