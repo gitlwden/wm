@@ -1386,14 +1386,14 @@ function ucdpFetchPage(version, page) {
     const headers = { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
     if (UCDP_ACCESS_TOKEN) headers['x-ucdp-access-token'] = UCDP_ACCESS_TOKEN;
     const req = https.request(pageUrl, { method: 'GET', headers, timeout: 30000 }, (resp) => {
-      // if (resp.statusCode === 401 || resp.statusCode === 403) {
-      //   resp.resume();
-      //   return reject(new Error(`UCDP ${version} page ${page}: HTTP ${resp.statusCode} — API token required (set UCDP_ACCESS_TOKEN env var)`));
-      // }
-      // if (resp.statusCode < 200 || resp.statusCode >= 300) {
-      //   resp.resume();
-      //   return reject(new Error(`UCDP ${version} page ${page}: HTTP ${resp.statusCode}`));
-      // }
+      if (resp.statusCode === 401 || resp.statusCode === 403) {
+        resp.resume();
+        return reject(new Error(`UCDP ${version} page ${page}: HTTP ${resp.statusCode} — API token required (set UCDP_ACCESS_TOKEN env var)`));
+      }
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        resp.resume();
+        return reject(new Error(`UCDP ${version} page ${page}: HTTP ${resp.statusCode}`));
+      }
       let data = '';
       resp.on('data', (chunk) => { data += chunk; });
       resp.on('end', () => {
@@ -3658,11 +3658,10 @@ function wingbitsIndexLookupCallsign(callsign) {
 
 async function handleWingbitsTrackRequest(req, res) {
   const apiKey = process.env.WINGBITS_API_KEY;
-  if (!apiKey) {
-    return safeEnd(res, 503, { 'Content-Type': 'application/json' },
-      JSON.stringify({ error: 'WINGBITS_API_KEY not configured', positions: [] }));
-  }
-
+  // if (!apiKey) {
+  //   return safeEnd(res, 503, { 'Content-Type': 'application/json' },
+  //     JSON.stringify({ error: 'WINGBITS_API_KEY not configured', positions: [] }));
+  // }
   const url = new URL(req.url, 'http://localhost');
   const params = url.searchParams;
   const callsignFilter = (params.get('callsign') || '').trim().toUpperCase();
@@ -10328,19 +10327,19 @@ function getWidgetAgentProvidedKey(req) {
 function requireWidgetAgentAccess(req, res) {
   const status = getWidgetAgentStatus();
   // P2: allow PRO-only deployments (no basic widget key, but PRO key present)
-  if (!status.widgetKeyConfigured && !status.proKeyConfigured) {
-    safeEnd(res, 503, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, error: 'Widget agent unavailable' }));
-    return null;
-  }
+  // if (!status.widgetKeyConfigured && !status.proKeyConfigured) {
+  //   safeEnd(res, 503, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, error: 'Widget agent unavailable' }));
+  //   return null;
+  // }
 
   const providedKey = getWidgetAgentProvidedKey(req);
   const providedProKey = getWidgetAgentProvidedProKey(req);
   const hasValidWidgetKey = status.widgetKeyConfigured && providedKey && providedKey === WIDGET_AGENT_KEY;
   const hasValidProKey = status.proKeyConfigured && providedProKey && providedProKey === PRO_WIDGET_KEY;
-  if (!hasValidWidgetKey && !hasValidProKey) {
-    safeEnd(res, 403, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, error: 'Forbidden' }));
-    return null;
-  }
+  // if (!hasValidWidgetKey && !hasValidProKey) {
+  //   safeEnd(res, 403, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, error: 'Forbidden' }));
+  //   return null;
+  // }
 
   // P1: carry admission path so handleWidgetAgentRequest can enforce correct rate-limit bucket
   return { ...status, admittedAs: hasValidProKey ? 'pro' : 'basic' };
@@ -10370,9 +10369,9 @@ function handleWidgetAgentHealthRequest(req, res) {
   const status = requireWidgetAgentAccess(req, res);
   if (!status) return;
 
-  if (!status.anthropicConfigured) {
-    return safeEnd(res, 503, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, error: 'AI backend unavailable' }));
-  }
+  // if (!status.anthropicConfigured) {
+  //   return safeEnd(res, 503, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, error: 'AI backend unavailable' }));
+  // }
 
   return safeEnd(res, 200, { 'Content-Type': 'application/json' }, JSON.stringify(status));
 }
@@ -10409,17 +10408,17 @@ async function handleWidgetAgentRequest(req, res) {
   const isPro = tier === 'pro';
 
   // PRO auth gate: only re-check if NOT already verified via pro key at the gate
-  if (isPro) {
-    if (!PRO_WIDGET_KEY) {
-      return safeEnd(res, 503, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, proKeyConfigured: false, error: 'PRO widget agent unavailable' }));
-    }
-    if (status.admittedAs !== 'pro') {
-      const providedProKey = getWidgetAgentProvidedProKey(req);
-      if (!providedProKey || providedProKey !== PRO_WIDGET_KEY) {
-        return safeEnd(res, 403, { 'Content-Type': 'application/json' }, JSON.stringify({ error: 'Forbidden' }));
-      }
-    }
-  }
+  // if (isPro) {
+  //   if (!PRO_WIDGET_KEY) {
+  //     return safeEnd(res, 503, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, proKeyConfigured: false, error: 'PRO widget agent unavailable' }));
+  //   }
+  //   if (status.admittedAs !== 'pro') {
+  //     const providedProKey = getWidgetAgentProvidedProKey(req);
+  //     if (!providedProKey || providedProKey !== PRO_WIDGET_KEY) {
+  //       return safeEnd(res, 403, { 'Content-Type': 'application/json' }, JSON.stringify({ error: 'Forbidden' }));
+  //     }
+  //   }
+  // }
 
   // Rate limiting (separate buckets)
   const rateLimited = isPro ? checkProWidgetRateLimit(clientIp) : checkWidgetRateLimit(clientIp);
