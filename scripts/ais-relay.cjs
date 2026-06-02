@@ -10215,6 +10215,339 @@ const WIDGET_ANTHROPIC_KEY = (process.env.ANTHROPIC_API_KEY || '').trim();
 const WIDGET_EXA_KEY = (process.env.EXA_API_KEYS || '').split(/[\n,]+/).map(k => k.trim()).filter(Boolean)[0] || '';
 const WIDGET_BRAVE_KEY = (process.env.BRAVE_API_KEYS || '').split(/[\n,]+/).map(k => k.trim()).filter(Boolean)[0] || '';
 
+// ─── Widget LLM: OpenAI-compatible multi-provider support ────────────────────
+const fs = require('fs');
+
+const WIDGET_LLM_PROVIDERS = [
+  {
+    name: 'groq',
+    url: 'https://api.groq.com/openai/v1/chat/completions',
+    envKey: 'GROQ_API_KEY',
+    defaultModel: 'llama-3.3-70b-versatile',
+  },
+  {
+    name: 'nvidia',
+    url: 'https://integrate.api.nvidia.com/v1/chat/completions',
+    envKey: 'NVIDIA_NIM_API_KEY',
+    defaultModel: 'meta/llama-3.3-70b-instruct',
+  },
+  {
+    name: 'cerebras',
+    url: 'https://api.cerebras.ai/v1/chat/completions',
+    envKey: 'CEREBRAS_API_KEY',
+    defaultModel: 'llama3.1-8b',
+  },
+  {
+    name: 'sambanova',
+    url: 'https://api.sambanova.ai/v1/chat/completions',
+    envKey: 'SAMBANOVA_API_KEY',
+    defaultModel: 'Meta-Llama-3.1-8B-Instruct',
+  },
+];
+
+// ─── LLM Provider Cache (persisted to local file) ────────────────────────────
+const LLM_CACHE_PATH = path.join(process.cwd(), '.llm-provider-cache.json');
+const LLM_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const LLM_TEST_TIMEOUT_MS = 10_000; // 10s per provider test
+
+let llmCache = null;
+let llmCacheLoading = null;
+
+/**
+ * Load LLM provider cache from file
+ */
+function loadLlmCache() {
+  try {
+    if (fs.existsSync(LLM_CACHE_PATH)) {
+      const data = JSON.parse(fs.readFileSync(LLM_CACHE_PATH, 'utf8'));
+      if (data.timestamp && Date.now() - data.timestamp < LLM_CACHE_TTL_MS) {
+        llmCache = data;
+        console.log(`[llm-cache] Loaded cached provider: ${data.provider}/${data.model} (tested ${Math.round((Date.now() - data.timestamp) / 60000)}min ago)`);
+        return data;
+      } else {
+        console.log('[llm-cache] Cache expired, will re-test providers');
+      }
+    }
+  } catch (err) {
+    console.warn('[llm-cache] Failed to load cache:', err.message);
+  }
+  return null;
+}
+
+/**
+ * Save LLM provider cache to file
+ */
+function saveLlmCache(data) {
+  try {
+    fs.writeFileSync(LLM_CACHE_PATH, JSON.stringify(data, null, 2));
+    llmCache = data;
+    console.log(`[llm-cache] Saved provider: ${data.provider}/${data.model}`);
+  } catch (err) {
+    console.warn('[llm-cache] Failed to save cache:', err.message);
+  }
+}
+
+/**
+ * Test a single LLM provider with a simple prompt
+ */
+async function testLlmProvider(provider, model) {
+  const apiKey = process.env[provider.envKey];
+  if (!apiKey) return null;
+
+  const headers = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    'User-Agent': 'WorldMonitor-LLM-Test/1.0',
+  };
+
+  const body = {
+    model,
+    messages: [{ role: 'user', content: 'Say "ok" in one word.' }],
+    max_tokens: 10,
+  };
+
+  const start = Date.now();
+  try {
+    const resp = await fetch(provider.url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(LLM_TEST_TIMEOUT_MS),
+    });
+
+    if (!resp.ok) {
+      return { success: false, latencyMs: Date.now() - start, error: `HTTP ${resp.status}` };
+    }
+
+    const data = await resp.json();
+    const content = data.choices?.[0]?.message?.content?.trim();
+
+    if (content) {
+      return { success: true, latencyMs: Date.now() - start, model };
+    }
+    return { success: false, latencyMs: Date.now() - start, error: 'Empty response' };
+  } catch (err) {
+    return { success: false, latencyMs: Date.now() - start, error: err.message };
+  }
+}
+
+/**
+ * Run one-shot provider benchmark: test all available providers concurrently
+ */
+async function benchmarkLlmProviders() {
+  console.log('[llm-benchmark] Testing all available providers...');
+
+  const availableProviders = WIDGET_LLM_PROVIDERS.filter(p => process.env[p.envKey]);
+  if (availableProviders.length === 0) {
+    throw new Error('No LLM providers configured');
+  }
+
+  // Test all providers concurrently
+  const results = await Promise.all(
+    availableProviders.map(async (provider) => {
+      const result = await testLlmProvider(provider, provider.defaultModel);
+      if (result?.success) {
+        console.log(`[llm-benchmark] ✓ ${provider.name}/${provider.defaultModel}: ${result.latencyMs}ms`);
+        return { ...result, provider: provider.name, url: provider.url, envKey: provider.envKey };
+      } else {
+        console.log(`[llm-benchmark] ✗ ${provider.name}: ${result?.error || 'Failed'}`);
+        return null;
+      }
+    })
+  );
+
+  // Sort by latency (fastest first)
+  const successful = results.filter(Boolean).sort((a, b) => a.latencyMs - b.latencyMs);
+
+  if (successful.length === 0) {
+    throw new Error('All LLM providers failed testing');
+  }
+
+  const best = successful[0];
+  console.log(`[llm-benchmark] Winner: ${best.provider}/${best.model} (${best.latencyMs}ms)`);
+
+  return {
+    provider: best.provider,
+    model: best.model,
+    url: best.url,
+    envKey: best.envKey,
+    latencyMs: best.latencyMs,
+    timestamp: Date.now(),
+    alternatives: successful.slice(1).map(p => ({
+      provider: p.provider,
+      model: p.model,
+      latencyMs: p.latencyMs,
+    })),
+  };
+}
+
+/**
+ * Get best LLM provider: use cache if valid, otherwise benchmark
+ */
+async function getBestLlmProvider() {
+  if (llmCache) return llmCache;
+  if (llmCacheLoading) return llmCacheLoading;
+
+  llmCacheLoading = (async () => {
+    try {
+      const cached = loadLlmCache();
+      if (cached) return cached;
+      const result = await benchmarkLlmProviders();
+      saveLlmCache(result);
+      return result;
+    } catch (err) {
+      console.error('[llm-cache] Benchmark failed:', err.message);
+      throw err;
+    } finally {
+      llmCacheLoading = null;
+    }
+  })();
+
+  return llmCacheLoading;
+}
+
+/**
+ * Invalidate cache and re-benchmark (called when provider fails)
+ */
+async function invalidateLlmCache(reason) {
+  console.log(`[llm-cache] Invalidating cache: ${reason}`);
+  llmCache = null;
+  try {
+    if (fs.existsSync(LLM_CACHE_PATH)) {
+      fs.unlinkSync(LLM_CACHE_PATH);
+    }
+  } catch { /* ignore */ }
+  return getBestLlmProvider();
+}
+
+// Warm cache on startup (fire-and-forget)
+void getBestLlmProvider().catch(err => {
+  console.error('[llm-cache] Initial benchmark failed:', err.message);
+});
+
+function getWidgetLlmProvider(isPro) {
+  const overrideProvider = process.env.WIDGET_LLM_PROVIDER;
+  const overrideModel = process.env.WIDGET_LLM_MODEL;
+
+  if (overrideProvider) {
+    const provider = WIDGET_LLM_PROVIDERS.find(p => p.name === overrideProvider);
+    if (provider && process.env[provider.envKey]) {
+      return { ...provider, model: overrideModel || provider.defaultModel };
+    }
+  }
+
+  // Use cached best provider if available
+  if (llmCache) {
+    const provider = WIDGET_LLM_PROVIDERS.find(p => p.name === llmCache.provider);
+    if (provider && process.env[provider.envKey]) {
+      return { ...provider, model: llmCache.model };
+    }
+  }
+
+  // Fallback: first available provider
+  for (const provider of WIDGET_LLM_PROVIDERS) {
+    if (process.env[provider.envKey]) {
+      return { ...provider, model: overrideModel || provider.defaultModel };
+    }
+  }
+  return null;
+}
+
+async function callWidgetLlmSingle({ messages, tools, maxTokens, timeoutMs, provider }) {
+  const apiKey = process.env[provider.envKey];
+  const headers = {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+    'User-Agent': 'WorldMonitor-WidgetAgent/2.0',
+  };
+
+  // Convert tools to OpenAI function calling format
+  const openaiTools = tools.map(tool => ({
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.input_schema,
+    },
+  }));
+
+  const body = {
+    model: provider.model,
+    messages,
+    max_tokens: maxTokens,
+    tools: openaiTools.length > 0 ? openaiTools : undefined,
+    tool_choice: openaiTools.length > 0 ? 'auto' : undefined,
+  };
+
+  const resp = await fetch(provider.url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => '');
+    const err = new Error(`LLM API error: ${resp.status} ${errText.slice(0, 200)}`);
+    err.status = resp.status;
+    throw err;
+  }
+
+  const data = await resp.json();
+  const choice = data.choices?.[0];
+  if (!choice) throw new Error('LLM returned empty response');
+
+  const message = choice.message;
+  const content = [];
+
+  if (message.content) {
+    content.push({ type: 'text', text: message.content });
+  }
+
+  if (message.tool_calls?.length > 0) {
+    for (const toolCall of message.tool_calls) {
+      content.push({
+        type: 'tool_use',
+        id: toolCall.id,
+        name: toolCall.function.name,
+        input: JSON.parse(toolCall.function.arguments || '{}'),
+      });
+    }
+  }
+
+  return {
+    stop_reason: choice.finish_reason === 'tool_calls' ? 'tool_use' : 'end_turn',
+    content,
+    model: provider.model,
+    provider: provider.name,
+  };
+}
+
+async function callWidgetLlm({ messages, tools, maxTokens, timeoutMs, isPro }) {
+  const provider = getWidgetLlmProvider(isPro);
+  if (!provider) {
+    throw new Error('No LLM provider configured. Set GROQ_API_KEY, NVIDIA_NIM_API_KEY, CEREBRAS_API_KEY, or SAMBANOVA_API_KEY');
+  }
+
+  try {
+    return await callWidgetLlmSingle({ messages, tools, maxTokens, timeoutMs, provider });
+  } catch (err) {
+    console.warn(`[widget-llm] Provider ${provider.name} failed: ${err.message}, invalidating cache...`);
+    const newCache = await invalidateLlmCache(`${provider.name} failed: ${err.message}`);
+    const newProvider = WIDGET_LLM_PROVIDERS.find(p => p.name === newCache.provider);
+    if (newProvider && process.env[newProvider.envKey]) {
+      return await callWidgetLlmSingle({
+        messages,
+        tools,
+        maxTokens,
+        timeoutMs,
+        provider: { ...newProvider, model: newCache.model },
+      });
+    }
+    throw err;
+  }
+}
+
 async function performWidgetWebSearch(query) {
   if (WIDGET_EXA_KEY) {
     try {
@@ -10303,11 +10636,15 @@ function checkProWidgetRateLimit(ip) {
 }
 
 function getWidgetAgentStatus() {
+  const provider = getWidgetLlmProvider(true);
+  const hasLlmProvider = provider !== null;
   return {
-    ok: Boolean(WIDGET_AGENT_KEY && WIDGET_ANTHROPIC_KEY),
+    ok: Boolean(WIDGET_AGENT_KEY) && (hasLlmProvider || Boolean(WIDGET_ANTHROPIC_KEY)),
     agentEnabled: true,
     widgetKeyConfigured: Boolean(WIDGET_AGENT_KEY),
     anthropicConfigured: Boolean(WIDGET_ANTHROPIC_KEY),
+    llmProviderConfigured: hasLlmProvider,
+    llmProvider: provider?.name || null,
     proKeyConfigured: Boolean(PRO_WIDGET_KEY),
   };
 }
@@ -10369,18 +10706,25 @@ function handleWidgetAgentHealthRequest(req, res) {
   const status = requireWidgetAgentAccess(req, res);
   if (!status) return;
 
-  // if (!status.anthropicConfigured) {
-  //   return safeEnd(res, 503, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, error: 'AI backend unavailable' }));
-  // }
+  // Check if any LLM provider is available
+  const hasLlmProvider = getWidgetLlmProvider(true) !== null;
+  const healthStatus = {
+    ...status,
+    llmProviderConfigured: hasLlmProvider,
+    llmProvider: llmCache?.provider || null,
+  };
 
-  return safeEnd(res, 200, { 'Content-Type': 'application/json' }, JSON.stringify(status));
+  return safeEnd(res, 200, { 'Content-Type': 'application/json' }, JSON.stringify(healthStatus));
 }
 
 async function handleWidgetAgentRequest(req, res) {
   const status = requireWidgetAgentAccess(req, res);
   if (!status) return;
-  if (!status.anthropicConfigured) {
-    return safeEnd(res, 503, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, error: 'AI backend unavailable' }));
+
+  // Check if any LLM provider is configured
+  const hasLlmProvider = getWidgetLlmProvider(true) !== null;
+  if (!hasLlmProvider && !WIDGET_ANTHROPIC_KEY) {
+    return safeEnd(res, 503, { 'Content-Type': 'application/json' }, JSON.stringify({ ...status, error: 'AI backend unavailable. Configure GROQ_API_KEY, NVIDIA_NIM_API_KEY, or other LLM provider.' }));
   }
 
   const clientIp = req.headers['cf-connecting-ip'] || req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown';
@@ -10437,7 +10781,8 @@ async function handleWidgetAgentRequest(req, res) {
   }
 
   // Tier-specific settings
-  const model = isPro ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+  const provider = getWidgetLlmProvider(isPro);
+  const model = provider?.model || (isPro ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001');
   const maxTokens = isPro ? 8192 : 4096;
   const maxTurns = isPro ? 10 : 6;
   const maxHtml = isPro ? WIDGET_PRO_MAX_HTML : WIDGET_MAX_HTML;
@@ -10460,19 +10805,12 @@ async function handleWidgetAgentRequest(req, res) {
     if (!res.writableEnded) res.end();
   }, timeoutMs);
 
-  // Hoisted out of the try block so the catch's structured-log payload can
-  // read it. `let` is block-scoped — declaring `toolCallCount` inside the
-  // try would make any reference from the catch throw a ReferenceError,
-  // which the inner log-fallback would silently swallow into "[widget-agent]
-  // Error (log-failed)" — defeating the entire diagnostic value of this
-  // log line. `completed` doesn't need hoisting (not read in catch).
   let toolCallCount = 0;
 
   try {
-    const { default: Anthropic } = await import('@anthropic-ai/sdk');
-    const client = new Anthropic({ apiKey: WIDGET_ANTHROPIC_KEY });
-
+    // Build messages with system prompt as first message
     const messages = [
+      { role: 'system', content: systemPrompt },
       ...conversationHistory
         .slice(-10)
         .filter(m => m.role === 'user' || m.role === 'assistant')
@@ -10490,20 +10828,41 @@ async function handleWidgetAgentRequest(req, res) {
     for (let turn = 0; turn < maxTurns; turn++) {
       if (cancelled) break;
 
-      // Option D: on penultimate turn, inject a final-turn directive so the model
-      // emits HTML with whatever data it has instead of making another tool call.
       const isLastChance = turn === maxTurns - 2;
       const turnMessages = isLastChance
         ? [...messages, { role: 'user', content: 'FINAL TURN: You have used all available tool calls. You MUST emit the completed widget HTML now using the data you already have. No more tool calls — output <!-- widget-html --> immediately.' }]
         : messages;
 
-      const response = await client.messages.create({
-        model,
-        max_tokens: maxTokens,
-        system: systemPrompt,
-        tools: isLastChance ? [] : [WIDGET_FETCH_TOOL, WIDGET_SEARCH_TOOL],
-        messages: turnMessages,
-      });
+      // Use multi-provider LLM call
+      const tools = isLastChance ? [] : [WIDGET_FETCH_TOOL, WIDGET_SEARCH_TOOL];
+      let response;
+
+      if (provider) {
+        // Use OpenAI-compatible multi-provider
+        response = await callWidgetLlm({
+          messages: turnMessages,
+          tools,
+          maxTokens,
+          timeoutMs,
+          isPro,
+        });
+      } else if (WIDGET_ANTHROPIC_KEY) {
+        // Fallback to Anthropic
+        const { default: Anthropic } = await import('@anthropic-ai/sdk');
+        const client = new Anthropic({ apiKey: WIDGET_ANTHROPIC_KEY });
+        const systemMsg = turnMessages.find(m => m.role === 'system');
+        const userMessages = turnMessages.filter(m => m.role !== 'system');
+
+        response = await client.messages.create({
+          model,
+          max_tokens: maxTokens,
+          system: systemMsg?.content || '',
+          tools,
+          messages: userMessages,
+        });
+      } else {
+        throw new Error('No LLM provider available');
+      }
 
       if (response.stop_reason === 'end_turn') {
         const textBlock = response.content.find(b => b.type === 'text');
@@ -10529,12 +10888,12 @@ async function handleWidgetAgentRequest(req, res) {
             try {
               const searchResult = await performWidgetWebSearch(String(query));
               if (searchResult) {
-                toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: sanitizeToolContent(JSON.stringify(searchResult.results)) });
+                toolResults.push({ role: 'tool', tool_call_id: block.id, content: sanitizeToolContent(JSON.stringify(searchResult.results)) });
               } else {
-                toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'No search results available. No search provider configured.' });
+                toolResults.push({ role: 'tool', tool_call_id: block.id, content: 'No search results available. No search provider configured.' });
               }
             } catch (err) {
-              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: `Search failed: ${err.message}` });
+              toolResults.push({ role: 'tool', tool_call_id: block.id, content: `Search failed: ${err.message}` });
             }
             continue;
           }
@@ -10544,7 +10903,7 @@ async function handleWidgetAgentRequest(req, res) {
           sendWidgetSSE(res, 'tool_call', { endpoint });
 
           if (!isWidgetEndpointAllowed(endpoint)) {
-            toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Endpoint not allowed.' });
+            toolResults.push({ role: 'tool', tool_call_id: block.id, content: 'Endpoint not allowed.' });
             continue;
           }
 
@@ -10560,16 +10919,30 @@ async function handleWidgetAgentRequest(req, res) {
             const data = await dataRes.text();
             const trimmed = data.trimStart();
             if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
-              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: 'Error: endpoint returned HTML instead of JSON. No data available.' });
+              toolResults.push({ role: 'tool', tool_call_id: block.id, content: 'Error: endpoint returned HTML instead of JSON. No data available.' });
             } else {
-              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: sanitizeToolContent(data) });
+              toolResults.push({ role: 'tool', tool_call_id: block.id, content: sanitizeToolContent(data) });
             }
           } catch (err) {
-            toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: `Fetch failed: ${err.message}` });
+            toolResults.push({ role: 'tool', tool_call_id: block.id, content: `Fetch failed: ${err.message}` });
           }
         }
-        messages.push({ role: 'assistant', content: response.content });
-        messages.push({ role: 'user', content: toolResults });
+
+        // Build assistant message with tool calls
+        const assistantToolCalls = response.content
+          .filter(b => b.type === 'tool_use')
+          .map(b => ({
+            id: b.id,
+            type: 'function',
+            function: { name: b.name, arguments: JSON.stringify(b.input) },
+          }));
+
+        messages.push({
+          role: 'assistant',
+          content: response.content.find(b => b.type === 'text')?.text || null,
+          tool_calls: assistantToolCalls.length > 0 ? assistantToolCalls : undefined,
+        });
+        messages.push(...toolResults);
         toolCallCount++;
       }
     }

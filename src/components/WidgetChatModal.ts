@@ -3,7 +3,7 @@ import { getBrowserTesterKey, getWidgetAgentKey, getProWidgetKey } from '@/servi
 import { getClerkToken } from '@/services/clerk';
 import { t } from '@/services/i18n';
 import { escapeHtml } from '@/utils/sanitize';
-import { widgetAgentHealthUrl, widgetAgentUrl } from '@/utils/proxy';
+import { widgetAgentUrl } from '@/utils/proxy';
 import { wrapWidgetHtml, wrapProWidgetHtml } from '@/utils/widget-sanitizer';
 import { track } from '@/services/analytics';
 
@@ -17,14 +17,8 @@ interface WidgetChatOptions {
 }
 
 type PreviewPhase = 'checking' | 'ready_to_prompt' | 'fetching' | 'composing' | 'complete' | 'error';
-type WidgetAgentHealth = {
-  ok?: boolean;
-  agentEnabled?: boolean;
-  widgetKeyConfigured?: boolean;
-  anthropicConfigured?: boolean;
-  proKeyConfigured?: boolean;
-  error?: string;
-};
+// Health check type removed for local dev
+// type WidgetAgentHealth = { ... };
 
 const EXAMPLE_PROMPT_KEYS = [
   'widgets.examples.oilGold',
@@ -396,29 +390,8 @@ function renderExampleChips(container: HTMLElement, inputEl: HTMLTextAreaElement
   }
 }
 
-function resolvePreflightMessage(
-  status: number,
-  payload: WidgetAgentHealth | null,
-  isPro: boolean,
-  usedTesterKey: boolean,
-): string {
-  if (status === 403) {
-    // Tester-key path: tell the operator to update the wm-*-key they actually have.
-    if (usedTesterKey) return isPro ? t('widgets.preflightInvalidProKey') : t('widgets.preflightInvalidKey');
-    // Clerk-auth path: split on isPro.
-    //   isPro=true  — the modal believes the user is Pro; a 403 means either
-    //                 (a) they just upgraded (entitlement still propagating)
-    //                 or (b) the entitlement service is degraded. Tell them to
-    //                 refresh / contact support.
-    //   isPro=false — a free user reached a Pro action; "contact support" is
-    //                 wrong, they need to upgrade. Surface a clean upgrade ask
-    //                 without the "just upgraded" language.
-    return isPro ? t('widgets.preflightProSubscriptionRequired') : t('widgets.preflightProRequired');
-  }
-  if (status === 503 && payload?.proKeyConfigured === false) return t('widgets.preflightProUnavailable');
-  if (payload?.anthropicConfigured === false) return t('widgets.preflightAiUnavailable');
-  return t('widgets.preflightUnavailable');
-}
+// Preflight check removed for local development
+// function resolvePreflightMessage(...) { ... }
 
 function setReadinessState(container: HTMLElement, tone: 'checking' | 'ready' | 'error', text: string): void {
   container.className = `widget-chat-readiness is-${tone}`;
