@@ -74,6 +74,8 @@ jobs:
         run: node scripts/seed-unrest-events.mjs
         continue-on-error: true
         env:
+          PROXY_URL: ${{ steps.proxy.outputs.proxy_url || secrets.PROXY_URL }}
+          PROXY_POOL: ${{ steps.proxy.outputs.proxy_pool || secrets.PROXY_POOL }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
           UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
