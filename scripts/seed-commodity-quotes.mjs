@@ -10,7 +10,7 @@ loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'market:commodities-bootstrap:v1';
 const GOLD_EXTENDED_KEY = 'market:gold-extended:v1';
-const CACHE_TTL = 1800;
+const CACHE_TTL = 172_800; // 48h — workflow runs daily, keep data alive between runs
 const YAHOO_DELAY_MS = 200;
 
 const GOLD_HISTORY_SYMBOLS = ['GC=F', 'SI=F'];
