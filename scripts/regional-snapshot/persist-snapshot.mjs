@@ -2,7 +2,7 @@
 // Idempotent persistence + index pruning + dedup guard.
 // Implements the persist step of the seed pipeline.
 
-import { getRedisCredentials } from '../_seed-utils.mjs';
+import { getRedisCredentials, cfPipeline } from '../_seed-utils.mjs';
 
 const SNAPSHOT_TTL_SECONDS = 90 * 24 * 60 * 60; // 90 days
 const DEDUP_TTL_SECONDS = 900; // 15 min
@@ -30,16 +30,12 @@ export async function persistSnapshot(snapshot) {
   // 1. Idempotency check via atomic SET NX EX (single round-trip; SETNX + EXPIRE
   //    would be a race that leaks a permanent dedup key on EXPIRE failure).
   const dedupKey = `dedup:snapshot:v1:${region}:${triggerReason}:${bucket}`;
-  const dedupRes = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([['SET', dedupKey, snapshotId, 'EX', String(DEDUP_TTL_SECONDS), 'NX']]),
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!dedupRes.ok) {
-    return { persisted: false, reason: `dedup-http-${dedupRes.status}` };
+  let dedupJson;
+  try {
+    dedupJson = await cfPipeline([['SET', dedupKey, snapshotId, 'EX', String(DEDUP_TTL_SECONDS), 'NX']]);
+  } catch (err) {
+    return { persisted: false, reason: `dedup-error-${err?.message || 'unknown'}` };
   }
-  const dedupJson = await dedupRes.json();
   // SET ... NX returns 'OK' on success, null when the key already exists.
   if (!dedupJson?.[0] || dedupJson[0].result == null) {
     return { persisted: false, reason: 'duplicate-bucket' };
@@ -63,14 +59,10 @@ export async function persistSnapshot(snapshot) {
     ['DEL', liveKey],
   ];
 
-  const pipeRes = await fetch(`${url}/pipeline`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(pipeline),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!pipeRes.ok) {
-    return { persisted: false, reason: `pipeline-http-${pipeRes.status}` };
+  try {
+    await cfPipeline(pipeline);
+  } catch (err) {
+    return { persisted: false, reason: `pipeline-error-${err?.message || 'unknown'}` };
   }
 
   return { persisted: true, reason: 'ok' };
@@ -84,30 +76,18 @@ export async function persistSnapshot(snapshot) {
  * @returns {Promise<import('../../shared/regions.types.js').RegionalSnapshot | null>}
  */
 export async function readLatestSnapshot(regionId) {
-  const { url, token } = getRedisCredentials();
-  if (!url || !token) return null;
-
-  const latestKey = `intelligence:snapshot:v1:${regionId}:latest`;
-  const idRes = await fetch(`${url}/get/${encodeURIComponent(latestKey)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!idRes.ok) return null;
-  const idJson = await idRes.json();
-  const snapshotId = idJson.result;
-  if (!snapshotId) return null;
-
-  const snapKey = `intelligence:snapshot-by-id:v1:${snapshotId}`;
-  const snapRes = await fetch(`${url}/get/${encodeURIComponent(snapKey)}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    signal: AbortSignal.timeout(5_000),
-  });
-  if (!snapRes.ok) return null;
-  const snapJson = await snapRes.json();
-  if (!snapJson.result) return null;
-
   try {
-    return JSON.parse(snapJson.result);
+    const latestKey = `intelligence:snapshot:v1:${regionId}:latest`;
+    const idResults = await cfPipeline([['GET', latestKey]]);
+    const snapshotId = idResults?.[0]?.result;
+    if (!snapshotId) return null;
+
+    const snapKey = `intelligence:snapshot-by-id:v1:${snapshotId}`;
+    const snapResults = await cfPipeline([['GET', snapKey]]);
+    const raw = snapResults?.[0]?.result;
+    if (!raw) return null;
+
+    return JSON.parse(raw);
   } catch {
     return null;
   }

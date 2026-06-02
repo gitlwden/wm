@@ -15,7 +15,7 @@
 
 import { pathToFileURL } from 'node:url';
 
-import { loadEnvFile, getRedisCredentials, writeExtraKeyWithMeta } from './_seed-utils.mjs';
+import { loadEnvFile, getRedisCredentials, cfPipeline, writeExtraKeyWithMeta } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 import { REGIONS } from './shared/geography.js';
 import { generateWeeklyBrief } from './regional-snapshot/weekly-brief.mjs';
@@ -38,16 +38,11 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
  * @param {string} regionId
  * @returns {Promise<object | null>}
  */
-async function readLatestSnapshot(url, token, regionId) {
+async function readLatestSnapshot(_url, _token, regionId) {
   try {
     const latestKey = `${SNAPSHOT_LATEST_KEY_PREFIX}${regionId}:latest`;
-    const latestResp = await fetch(`${url}/get/${encodeURIComponent(latestKey)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!latestResp.ok) return null;
-    const latestData = await latestResp.json();
-    let snapshotId = latestData?.result;
+    const latestResults = await cfPipeline([['GET', latestKey]]);
+    let snapshotId = latestResults?.[0]?.result;
     if (!snapshotId) return null;
     if (typeof snapshotId === 'string') {
       try { snapshotId = JSON.parse(snapshotId); } catch { /* bare string is fine */ }
@@ -58,13 +53,9 @@ async function readLatestSnapshot(url, token, regionId) {
     if (typeof snapshotId !== 'string') return null;
 
     const snapKey = `${SNAPSHOT_BY_ID_KEY_PREFIX}${snapshotId}`;
-    const snapResp = await fetch(`${url}/get/${encodeURIComponent(snapKey)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!snapResp.ok) return null;
-    const snapData = await snapResp.json();
-    return snapData?.result ? unwrapEnvelope(JSON.parse(snapData.result)).data : null;
+    const snapResults = await cfPipeline([['GET', snapKey]]);
+    const raw = snapResults?.[0]?.result;
+    return raw ? unwrapEnvelope(typeof raw === 'string' ? JSON.parse(raw) : raw).data : null;
   } catch {
     return null;
   }
