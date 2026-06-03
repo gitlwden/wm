@@ -487,10 +487,11 @@ export class CountryIntelManager implements AppModule {
         if (hasPremiumAccess(getAuthState())) this.ctx.countryBriefPage.updateMultiSectorCostShock?.(null);
       });
 
-    if (hasPremiumAccess(getAuthState())) {
-      this.fetchProSections(code);
-    }
+    // if (hasPremiumAccess(getAuthState())) {
+    //   this.fetchProSections(code);
+    // }
 
+    this.fetchProSections(code);
     this.mountCountryTimeline(code, country);
 
     try {
