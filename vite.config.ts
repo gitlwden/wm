@@ -1107,7 +1107,7 @@ export default defineConfig(({ mode }) => {
                 const { prompt, mode, tier, currentHtml, conversationHistory } = JSON.parse(body);
 
                 // Load system prompt from ais-relay.cjs
-                const relayCode = fs.readFileSync(path.join(process.cwd(), 'scripts/ais-relay.cjs'), 'utf8');
+                const relayCode = readFileSync(join(process.cwd(), 'scripts/ais-relay.cjs'), 'utf8');
                 const promptMatch = relayCode.match(/const WIDGET_SYSTEM_PROMPT = `([\s\S]*?)`;/);
                 const systemPrompt = promptMatch ? promptMatch[1] : 'You are a widget builder. Generate HTML widgets.';
 
