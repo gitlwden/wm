@@ -1206,8 +1206,8 @@ export default defineConfig(({ mode }) => {
                           const endpoint = block.input.endpoint;
                           const params = block.input.params || {};
 
-                          // Use actual WorldMonitor API
-                          const url = new URL(endpoint, 'https://api.worldmonitor.app');
+                          // Use local API (Vite proxy will handle /api routes)
+                          const url = new URL(endpoint, 'http://localhost:5173');
                           for (const [k, v] of Object.entries(params)) {
                             url.searchParams.set(k, String(v));
                           }
