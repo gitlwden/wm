@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
-import { resolve, dirname, extname } from 'path';
-import { mkdir, readFile, writeFile } from 'fs/promises';
+import { resolve, dirname, extname, join } from 'path';
+import { mkdir, readFile, writeFile, readFileSync, writeFileSync, existsSync } from 'fs';
 import { brotliCompress } from 'zlib';
 import { promisify } from 'util';
 import pkg from './package.json';
@@ -965,11 +965,7 @@ export default defineConfig(({ mode }) => {
       {
         name: 'wm-widget-agent',
         configureServer(server) {
-          // Import LLM functions inline
-          const fs = require('fs');
-          const path = require('path');
-
-          // LLM Provider configuration
+          // LLM Provider configuration (using imported fs/path)
           const LLM_PROVIDERS = [
             { name: 'groq', url: 'https://api.groq.com/openai/v1/chat/completions', envKey: 'GROQ_API_KEY', model: 'llama-3.3-70b-versatile' },
             { name: 'nvidia', url: 'https://integrate.api.nvidia.com/v1/chat/completions', envKey: 'NVIDIA_NIM_API_KEY', model: 'meta/llama-3.3-70b-instruct' },
@@ -978,14 +974,14 @@ export default defineConfig(({ mode }) => {
           ];
 
           // Cache file
-          const CACHE_PATH = path.join(process.cwd(), '.llm-provider-cache.json');
+          const CACHE_PATH = join(process.cwd(), '.llm-provider-cache.json');
           let llmCache = null;
 
           // Load cache
           function loadCache() {
             try {
-              if (fs.existsSync(CACHE_PATH)) {
-                const data = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf8'));
+              if (existsSync(CACHE_PATH)) {
+                const data = JSON.parse(readFileSync(CACHE_PATH, 'utf8'));
                 if (data.timestamp && Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
                   return data;
                 }
@@ -997,7 +993,7 @@ export default defineConfig(({ mode }) => {
           // Save cache
           function saveCache(data) {
             try {
-              fs.writeFileSync(CACHE_PATH, JSON.stringify(data, null, 2));
+              writeFileSync(CACHE_PATH, JSON.stringify(data, null, 2));
             } catch {}
           }
 
