@@ -89,3 +89,5 @@ playground-pricing.html
 
 # LLM provider cache (generated at runtime)
 .llm-provider-cache.json
+temp_lint.txt
+temp_log.txt

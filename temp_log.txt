@@ -1,8 +1,0 @@
-[rtk] /!\ No hook installed — run `rtk init -g` for automatic token savings
-> tsc --noEmit
-src/app/data-loader.ts(10,3): error TS6133: 'CANONICAL_FEEDS' is declared but its value is never read.
-src/app/data-loader.ts(19,1): error TS6192: All imports in import declaration are unused.
-src/app/data-loader.ts(1168,34): error TS2339: Property 'isCustom' does not exist on type 'NewsCategoryLoadEntry<Feed[]>'.
-src/app/panel-layout.ts(467,40): error TS2554: Expected 2 arguments, but got 1.
-src/components/EarningsCalendarPanel.ts(192,25): error TS2304: Cannot find name 'unsafeRawHtml'.
-src/components/EconomicCalendarPanel.ts(250,25): error TS2304: Cannot find name 'unsafeRawHtml'.
