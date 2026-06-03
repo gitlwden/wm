@@ -1169,7 +1169,7 @@ export class EventHandlerManager implements AppModule {
     // (so signed-out users keep it too). Passing onSettingsClick here makes
     // AuthHeaderWidget render a second gear next to the avatar for signed-in
     // users — a duplicate. Leave it unset.
-    const widget = new AuthHeaderWidget(() => modal.open());
+    const widget = new AuthHeaderWidget(() => modal.open(), () => this.ctx.unifiedSettings?.open());
     this.ctx.authHeaderWidget = widget;
     const mount = document.getElementById('authWidgetMount');
     if (mount) {

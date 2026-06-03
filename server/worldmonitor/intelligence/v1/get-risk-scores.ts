@@ -12,6 +12,21 @@ import iso3ToIso2Json from '../../../../shared/iso3-to-iso2.json';
 import { getCachedJson, getCachedJsonBatch, setCachedJson, cachedFetchJsonWithMeta } from '../../../_shared/redis';
 import { CLIMATE_ANOMALIES_KEY } from '../../../_shared/cache-keys';
 import { TIER1_COUNTRIES } from './_shared';
+import {
+  CII_CONFLICT_ACTIVITY_CAP,
+  CII_CONFLICT_ACTIVITY_PIVOT,
+  CII_FORMULA_VERSION,
+  STRATEGIC_RISK_POSITIONAL_DECAY,
+  STRATEGIC_RISK_SCALE_FACTOR,
+  STRATEGIC_RISK_SCALE_FLOOR,
+  STRATEGIC_RISK_TOP_N,
+} from './_risk-config';
+import {
+  CII_BASELINE_RISK,
+  CII_EVENT_MULTIPLIER,
+  DEFAULT_CII_BASELINE_RISK,
+  DEFAULT_CII_EVENT_MULTIPLIER,
+} from '../../../../shared/cii-weights';
 
 // ========================================================================
 // Country risk baselines and multipliers
