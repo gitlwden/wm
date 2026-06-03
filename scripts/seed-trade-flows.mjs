@@ -24,7 +24,7 @@ const MIN_COVERAGE_RATIO = 0.70;
 // but 0/5 per-reporter coverage for the dead one blocks publish here.
 const MIN_PER_REPORTER_RATIO = 0.40; // at least 2 of 5 commodities per reporter
 
-// Strategic reporters: US, China, Russia, Iran, India, Taiwan
+// Strategic reporters: original 6 + major economies (14 total)
 const REPORTERS = [
   { code: '842', name: 'USA' },
   { code: '156', name: 'China' },
@@ -32,6 +32,14 @@ const REPORTERS = [
   { code: '364', name: 'Iran' },
   { code: '699', name: 'India' },
   { code: '490', name: 'Taiwan' },
+  { code: '392', name: 'Japan' },
+  { code: '276', name: 'Germany' },
+  { code: '682', name: 'Saudi Arabia' },
+  { code: '410', name: 'South Korea' },
+  { code: '076', name: 'Brazil' },
+  { code: '826', name: 'UK' },
+  { code: '251', name: 'France' },
+  { code: '381', name: 'Italy' },
 ];
 
 // Strategic HS commodity codes

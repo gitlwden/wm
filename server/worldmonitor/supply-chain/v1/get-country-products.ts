@@ -7,6 +7,7 @@ import type {
 import { ValidationError } from '../../../../src/generated/server/worldmonitor/supply_chain/v1/service_server';
 
 import { getCachedJson } from '../../../_shared/redis';
+import { lazyFetchBilateralHs4 } from './_bilateral-hs4-lazy';
 
 interface BilateralHs4Payload {
   iso2: string;
@@ -28,8 +29,18 @@ export async function getCountryProducts(
 
   // Seeder writes via raw key (no env-prefix) — match it on read.
   const key = `comtrade:bilateral-hs4:${iso2}:v1`;
-  const payload = await getCachedJson(key, true).catch(() => null) as BilateralHs4Payload | null;
-  if (!payload) return empty;
+  let payload = await getCachedJson(key, true).catch(() => null) as BilateralHs4Payload | null;
+
+  // Lazy fallback: if the seed hasn't written this country's key (TTL expired,
+  // country not in seed set, or transient Comtrade failure), attempt a live
+  // fetch from the UN Comtrade public API.
+  if (!payload) {
+    const lazy = await lazyFetchBilateralHs4(iso2).catch(() => null);
+    if (lazy && lazy.products.length > 0) {
+      return { iso2, products: lazy.products as unknown as CountryProduct[], fetchedAt: new Date().toISOString() };
+    }
+    return empty;
+  }
 
   return {
     iso2,

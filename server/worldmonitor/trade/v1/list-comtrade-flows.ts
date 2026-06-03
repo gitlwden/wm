@@ -9,7 +9,7 @@ import { getCachedJsonBatch } from '../../../_shared/redis';
 const KEY_PREFIX = 'comtrade:flows';
 
 // Strategic reporters and commodities mirrored from the seed script.
-const REPORTERS = ['842', '156', '643', '364', '699', '490'];
+const REPORTERS = ['842', '156', '643', '364', '699', '490', '392', '276', '682', '410', '076', '826', '251', '381'];
 const CMD_CODES = ['2709', '2711', '7108', '8542', '9301'];
 
 function isValidCode(c: string): boolean {

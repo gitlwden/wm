@@ -3,6 +3,7 @@ import { getRpcBaseUrl } from '@/services/rpc-client';
 import { createCircuitBreaker } from '@/utils';
 import { SITE_VARIANT } from '@/config';
 import { getHydratedData } from '@/services/bootstrap';
+import { CURATED_COUNTRIES } from '@/config/countries';
 
 export interface PredictionMarket {
   title: string;
@@ -126,10 +127,23 @@ const COUNTRY_SEARCH_ALIASES: Record<string, string[]> = {
   'North Korea': ['DPRK', 'Pyongyang', 'Kim Jong'],
 };
 
-function countrySearchTerms(country: string): string[] {
+function countrySearchTerms(country: string, code?: string): string[] {
   const terms = [country];
+  // Merge CURATED_COUNTRIES aliases (covers 31 countries with rich terms
+  // like 'kremlin', 'putin', 'xi jinping', 'netanyahu', etc.)
+  const curated = code ? CURATED_COUNTRIES[code] : undefined;
+  if (curated?.searchAliases) {
+    for (const alias of curated.searchAliases) {
+      if (!terms.includes(alias)) terms.push(alias);
+    }
+  }
+  // Legacy hardcoded aliases (kept for countries not in CURATED_COUNTRIES)
   const aliases = COUNTRY_SEARCH_ALIASES[country];
-  if (aliases) terms.push(...aliases);
+  if (aliases) {
+    for (const alias of aliases) {
+      if (!terms.includes(alias)) terms.push(alias);
+    }
+  }
   return terms;
 }
 
@@ -137,14 +151,16 @@ function matchesCountryTerms(title: string, terms: string[]): boolean {
   return terms.some(t => new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(title));
 }
 
-export async function fetchCountryMarkets(country: string): Promise<PredictionMarket[]> {
-  const terms = countrySearchTerms(country);
+export async function fetchCountryMarkets(country: string, code?: string): Promise<PredictionMarket[]> {
+  const terms = countrySearchTerms(country, code);
   const allMarkets: PredictionMarket[] = [];
 
-  // Try RPC across geopolitics + finance (parallel, both cover most country markets)
+  // Pass empty query — server-side includes() is too strict for abbreviated
+  // names ("US" vs "United States"). Client-side regex matching with full
+  // CURATED_COUNTRIES aliases handles the filtering instead.
   const rpcResults = await Promise.allSettled(
     (['geopolitics', 'economy'] as const).map(category =>
-      client.listPredictionMarkets({ category, query: country, pageSize: 30, cursor: '' })
+      client.listPredictionMarkets({ category, query: '', pageSize: 30, cursor: '' })
     )
   );
   for (const result of rpcResults) {

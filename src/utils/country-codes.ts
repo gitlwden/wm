@@ -75,7 +75,9 @@ export function iso2ToUnCode(iso2: string): string | null {
 // UN M49 codes mostly match UN Comtrade reporterCodes except India (699, not
 // 356) and Taiwan (490 "Other Asia, nes", not 158). Use this helper wherever
 // an iso2 feeds into a Comtrade reporterCode lookup or seeded comtrade:* key.
-const ISO2_TO_COMTRADE_OVERRIDES: Record<string, string> = { IN: '699', TW: '490' };
+const ISO2_TO_COMTRADE_OVERRIDES: Record<string, string> = {
+  IN: '699', TW: '490', FR: '251', IT: '381', CH: '757', NO: '579',
+};
 export function iso2ToComtradeReporterCode(iso2: string): string | null {
   const upper = iso2.toUpperCase();
   return ISO2_TO_COMTRADE_OVERRIDES[upper] ?? ISO2_TO_UN[upper] ?? null;

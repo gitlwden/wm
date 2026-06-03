@@ -25,7 +25,7 @@ const LOCK_TTL_MS = 20 * 60 * 1000; // 20 min (pipeline write of 200+ countries)
 const MIN_COVERAGE_RATIO = 0.80; // abort if new spine < 80% of previous country count
 
 // Countries with Comtrade reporter codes for shock model inputs.
-// Only these 6 reporters are seeded in comtrade:flows; must stay in sync with
+// Must stay in sync with seed-trade-flows.mjs REPORTERS and
 // compute-energy-shock.ts ISO2_TO_COMTRADE.
 const ISO2_TO_COMTRADE = {
   US: '842',
@@ -34,6 +34,14 @@ const ISO2_TO_COMTRADE = {
   IR: '364',
   IN: '699',
   TW: '490',
+  JP: '392',
+  DE: '276',
+  SA: '682',
+  KR: '410',
+  BR: '076',
+  GB: '826',
+  FR: '251',
+  IT: '381',
 };
 
 // Chokepoints supported by the shock model for comtrade-mapped countries.
