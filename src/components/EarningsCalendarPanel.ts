@@ -1,7 +1,7 @@
 import type { MarketServiceClient } from '@/generated/client/worldmonitor/market/v1/service_client';
 import { Panel } from './Panel';
 import { t, getLocale } from '@/services/i18n';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, unsafeRawHtml } from '@/utils/sanitize';
 import { getHydratedData } from '@/services/bootstrap';
 
 let _client: MarketServiceClient | null = null;
@@ -189,6 +189,6 @@ export class EarningsCalendarPanel extends Panel {
         ${sortedDates.map((d, i) => renderGroup(d, grouped.get(d)!, i === 0)).join('')}
       </div>`;
 
-    this.setContent(html);
+    this.setSafeContent(unsafeRawHtml(html, 'legacy Panel.setContent() migration'));
   }
 }

@@ -16,17 +16,37 @@ git clone https://github.com/koala73/worldmonitor.git
 cd worldmonitor
 npm install
 
-# 2. Start the stack
+# 2. Generate the REQUIRED secrets. Without these the stack will not start
+#    (see the "Required Environment Variables" table below).
+echo "RELAY_SHARED_SECRET=$(openssl rand -hex 32)" >> .env
+echo "REDIS_PASSWORD=$(openssl rand -hex 32)"      >> .env
+echo "REDIS_TOKEN=$(openssl rand -hex 32)"         >> .env
+
+# 3. Start the stack
 docker compose up -d        # or: uvx podman-compose up -d
 
-# 3. Seed data into Redis
+# 4. Seed data into Redis
 ./scripts/run-seeders.sh
 
-# 4. Open the dashboard
+# 5. Open the dashboard
 open http://localhost:3000
 ```
 
 The dashboard works out of the box with public data sources (earthquakes, weather, conflicts, etc.). API keys unlock additional data feeds.
+
+## 🔐 Required Environment Variables
+
+These must be set before `docker compose up -d`, or one of the containers will exit on boot.
+
+| Variable | Purpose | How to generate |
+| --- | --- | --- |
+| `RELAY_SHARED_SECRET` | Authenticates every non-public request the dashboard makes to the AIS relay. The relay refuses to start without it. | `openssl rand -hex 32` |
+| `REDIS_PASSWORD` | Redis AUTH password (`--requirepass`). The Redis container refuses to start without it; the REST proxy uses it in its upstream connection string. | `openssl rand -hex 32` |
+| `REDIS_TOKEN` | Bearer token the REST proxy (`redis-rest`) requires on every request, and the value the app sends as `UPSTASH_REDIS_REST_TOKEN`. The proxy and app containers refuse to start without it. | `openssl rand -hex 32` |
+
+> Earlier releases shipped `wm-local-token` as a default for the REST token. That default has been removed (#3804) — the proxy was only reachable from `127.0.0.1:8079` so external exposure required a hostile `docker-compose.override.yml`, but any user who flipped that binding to `0.0.0.0` was instantly authenticated by a publicly documented string. Fresh installs and existing clones both need to set `REDIS_TOKEN` and `REDIS_PASSWORD` in `.env` from this release onward.
+
+> Need to bring the relay up without auth for local debugging? Set `I_UNDERSTAND_THIS_DISABLES_AUTH=true` (the deprecated `ALLOW_UNAUTHENTICATED_RELAY=true` is still accepted). The relay will log a loud `[SECURITY]` warning at boot and every 5 minutes, and every non-public route will be reachable by anyone who can hit the port — **never use this on an internet-reachable host.**
 
 ## 🔑 API Keys
 
@@ -49,7 +69,7 @@ services:
       ACLED_ACCESS_TOKEN: ""      # https://acleddata.com (free for researchers)
 
       # 🛰️ Earth Observation
-      NASA_FIRMS_API_KEY: ""      # https://firms.modaps.eosdis.nasa.gov (free)
+      NASA_FIRMS_API_KEY: ""      # REQUIRED for seed-fire-detections.mjs — https://firms.modaps.eosdis.nasa.gov (free)
 
       # ✈️ Aviation
       AVIATIONSTACK_API: ""       # https://aviationstack.com (free tier)
@@ -102,12 +122,19 @@ To automate, add a cron job:
 If you prefer to run seeders individually:
 
 ```bash
+# Source .env so REDIS_TOKEN (and any API keys it holds) become available.
+# Quick-start puts REDIS_TOKEN in .env, not in your shell — without this,
+# the next line fails-loud with "REDIS_TOKEN: parameter null or not set".
+set -a; . ./.env; set +a
+
 export UPSTASH_REDIS_REST_URL=http://localhost:8079
-export UPSTASH_REDIS_REST_TOKEN=wm-local-token
+export UPSTASH_REDIS_REST_TOKEN="${REDIS_TOKEN:?set REDIS_TOKEN in .env first}"
 node scripts/seed-earthquakes.mjs
 node scripts/seed-military-flights.mjs
 # ... etc
 ```
+
+`./scripts/run-seeders.sh` auto-sources `REDIS_TOKEN` from `.env`, so the wrapper is the simpler path. Use the manual form only when iterating on a single seeder.
 
 ## 🏗️ Architecture
 
@@ -154,6 +181,7 @@ docker compose down && docker compose up -d
 - The Docker image uses **Node.js 22 Alpine** for both builder and runtime stages
 - Blog site build is skipped in Docker (separate dependencies)
 - The runtime stage needs `gettext` (Alpine package) for `envsubst` in the nginx config
+- Docker nginx mirrors Vercel's `script-src` policy and does not allow `'unsafe-inline'`; hash-pin any custom inline scripts before adding them to a self-hosted build.
 - If you hit `npm ci` sync errors in Docker, regenerate the lockfile with the container's npm version:
   ```bash
   docker run --rm -v "$(pwd)":/app -w /app node:22-alpine npm install --package-lock-only

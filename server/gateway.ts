@@ -13,6 +13,8 @@ import { createRouter, type RouteDescriptor } from './router';
 import { getCorsHeaders, isDisallowedOrigin, isAllowedOrigin } from './cors';
 // @ts-expect-error — JS module, no declaration file
 import { validateApiKey } from '../api/_api-key.js';
+// @ts-expect-error — JS module, no declaration file
+import { captureSilentError } from '../api/_sentry-edge.js';
 import { mapErrorToResponse } from './error-mapper';
 import { checkRateLimit, checkEndpointRateLimit, hasEndpointRatePolicy } from './_shared/rate-limit';
 import { drainResponseHeaders } from './_shared/response-headers';
@@ -49,6 +51,7 @@ import {
   type CacheTier as UsageCacheTier,
   type RequestReason,
 } from './_shared/usage';
+import { timingSafeEqual } from './_shared/internal-auth';
 import type { ServerOptions } from '../src/generated/server/worldmonitor/seismology/v1/service_server';
 
 export const serverOptions: ServerOptions = { onError: mapErrorToResponse };
@@ -313,6 +316,7 @@ const RPC_CACHE_TIER: Record<string, CacheTier> = {
   '/api/intelligence/v1/get-regional-brief': 'slow',
   '/api/resilience/v1/get-resilience-score': 'slow',
   '/api/resilience/v1/get-resilience-ranking': 'slow',
+  '/api/resilience/v1/get-runtime-manifest': 'no-store',
 
   // Partner-facing shipping/v2. route-intelligence is premium-gated; gateway
   // short-circuits to slow-browser. Entry required by tests/route-cache-tier.test.mjs.
@@ -324,6 +328,10 @@ const RPC_CACHE_TIER: Record<string, CacheTier> = {
 
 import { PREMIUM_RPC_PATHS } from '../src/shared/premium-paths';
 
+export const PUBLIC_NO_AUTH_RPC_PATHS = new Set<string>([
+  '/api/resilience/v1/get-runtime-manifest',
+]);
+
 /**
  * Creates a Vercel Edge handler for a single domain's routes.
  *
@@ -332,13 +340,63 @@ import { PREMIUM_RPC_PATHS } from '../src/shared/premium-paths';
  */
 export type GatewayCtx = { waitUntil: (p: Promise<unknown>) => void };
 
+const POST_TO_GET_MAX_BODY_BYTES = 1_048_576;
+const POST_TO_GET_MAX_ARRAY_VALUES_PER_KEY = 200;
+
+function isPostToGetCompatibleBodySize(headers: Headers): boolean {
+  const rawContentLength = headers.get('Content-Length');
+  if (rawContentLength === null || !/^\d+$/.test(rawContentLength)) return false;
+
+  const contentLength = Number(rawContentLength);
+  return Number.isSafeInteger(contentLength) && contentLength < POST_TO_GET_MAX_BODY_BYTES;
+}
+
+// `TRUSTED_USER_ID_HEADER` (a.k.a. `x-user-id`) is gateway-internal: the
+// gateway is the ONLY layer permitted to set it, and it must reflect an
+// authenticated principal. Inbound client copies are stripped at handler
+// entry (see stripClientUserIdHeader); the authenticated value is re-
+// injected after Clerk / wm_ user-key / legacy bearer auth via
+// withAuthenticatedUserId. The internal-MCP block below has its own
+// strip-and-rebuild step that ALSO strips this header alongside
+// INTERNAL_MCP_VERIFIED_HEADER — both layers are defense-in-depth.
+function cloneRequestWithHeaders(request: Request, headers: Headers): Request {
+  return new Request(request, { headers });
+}
+
+function stripClientUserIdHeader(request: Request): Request {
+  if (!request.headers.has(TRUSTED_USER_ID_HEADER)) return request;
+  const headers = new Headers(request.headers);
+  headers.delete(TRUSTED_USER_ID_HEADER);
+  return cloneRequestWithHeaders(request, headers);
+}
+
+function withAuthenticatedUserId(request: Request, userId: string): Request {
+  const headers = new Headers(request.headers);
+  headers.set(TRUSTED_USER_ID_HEADER, userId);
+  return cloneRequestWithHeaders(request, headers);
+}
+
+async function isResilienceRankingSeedRefreshRequest(request: Request, pathname: string): Promise<boolean> {
+  if (pathname !== '/api/resilience/v1/get-resilience-ranking') return false;
+  const expected = process.env.WORLDMONITOR_SEED_REFRESH_KEY?.trim() ?? '';
+  if (!expected) return false;
+  try {
+    const url = new URL(request.url);
+    if (url.searchParams.get('refresh') !== '1') return false;
+  } catch {
+    return false;
+  }
+  const candidate = request.headers.get('X-WorldMonitor-Key') ?? '';
+  return timingSafeEqual(candidate, expected);
+}
+
 export function createDomainGateway(
   routes: RouteDescriptor[],
 ): (req: Request, ctx?: GatewayCtx) => Promise<Response> {
   const router = createRouter(routes);
 
   return async function handler(originalRequest: Request, ctx?: GatewayCtx): Promise<Response> {
-    let request = originalRequest;
+    let request = stripClientUserIdHeader(originalRequest);
     const rawPathname = new URL(request.url).pathname;
     const pathname = rawPathname.length > 1 ? rawPathname.replace(/\/+$/, '') : rawPathname;
     const t0 = Date.now();
@@ -416,8 +474,26 @@ export function createDomainGateway(
     let corsHeaders: Record<string, string>;
     try {
       corsHeaders = getCorsHeaders(request);
-    } catch {
-      corsHeaders = { 'Access-Control-Allow-Origin': '*' };
+    } catch (err) {
+      // Pass the Sentry delivery promise through ctx.waitUntil so the
+      // Vercel Edge isolate survives long enough to actually flush the
+      // event. (captureSilentError uses keepalive:true as a transport
+      // fallback when ctx is absent, but the explicit waitUntil is the
+      // documented best practice.)
+      const captured = captureSilentError(err, {
+        tags: { route: 'gateway', step: 'cors_headers' },
+      });
+      ctx?.waitUntil(captured);
+      emitRequest(500, 'cors_error', null);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          // Prevent CDN/edge from caching the 500 — a transient CORS
+          // failure must not be pinned for downstream callers.
+          'Cache-Control': 'no-store',
+        },
+      });
     }
 
     // OPTIONS preflight
@@ -430,8 +506,8 @@ export function createDomainGateway(
     // Defense-in-depth: strip client-controlled copies of the trusted
     // internal-MCP markers BEFORE any other logic runs. The gateway is the
     // ONLY layer permitted to set `x-wm-mcp-internal-verified` /
-    // `x-user-id` (the latter is also set by the Clerk-session block
-    // below from a verified bearer). Without the strip step, an attacker
+    // `x-user-id` (the latter is also set by verified session / user-key
+    // paths below). Without the strip step, an attacker
     // who sends `x-wm-mcp-internal-verified: 1` from outside could spoof
     // premium context to any handler that reads these markers via
     // `isCallerPremium`. The strip MUST run regardless of whether the
@@ -663,18 +739,42 @@ export function createDomainGateway(
     // Route matching — if POST doesn't match, convert to GET for stale clients
     let matchedHandler = router.match(request);
     if (!matchedHandler && request.method === 'POST') {
-      const contentLen = parseInt(request.headers.get('Content-Length') ?? '0', 10);
-      if (contentLen < 1_048_576) {
+      if (isPostToGetCompatibleBodySize(request.headers)) {
         const url = new URL(request.url);
+        let oversizedKey: string | null = null;
         try {
-          const body = await request.clone().json();
+          const bodyText = await request.clone().text();
+          if (new TextEncoder().encode(bodyText).byteLength >= POST_TO_GET_MAX_BODY_BYTES) {
+            emitRequest(400, 'malformed_request', null);
+            return new Response(JSON.stringify({ error: 'malformed_request' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', ...corsHeaders },
+            });
+          }
+          const body = JSON.parse(bodyText);
           const isScalar = (x: unknown): x is string | number | boolean =>
             typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean';
           for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
-            if (Array.isArray(v)) v.forEach((item) => { if (isScalar(item)) url.searchParams.append(k, String(item)); });
-            else if (isScalar(v)) url.searchParams.set(k, String(v));
+            if (Array.isArray(v)) {
+              if (v.length > POST_TO_GET_MAX_ARRAY_VALUES_PER_KEY) {
+                oversizedKey = k;
+                break;
+              }
+              v.forEach((item) => { if (isScalar(item)) url.searchParams.append(k, String(item)); });
+            } else if (isScalar(v)) url.searchParams.set(k, String(v));
           }
-        } catch { /* non-JSON body — skip POST→GET conversion */ }
+        } catch { /* non-JSON body — preserve legacy POST→GET fallback */ }
+        if (oversizedKey !== null) {
+          emitRequest(400, 'malformed_request', null);
+          return new Response(JSON.stringify({
+            error: 'Too many values for POST compatibility parameter',
+            parameter: oversizedKey,
+            maxValues: POST_TO_GET_MAX_ARRAY_VALUES_PER_KEY,
+          }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          });
+        }
         const getReq = new Request(url.toString(), { method: 'GET', headers: request.headers });
         matchedHandler = router.match(getReq);
         if (matchedHandler) request = getReq;

@@ -1,7 +1,8 @@
 import { isDesktopRuntime } from '../services/runtime';
 import { invokeTauri } from '../services/tauri-bridge';
 import { t } from '../services/i18n';
-import { h, replaceChildren, safeHtml } from '../utils/dom-utils';
+import { h, replaceChildren, safeHtml as sanitizeHtmlFragment, setTrustedHtml, trustedHtml } from '../utils/dom-utils';
+import { safeHtmlToString, type SafeHtml } from '@/utils/sanitize';
 import { trackPanelResized } from '@/services/analytics';
 import { getAiFlowSettings } from '@/services/ai-flow-settings';
 import { getSecretState } from '@/services/runtime-config';
@@ -238,8 +239,18 @@ export class Panel {
   private retryAttempt = 0;
   private _fetching = false;
   private _locked = false;
+  // Snapshot of this.content's children at the moment showLocked /
+  // showGatedCta replaces them with a lock CTA. unlockPanel re-attaches
+  // these nodes so subclasses whose UI is constructed once (typically in
+  // the ctor — chips, input rows, static chrome) don't end up with a
+  // permanently empty body after a FREE→PRO auth-state cycle. The cache
+  // holds the actual DOM nodes; reattaching preserves any listeners and
+  // any subclass references like `this.inputEl`.
+  private _savedContent: ChildNode[] | null = null;
   private _collapsed = false;
   private _collapseBtn: HTMLButtonElement | null = null;
+  private viewportObserver: IntersectionObserver | null = null;
+  private viewportObserverRegistered = false;
 
   constructor(options: PanelOptions) {
     this.panelId = options.id;
@@ -267,7 +278,7 @@ export class Panel {
       const infoBtn = h('button', { className: 'panel-info-btn', 'aria-label': t('components.panel.showMethodologyInfo') }, '?');
 
       const tooltip = h('div', { className: 'panel-info-tooltip' });
-      tooltip.appendChild(safeHtml(options.infoTooltip));
+      tooltip.appendChild(sanitizeHtmlFragment(options.infoTooltip));
 
       infoBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -752,6 +763,54 @@ export class Panel {
     return this.element;
   }
 
+  /**
+   * Fire `callback` once when this panel's element scrolls within
+   * `marginPx` of the viewport. Uses IntersectionObserver where
+   * available; falls back to an idle-callback tick when not (Node/SSR
+   * or very old browsers). Idempotent — repeat calls are ignored
+   * once an observation is registered. Disconnected automatically on
+   * destroy() and on first firing (loadAllData is idempotent and the
+   * refresh scheduler owns repeat fetches, so re-firing is wasted
+   * work). (#3990)
+   */
+  public observeNearViewport(callback: () => void, marginPx = 200): void {
+    if (this.viewportObserverRegistered) return;
+    if (typeof IntersectionObserver === 'undefined' || typeof window === 'undefined') {
+      this.viewportObserverRegistered = true;
+      const tick = (): void => {
+        if (this.element.isConnected) callback();
+      };
+      // typeof window === 'undefined' takes the fallback branch alone (no IO + no
+      // window), so the requestIdleCallback lookup must be gated separately —
+      // dereferencing `window` here without that guard would ReferenceError in
+      // pure Node/SSR. Greptile #4001/P1.
+      const ric = typeof window !== 'undefined'
+        ? (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+        : undefined;
+      if (typeof ric === 'function') ric(tick);
+      else setTimeout(tick, 0);
+      return;
+    }
+    this.viewportObserverRegistered = true;
+    this.viewportObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          this.unobserveViewport();
+          callback();
+          return;
+        }
+      }
+    }, { rootMargin: `${marginPx}px` });
+    this.viewportObserver.observe(this.element);
+  }
+
+  private unobserveViewport(): void {
+    if (this.viewportObserver) {
+      this.viewportObserver.disconnect();
+      this.viewportObserver = null;
+    }
+  }
+
   public isNearViewport(marginPx = 400): boolean {
     if (!this.element.isConnected) return false;
     if (typeof window === 'undefined') return true;
@@ -831,6 +890,7 @@ export class Panel {
   public showLocked(features: string[] = []): void {
     this._locked = true;
     this.clearRetryCountdown();
+    this._snapshotContentForRestore();
 
     for (let child = this.header.nextElementSibling; child && child !== this.content; child = child.nextElementSibling) {
       (child as HTMLElement).style.display = 'none';
@@ -838,7 +898,7 @@ export class Panel {
     this.element.classList.add('panel-is-locked');
 
     const iconEl = h('div', { className: 'panel-locked-icon' });
-    iconEl.innerHTML = lockSvg;
+    setTrustedHtml(iconEl, trustedHtml(lockSvg, 'legacy direct innerHTML migration'));
 
     const lockedChildren: (HTMLElement | string)[] = [
       iconEl,
@@ -869,15 +929,6 @@ export class Panel {
   }
 
   public showGatedCta(reason: PanelGateReason, onAction: () => void): void {
-    this._locked = true;
-    this.clearRetryCountdown();
-
-    // Hide elements between header and content (same as showLocked)
-    for (let child = this.header.nextElementSibling; child && child !== this.content; child = child.nextElementSibling) {
-      (child as HTMLElement).style.display = 'none';
-    }
-    this.element.classList.add('panel-is-locked');
-
     const config: Record<string, { icon: string; desc: string; cta: string }> = {
       [PanelGateReason.ANONYMOUS]: {
         icon: lockSvg,
@@ -894,8 +945,22 @@ export class Panel {
     const entry = config[reason];
     if (!entry) return; // PanelGateReason.NONE should never reach here
 
+    // Bail-out done — now commit to the locked state. Doing this AFTER the
+    // guard avoids a half-locked DOM (header siblings hidden, panel-is-locked
+    // class set, _savedContent populated) on the acknowledged-impossible
+    // NONE-reason path. PR #3814 review (Greptile P2).
+    this._locked = true;
+    this.clearRetryCountdown();
+    this._snapshotContentForRestore();
+
+    // Hide elements between header and content (same as showLocked)
+    for (let child = this.header.nextElementSibling; child && child !== this.content; child = child.nextElementSibling) {
+      (child as HTMLElement).style.display = 'none';
+    }
+    this.element.classList.add('panel-is-locked');
+
     const iconEl = h('div', { className: 'panel-locked-icon' });
-    iconEl.innerHTML = entry.icon;
+    setTrustedHtml(iconEl, trustedHtml(entry.icon, 'legacy direct innerHTML migration'));
 
     const descEl = h('div', { className: 'panel-locked-desc' }, entry.desc);
 
@@ -913,8 +978,27 @@ export class Panel {
     for (let child = this.header.nextElementSibling; child && child !== this.content; child = child.nextElementSibling) {
       (child as HTMLElement).style.display = '';
     }
-    // Clear the locked state content
-    replaceChildren(this.content);
+    // Restore the pre-lock content if we have it. The saved nodes are the
+    // ORIGINAL DOM nodes the subclass built — reattaching preserves event
+    // listeners and any references the subclass holds (this.inputEl etc.),
+    // and fixes constructor-only subclasses (DeductionPanel,
+    // ChatAnalystPanel, …) that would otherwise end up with an empty body.
+    // Fall back to the legacy empty-content behaviour if nothing was saved.
+    if (this._savedContent !== null) {
+      replaceChildren(this.content, ...this._savedContent);
+      this._savedContent = null;
+    } else {
+      replaceChildren(this.content);
+    }
+  }
+
+  // Capture this.content's current child nodes so unlockPanel can put them
+  // back. Only snapshots on the FIRST transition into a lock state — a
+  // re-entrant showLocked / showGatedCta must not overwrite the cache with
+  // the locked-state CTA. The cache is cleared by unlockPanel on restore.
+  private _snapshotContentForRestore(): void {
+    if (this._savedContent !== null) return;
+    this._savedContent = Array.from(this.content.childNodes);
   }
 
   public showRetrying(message?: string, countdownSeconds?: number): void {
@@ -1008,7 +1092,11 @@ export class Panel {
     }
   }
 
-  public setContent(html: string): void {
+  public setSafeContent(html: SafeHtml): void {
+    this.setContentHtml(safeHtmlToString(html));
+  }
+
+  private setContentHtml(html: string): void {
     if (this._locked) return;
     this.setErrorState(false);
     this.clearRetryCountdown();
@@ -1037,7 +1125,7 @@ export class Panel {
 
     this.pendingContentHtml = null;
     if (this.content.innerHTML !== html) {
-      this.content.innerHTML = html;
+      setTrustedHtml(this.content, trustedHtml(html, 'legacy direct innerHTML migration'));
     }
   }
 
@@ -1134,6 +1222,7 @@ export class Panel {
   public destroy(): void {
     this.abortController.abort();
     this.clearRetryCountdown();
+    this.unobserveViewport();
     if (this.colSpanReconcileRaf !== null) {
       cancelAnimationFrame(this.colSpanReconcileRaf);
       this.colSpanReconcileRaf = null;
@@ -1143,6 +1232,10 @@ export class Panel {
       this.contentDebounceTimer = null;
     }
     this.pendingContentHtml = null;
+    // Drop the snapshot of pre-lock children so a panel destroyed while
+    // still in the locked state doesn't retain the detached DOM subtree
+    // for the lifetime of the Panel instance. PR #3814 review (Greptile P2).
+    this._savedContent = null;
 
     if (this.tooltipCloseHandler) {
       document.removeEventListener('click', this.tooltipCloseHandler);

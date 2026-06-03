@@ -90,7 +90,11 @@ export default async function handler(req: Request): Promise<Response> {
   // same pattern as /api/intelligence/v1/deduct-situation.
   const _isPremium = await isCallerPremium(req);
 
-  const rateLimitResponse = await checkRateLimit(req, corsHeaders);
+  // Streaming LLM endpoint — the rate-limit IS the abuse defence (each
+  // call hits a frontier model). This route doesn't go through gateway
+  // checkEndpointRateLimit, so opt into fail-closed explicitly: a Redis
+  // outage must not silently lift the budget. (#3531)
+  const rateLimitResponse = await checkRateLimit(req, corsHeaders, { failClosed: true });
   if (rateLimitResponse) return rateLimitResponse;
 
   let body: ChatAnalystRequestBody;

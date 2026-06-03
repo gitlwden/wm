@@ -9,7 +9,7 @@ import { ingestNewsForCII, getCountryScore } from '@/services/country-instabilit
 import { getTheaterPostureSummaries } from '@/services/military-surge';
 import { getCachedPosture } from '@/services/cached-theater-posture';
 import { isMobileDevice } from '@/utils';
-import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
+import { escapeHtml, sanitizeUrl, unsafeRawHtml } from '@/utils/sanitize';
 import { SITE_VARIANT } from '@/config';
 import { deletePersistentCache, getPersistentCache, setPersistentCache } from '@/services/persistent-cache';
 import { t } from '@/services/i18n';
@@ -18,7 +18,7 @@ import { getAiFlowSettings, isAnyAiProviderEnabled, subscribeAiFlowChange } from
 import { getActiveFrameworkForPanel, subscribeFrameworkChange } from '@/services/analysis-framework-store';
 import { hasPremiumAccess } from '@/services/panel-gating';
 import { FrameworkSelector } from './FrameworkSelector';
-import { getServerInsights, type ServerInsights, type ServerInsightStory } from '@/services/insights-loader';
+import { fetchServerInsights, getServerInsights, type ServerInsights, type ServerInsightStory } from '@/services/insights-loader';
 import { computeISQ, type SignalQuality, type SignalQualityInput } from '@/utils/signal-quality';
 import { extractEntitiesFromTitle } from '@/services/entity-extraction';
 import { getEntityIndex } from '@/services/entity-index';
@@ -166,7 +166,7 @@ export class InsightsPanel extends Panel {
 
   private setProgress(step: number, total: number, message: string): void {
     const percent = Math.round((step / total) * 100);
-    this.setContent(`
+    this.setSafeContent(unsafeRawHtml(`
       <div class="insights-progress">
         <div class="insights-progress-bar">
           <div class="insights-progress-fill" style="width: ${percent}%"></div>
@@ -176,7 +176,7 @@ export class InsightsPanel extends Panel {
           <span class="insights-progress-message">${message}</span>
         </div>
       </div>
-    `);
+    `, 'legacy Panel.setContent() migration'));
   }
 
   public async updateInsights(clusters: ClusteredEvent[]): Promise<void> {
@@ -185,7 +185,18 @@ export class InsightsPanel extends Panel {
     const thisGeneration = this.updateGeneration;
 
     // Try server-side pre-computed insights first (instant, works even without clusters)
-    const serverInsights = getServerInsights();
+    let serverInsights = getServerInsights();
+    if (!serverInsights) {
+      // Bootstrap hydration miss (mobile fast-tier abort on 4G, stale cache,
+      // or single-shot getHydratedData already consumed). On-demand refetch
+      // via the bootstrap key-filter endpoint covers all three cases —
+      // critical for mobile where the client-side LLM fallback is gated off,
+      // and a free win for desktop (no client LLM cost when server data is
+      // recoverable). Mirrors the AAIISentimentPanel pattern.
+      if (this.updateGeneration !== thisGeneration) return;
+      serverInsights = await fetchServerInsights();
+      if (this.updateGeneration !== thisGeneration) return;
+    }
     if (serverInsights) {
       await this.updateFromServer(serverInsights, clusters, thisGeneration);
       return;
@@ -193,14 +204,14 @@ export class InsightsPanel extends Panel {
 
     if (clusters.length === 0) {
       this.setDataBadge('unavailable');
-      this.setContent(`<div class="insights-empty">${t('components.insights.waitingForData')}</div>`);
+      this.setSafeContent(unsafeRawHtml(`<div class="insights-empty">${t('components.insights.waitingForData')}</div>`, 'legacy Panel.setContent() migration'));
       return;
     }
 
     // Fallback: full client-side pipeline (skip on mobile — too heavy)
     if (isMobileDevice()) {
       this.setDataBadge('unavailable');
-      this.setContent(`<div class="insights-empty">${t('components.insights.waitingForData')}</div>`);
+      this.setSafeContent(unsafeRawHtml(`<div class="insights-empty">${t('components.insights.waitingForData')}</div>`, 'legacy Panel.setContent() migration'));
       return;
     }
     await this.updateFromClient(clusters, thisGeneration);
@@ -371,7 +382,7 @@ export class InsightsPanel extends Panel {
       const importantClusters = importantItems.map(({ cluster }) => cluster);
 
       if (importantClusters.length === 0) {
-        this.setContent(`<div class="insights-empty">${t('components.insights.noStories')}</div>`);
+        this.setSafeContent(unsafeRawHtml(`<div class="insights-empty">${t('components.insights.noStories')}</div>`, 'legacy Panel.setContent() migration'));
         return;
       }
 
@@ -464,7 +475,7 @@ export class InsightsPanel extends Panel {
     const statsHtml = this.renderStats(clusters);
     const missedHtml = this.renderMissedStories();
 
-    this.setContent(`
+    this.setSafeContent(unsafeRawHtml(`
       ${briefHtml}
       ${focalPointsHtml}
       ${convergenceHtml}
@@ -475,7 +486,7 @@ export class InsightsPanel extends Panel {
         ${breakingHtml}
       </div>
       ${missedHtml}
-    `);
+    `, 'legacy Panel.setContent() migration'));
   }
 
   private renderServerInsights(
@@ -490,7 +501,7 @@ export class InsightsPanel extends Panel {
     const statsHtml = this.renderServerStats(insights);
     const missedHtml = this.renderMissedStories();
 
-    this.setContent(`
+    this.setSafeContent(unsafeRawHtml(`
       ${briefHtml}
       ${focalPointsHtml}
       ${convergenceHtml}
@@ -501,7 +512,7 @@ export class InsightsPanel extends Panel {
         ${storiesHtml}
       </div>
       ${missedHtml}
-    `);
+    `, 'legacy Panel.setContent() migration'));
   }
 
   private renderServerStories(
@@ -811,13 +822,13 @@ export class InsightsPanel extends Panel {
   }
 
   private renderDisabledState(): void {
-    this.setContent(`
+    this.setSafeContent(unsafeRawHtml(`
       <div class="insights-disabled">
         <div class="insights-disabled-icon">⚡</div>
         <div class="insights-disabled-title">${t('components.insights.insightsDisabledTitle')}</div>
         <div class="insights-disabled-hint">${t('components.insights.insightsDisabledHint')}</div>
       </div>
-    `);
+    `, 'legacy Panel.setContent() migration'));
   }
 
   private async onAiFlowChanged(): Promise<void> {

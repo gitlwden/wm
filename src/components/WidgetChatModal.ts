@@ -4,6 +4,8 @@ import { escapeHtml } from '@/utils/sanitize';
 import { widgetAgentUrl } from '@/utils/proxy';
 import { wrapWidgetHtml, wrapProWidgetHtml } from '@/utils/widget-sanitizer';
 import { track } from '@/services/analytics';
+import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
+
 
 interface WidgetChatOptions {
   mode: 'create' | 'modify';
@@ -57,7 +59,7 @@ export function openWidgetChatModal(options: WidgetChatOptions): void {
   const titleText = isModify ? t('widgets.modifyTitle') : t('widgets.chatTitle');
   const proBadgeHtml = isPro ? `<span class="widget-pro-badge">${escapeHtml(t('widgets.proBadge'))}</span>` : '';
 
-  modal.innerHTML = `
+  setTrustedHtml(modal, trustedHtml(`
     <div class="modal-header">
       <span class="modal-title">${escapeHtml(titleText)}${proBadgeHtml}</span>
       <button class="modal-close" aria-label="${escapeHtml(t('common.close'))}">\u2715</button>
@@ -83,7 +85,7 @@ export function openWidgetChatModal(options: WidgetChatOptions): void {
       <div class="widget-chat-footer-status"></div>
       <button class="widget-chat-action-btn" disabled>${isModify ? t('widgets.applyChanges') : t('widgets.addToDashboard')}</button>
     </div>
-  `;
+  `, "legacy direct innerHTML migration"));
 
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
@@ -244,7 +246,7 @@ export function openWidgetChatModal(options: WidgetChatOptions): void {
       const statusEl = appendMessage(messagesEl, 'assistant', '');
       const radarEl = document.createElement('span');
       radarEl.className = 'widget-chat-radar';
-      radarEl.innerHTML = '<span class="panel-loading-radar"><span class="panel-radar-sweep"></span><span class="panel-radar-dot"></span></span>';
+      setTrustedHtml(radarEl, trustedHtml('<span class="panel-loading-radar"><span class="panel-radar-sweep"></span><span class="panel-radar-dot"></span></span>', "legacy direct innerHTML migration"));
       statusEl.appendChild(radarEl);
 
       const reader = res.body.getReader();
@@ -353,7 +355,7 @@ export function closeWidgetChatModal(): void {
 }
 
 function renderExampleChips(container: HTMLElement, inputEl: HTMLTextAreaElement, isPro: boolean): void {
-  container.innerHTML = '';
+  setTrustedHtml(container, trustedHtml('', "legacy direct innerHTML migration"));
   const keys = isPro ? PRO_EXAMPLE_PROMPT_KEYS : EXAMPLE_PROMPT_KEYS;
   for (const key of keys) {
     const btn = document.createElement('button');
@@ -386,7 +388,7 @@ function renderPreviewState(container: HTMLElement, phase: PreviewPhase, detail 
   const copy = detail || getPreviewCopy(phase);
   const isError = phase === 'error';
 
-  container.innerHTML = `
+  setTrustedHtml(container, trustedHtml(`
     <div class="widget-chat-preview-state is-${phase}">
       <div class="widget-chat-preview-head">
         <div>
@@ -411,7 +413,7 @@ function renderPreviewState(container: HTMLElement, phase: PreviewPhase, detail 
         </div>
       `}
     </div>
-  `;
+  `, "legacy direct innerHTML migration"));
 }
 
 function renderPreviewHtml(
@@ -426,7 +428,7 @@ function renderPreviewHtml(
     ? wrapProWidgetHtml(html)
     : wrapWidgetHtml(html, 'wm-widget-shell-preview');
 
-  container.innerHTML = `
+  setTrustedHtml(container, trustedHtml(`
     <div class="widget-chat-preview-frame">
       <div class="widget-chat-preview-head">
         <div>
@@ -440,7 +442,7 @@ function renderPreviewHtml(
         ${rendered}
       </div>
     </div>
-  `;
+  `, "legacy direct innerHTML migration"));
 }
 
 function getPhaseLabel(phase: PreviewPhase): string {

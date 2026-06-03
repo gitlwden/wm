@@ -1096,7 +1096,24 @@ const ENERGY_MOBILE_MAP_LAYERS: MapLayers = {
 // UNIFIED PANEL REGISTRY
 // ============================================
 
-/** All panels from all variants — union with FULL taking precedence for duplicate keys. */
+type PanelVariant = 'full' | 'tech' | 'finance' | 'commodity' | 'energy' | 'happy';
+
+const VARIANT_PANEL_CONFIGS: Record<PanelVariant, Record<string, PanelConfig>> = {
+  full: FULL_PANELS,
+  tech: TECH_PANELS,
+  finance: FINANCE_PANELS,
+  commodity: COMMODITY_PANELS,
+  energy: ENERGY_PANELS,
+  happy: HAPPY_PANELS,
+};
+
+function getVariantPanelConfigs(variant: string): Record<string, PanelConfig> | undefined {
+  return Object.prototype.hasOwnProperty.call(VARIANT_PANEL_CONFIGS, variant)
+    ? VARIANT_PANEL_CONFIGS[variant as PanelVariant]
+    : undefined;
+}
+
+/** All panels from all variants — canonical cross-variant registry. */
 export const ALL_PANELS: Record<string, PanelConfig> = {
   ...HAPPY_PANELS,
   ...COMMODITY_PANELS,
@@ -1108,12 +1125,12 @@ export const ALL_PANELS: Record<string, PanelConfig> = {
 
 /** Per-variant canonical panel order (keys = which panels are enabled by default). */
 export const VARIANT_DEFAULTS: Record<string, string[]> = {
-  full:      Object.keys(FULL_PANELS),
-  tech:      Object.keys(TECH_PANELS),
-  finance:   Object.keys(FINANCE_PANELS),
-  commodity: Object.keys(COMMODITY_PANELS),
-  energy:    Object.keys(ENERGY_PANELS),
-  happy:     Object.keys(HAPPY_PANELS),
+  full:      Object.keys(VARIANT_PANEL_CONFIGS.full),
+  tech:      Object.keys(VARIANT_PANEL_CONFIGS.tech),
+  finance:   Object.keys(VARIANT_PANEL_CONFIGS.finance),
+  commodity: Object.keys(VARIANT_PANEL_CONFIGS.commodity),
+  energy:    Object.keys(VARIANT_PANEL_CONFIGS.energy),
+  happy:     Object.keys(VARIANT_PANEL_CONFIGS.happy),
 };
 
 /**
@@ -1151,10 +1168,25 @@ export const VARIANT_PANEL_OVERRIDES: Partial<Record<string, Partial<Record<stri
  * applying variant-specific display overrides (name, premium, etc.).
  */
 export function getEffectivePanelConfig(key: string, variant: string): PanelConfig {
-  const base = ALL_PANELS[key];
+  const base = getVariantPanelConfigs(variant)?.[key] ?? ALL_PANELS[key];
   if (!base) return { name: key, enabled: false, priority: 2 };
   const override = VARIANT_PANEL_OVERRIDES[variant]?.[key] ?? {};
   return { ...base, ...override };
+}
+
+/**
+ * Returns true if `key` is in the current variant's default panel set.
+ *
+ * App.ts:577-583 merges ALL_PANELS into panelSettings on every variant so
+ * users can cross-enable panels, which makes `shouldCreatePanel(key)`
+ * (which just checks `key in panelSettings`) true everywhere. Auto-refresh
+ * paths that fan out a fetch must instead gate on the variant defaults —
+ * otherwise variants whose backend doesn't seed the panel's bootstrap key
+ * (e.g. tech-readiness on commodity/finance/energy) blow their 5s fetch
+ * budget on a key that will never populate.
+ */
+export function isPanelInVariantDefaults(key: string): boolean {
+  return (VARIANT_DEFAULTS[SITE_VARIANT] ?? []).includes(key);
 }
 
 export const FREE_MAX_PANELS = 40;
@@ -1236,13 +1268,13 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // All variants — essential panels
   core: {
     labelKey: 'header.panelCatCore',
-    panelKeys: ['map', 'live-news', 'live-webcams', 'windy-webcams', 'insights', 'strategic-posture'],
+    panelKeys: ['map', 'live-news', 'live-webcams', 'windy-webcams', 'insights', 'strategic-posture', 'latest-brief'],
   },
 
   // Full (geopolitical) variant
   intelligence: {
     labelKey: 'header.panelCatIntelligence',
-    panelKeys: ['cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'forecast'],
+    panelKeys: ['cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'forecast', 'cross-source-signals', 'regional-intelligence', 'deduction', 'chat-analyst', 'thermal-escalation', 'social-velocity', 'geo-hubs'],
   },
   correlation: {
     labelKey: 'header.panelCatCorrelation',
@@ -1254,7 +1286,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
     labelKey: 'header.panelCatMarketsFinance',
-    panelKeys: ['commodities', 'energy-complex', 'energy-risk-overview', 'pipeline-status', 'storage-facility-map', 'fuel-shortages', 'energy-disruptions', 'hormuz-tracker', 'energy-crisis', 'markets', 'economic', 'trade-policy', 'sanctions-pressure', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'gulf-economies', 'etf-flows', 'stablecoins', 'crypto', 'heatmap'],
+    panelKeys: ['commodities', 'energy-complex', 'energy-risk-overview', 'pipeline-status', 'storage-facility-map', 'oil-inventories', 'fuel-prices', 'chokepoint-strip', 'fuel-shortages', 'energy-disruptions', 'hormuz-tracker', 'energy-crisis', 'markets', 'economic', 'trade-policy', 'sanctions-pressure', 'supply-chain', 'finance', 'polymarket', 'macro-signals', 'gulf-economies', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'aaii-sentiment', 'cot-positioning', 'earnings-calendar', 'economic-calendar', 'fear-greed', 'fsi', 'macro-tiles', 'market-breadth', 'liquidity-shifts', 'national-debt', 'positioning-247', 'wsb-ticker-scanner', 'yield-curve', 'gold-intelligence', 'bigmac', 'market-implications'],
   },
   topical: {
     labelKey: 'header.panelCatTopical',
@@ -1262,13 +1294,13 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   dataTracking: {
     labelKey: 'header.panelCatDataTracking',
-    panelKeys: ['monitors', 'satellite-fires', 'ucdp-events', 'displacement', 'climate', 'population-exposure', 'security-advisories', 'radiation-watch', 'oref-sirens', 'world-clock', 'tech-readiness'],
+    panelKeys: ['monitors', 'satellite-fires', 'ucdp-events', 'displacement', 'climate', 'climate-news', 'population-exposure', 'security-advisories', 'radiation-watch', 'oref-sirens', 'world-clock', 'tech-readiness', 'disease-outbreaks', 'fao-food-price-index', 'grocery-basket', 'defense-patents'],
   },
 
   // Tech variant
   techAi: {
     labelKey: 'header.panelCatTechAi',
-    panelKeys: ['ai', 'tech', 'hardware', 'cloud', 'dev', 'github', 'producthunt', 'events', 'service-status', 'tech-readiness'],
+    panelKeys: ['ai', 'tech', 'hardware', 'cloud', 'dev', 'github', 'producthunt', 'events', 'service-status', 'tech-readiness', 'internet-disruptions', 'tech-hubs'],
   },
   startupsVc: {
     labelKey: 'header.panelCatStartupsVc',

@@ -1,6 +1,5 @@
 import './styles/base-layer.css';
 import './styles/happy-theme.css';
-import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
 import { inject } from '@vercel/analytics';
 import { App } from './App';
@@ -22,6 +21,14 @@ const THIRD_PARTY_FETCH_HOST_ALLOWLIST = new Set([
   'basemaps.cartocdn.com',
   'tiles.openfreemap.org',
   'protomaps.github.io',
+  // Clerk Frontend API (CNAME → Clerk's auth infra). The bundled Clerk SDK
+  // fetches it for session/token refresh and retries transient failures
+  // itself (`retryImmediately`); a `Failed to fetch (clerk.worldmonitor.app)`
+  // that leaks to onunhandledrejection is a Clerk-SDK-internal network blip,
+  // not our code — same disposition as the existing `/ClerkJS: Network error/`
+  // ignoreError. NOT our `api.worldmonitor.app`, which stays off the list so
+  // genuine API regressions still surface (WORLDMONITOR-SA/SB).
+  'clerk.worldmonitor.app',
 ]);
 
 // Initialize Sentry error tracking (early as possible)
@@ -54,6 +61,13 @@ Sentry.init({
     /Unable to load image/,
     /Non-Error promise rejection captured with value:/,
     /Connection to Indexed Database server lost/,
+    // Library-thrown (Convex client / Clerk persistent cache) when the user's
+    // browser has IndexedDB disabled (Safari Private Browsing, hardened
+    // Firefox, some WebView contexts). Our code only initializes the
+    // library; the throw is environmental and unavoidable from our side.
+    // Same disposition as the existing "Connection to Indexed Database
+    // server lost" entry above. WORLDMONITOR-RC.
+    /^IndexedDBUnavailableError|IndexedDB is not available in this environment/,
     /webkit\.messageHandlers/,
     /(?:unsafe-eval.*Content Security Policy|Content Security Policy.*unsafe-eval)/,
     /Fullscreen request denied/,
@@ -195,6 +209,9 @@ Sentry.init({
     /Qt\([^)]*\) is not a function/,
     /shaderSource must be an instance of WebGLShader/,
     /WebGL2RenderingContext\.shaderSource: Argument 1 is not an object/,
+    // Chrome wording for the same condition (gl.createShader returned null,
+    // typically after WebGL context loss or on degraded GPU drivers). WORLDMONITOR-RM.
+    /Failed to execute 'shaderSource' on 'WebGL2?RenderingContext': parameter 1 is not of type 'WebGLShader'/,
     /Failed to initialize WebGL/,
     /opacityVertexArray\.length/,
     /Length of new data is \d+, which doesn't match current length of/,
@@ -202,6 +219,8 @@ Sentry.init({
     /^NetworkError: Load failed$/,
     /^A network error occurred\.?$/,
     /nmhCrx is not defined/,
+    /\bcrusoe is not defined\b/, // WORLDMONITOR-R3 — injected userscript reference, anonymous-frames-only stack
+    /\bvc_request_action is not defined\b/, // WORLDMONITOR-RB — Samsung Internet / Tizen smart-view-cast global injection
     /navigationPerformanceLoggerJavascriptInterface/,
     /jQuery is not defined/,
     /illegal UTF-16 sequence/,
@@ -532,6 +551,18 @@ Sentry.init({
         // handled above by `isHostScopedFetchFailure` which does its own
         // first-party-host allowlist (WORLDMONITOR-KM).
         || /^(?:TypeError: )?Failed to fetch$/.test(msg)
+        // Safari module-loader abort / streaming-fetch interruption: iOS
+        // Safari emits `SyntaxError: Unexpected EOF` with zero captured
+        // frames via `onunhandledrejection` when a dynamic `import()` or
+        // service-worker-mediated fetch is truncated mid-stream (PWA
+        // lifecycle transitions, background-tab termination, network blip
+        // during app boot). Our own `JSON.parse` calls produce
+        // engine-specific phrasings — V8: `Unexpected end of JSON input`;
+        // Safari: `JSON Parse error: Unexpected EOF` (with prefix) — so
+        // bare `Unexpected EOF` is engine-emitted only. Same `!hasFirstParty`
+        // safety as the `Failed to fetch` / `signal timed out` blocks above
+        // (WORLDMONITOR-RF).
+        || /^(?:SyntaxError: )?Unexpected EOF$/.test(msg)
       )
     ) return null;
     if (hasAnyStack && !hasFirstParty && (
@@ -562,7 +593,6 @@ window.addEventListener('unhandledrejection', (e) => {
 
 // CSP violation filter — exported for testability.
 // Returns true if the violation should be suppressed (not reported to Sentry).
-// @ts-expect-error — exported for tests, not consumed by other modules
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function shouldSuppressCspViolation(
   disposition: string,
@@ -571,6 +601,7 @@ function shouldSuppressCspViolation(
   sourceFile: string,
   cspConnectSrcAllowsHttps: boolean,
   firstPartyConvexHost: string | null,
+  cspMediaSrcAllowsHttps: boolean = false,
 ): boolean {
   // Skip non-enforced violations (report-only from dual-CSP interaction).
   if (disposition && disposition !== 'enforce') return true;
@@ -580,6 +611,44 @@ function shouldSuppressCspViolation(
     try {
       if (new URL(blockedURI).protocol === 'https:') return true;
     } catch { /* scheme-only values like "blob" fall through */ }
+  }
+  // media-src + HTTPS: HLS / live-stream media-element loads. Our media-src
+  // policy allows the `https:` scheme (`media-src 'self' data: blob: https:` in
+  // BOTH the index.html meta tag and the vercel.json header), so an *enforced*
+  // https: media-src block means a corporate proxy / privacy extension stripped
+  // `https:` from the user's effective media-src — the same environmental policy
+  // mutation as the connect-src case above. The HLS *manifest* fetch is
+  // connect-src (already suppressed via the foxnews-style rule); this covers the
+  // media element load of that same stream. Built-in and user-added custom HLS
+  // channels (LiveNewsPanel) both hit this — WORLDMONITOR-HV (bloomberg.com
+  // us.m3u8, 4 users). Gated on policy detection so it stays scoped to the
+  // current policy state, not a blanket protocol assumption. http: media-src
+  // blocks (real mixed-content) still surface.
+  if (directive === 'media-src' && cspMediaSrcAllowsHttps) {
+    try {
+      if (new URL(blockedURI).protocol === 'https:') return true;
+    } catch { /* scheme-only values fall through */ }
+  }
+  // default-src + HTTP: mixed-content block on a fetch type we set no explicit
+  // directive for — i.e. browser link-prefetch ("Preload pages" speculation) or
+  // an extension article-prefetcher. News article links render as plain
+  // <a target="_blank"> navigations (NewsPanel/ClimateNewsPanel/etc.) carrying
+  // feed-supplied URLs; some sources / downgrading proxies emit them over http:,
+  // and the browser/extension speculatively fetches them — the load falls to the
+  // default-src fallback because we set no prefetch-src. Our app is HTTPS-only and
+  // ships no http:// subresource loads, and every fetch directive we DO use
+  // (connect-src, img-src, script-src, media-src) is set explicitly, so a genuine
+  // first-party mixed-content fetch surfaces under its specific directive — never
+  // this default-src fallback. Preserve first-party worldmonitor.app http blocks
+  // so a real mixed-content regression on our own assets still surfaces
+  // (WORLDMONITOR-S0 — http://www.euronews.com article prefetch, 1 user/775 ev).
+  if (directive === 'default-src') {
+    try {
+      const u = new URL(blockedURI);
+      if (u.protocol === 'http:'
+          && u.hostname !== 'worldmonitor.app'
+          && !u.hostname.endsWith('.worldmonitor.app')) return true;
+    } catch { /* scheme-only values fall through */ }
   }
   // First-party Convex backend: corporate proxies / privacy extensions that mutate the
   // page CSP (stripping bare `https:` from connect-src) cause our Convex sync calls to
@@ -592,6 +661,28 @@ function shouldSuppressCspViolation(
   if (directive === 'connect-src' && firstPartyConvexHost) {
     try {
       if (new URL(blockedURI).hostname === firstPartyConvexHost) return true;
+    } catch { /* scheme-only values fall through */ }
+  }
+  // First-party img-src block on OUR registrable domain: same pattern as the Convex
+  // connect-src case above. Corporate proxies / privacy extensions (Zscaler, Symantec
+  // CloudSOC, school content-filters) can strip both `'self'` and `https:` from img-src
+  // in the user's effective policy, causing our own favicon and panel icons to be
+  // CSP-blocked even though our policy (`img-src 'self' data: blob: https:`) allows
+  // them. Scope to `worldmonitor.app` and its subdomains — img-src blocks to foreign
+  // hosts (a third-party CDN we never load, attacker-controlled host) still surface
+  // (WORLDMONITOR-JP). Suffix check uses a leading `.` so lookalikes like
+  // `worldmonitor.app.evil.com` do NOT match.
+  //
+  // REQUIRE https: protocol — our CSP only allows https: for img-src, so a real
+  // mixed-content regression (`<img src="http://worldmonitor.app/...">`) would be
+  // blocked by the browser. Suppressing http: blocks on first-party hosts would mask
+  // that regression in Sentry. The `cspConnectSrcAllowsHttps` block above uses the
+  // same protocol gate for connect-src.
+  if (directive === 'img-src') {
+    try {
+      const url = new URL(blockedURI);
+      if (url.protocol === 'https:'
+          && (url.hostname === 'worldmonitor.app' || url.hostname.endsWith('.worldmonitor.app'))) return true;
     } catch { /* scheme-only values fall through */ }
   }
   // YouTube IFrame API loader: explicitly allowed by our script-src
@@ -667,6 +758,19 @@ const _cspAllowsHttps = (() => {
   if (!metaEl) return false;
   return metaAllows;
 })();
+// media-src counterpart of `_cspAllowsHttps`. Detect whether the meta-tag CSP
+// allows the `https:` scheme in media-src so the filter only suppresses https:
+// media-src blocks when our own policy actually permits them (the block then
+// being an environmental policy mutation, not a real regression). Browsers
+// enforce meta + header independently; our header media-src also carries
+// `https:`, so the meta check is a sufficient (conservative) proxy.
+const _cspMediaSrcAllowsHttps = (() => {
+  const metaEl = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+  if (!metaEl) return false;
+  const metaCsp = metaEl.getAttribute('content') ?? '';
+  const metaMediaSrc = metaCsp.match(/media-src\s+([^;]*)/)?.[1] ?? '';
+  return /\bhttps:\b/.test(metaMediaSrc);
+})();
 // Resolve our configured Convex deployment hostname once. Convex is multi-tenant —
 // the CSP filter must scope its first-party suppression to OUR specific hostname,
 // not all *.convex.cloud, otherwise blocks to foreign/attacker tenants get silently
@@ -691,6 +795,7 @@ window.addEventListener('securitypolicyviolation', (e) => {
     e.sourceFile ?? '',
     _cspAllowsHttps,
     _firstPartyConvexHost,
+    _cspMediaSrcAllowsHttps,
   )) return;
   Sentry.captureMessage(`CSP: ${e.effectiveDirective} blocked ${blocked || '(inline)'}`, {
     level: 'warning',

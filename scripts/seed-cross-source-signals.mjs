@@ -682,7 +682,7 @@ function extractMediaToneDeterioration(d) {
 }
 
 function extractRiskScoreSpike(d) {
-  const payload = d['risk:scores:sebuf:stale:v1'];
+  const payload = d['risk:scores:sebuf:stale:v3'];
   if (!payload) return [];
   const ciiScores = Array.isArray(payload.ciiScores) ? payload.ciiScores : [];
   const spiking = ciiScores.filter(s => safeNum(s.combinedScore) > 80 || s.trend === 'TREND_DIRECTION_RISING');

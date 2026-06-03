@@ -27,6 +27,7 @@ import {
   ExportPanel,
   getCurrentTheme,
   setTheme,
+  showToast,
 } from '@/utils';
 import {
   IDLE_PAUSE_MS,
@@ -34,8 +35,10 @@ import {
   SITE_VARIANT,
   LAYER_TO_SOURCE,
   FEEDS,
+  CANONICAL_FEEDS,
   INTEL_SOURCES,
 } from '@/config';
+import { resolveNewsCategories, enabledNewsCategoryKeys } from '@/config/feed-resolution';
 import { VARIANT_META } from '@/config/variant-meta';
 import { isDesktopRuntime } from '@/services/runtime';
 import {
@@ -61,11 +64,14 @@ import { getCachedGpsInterference } from '@/services/gps-interference';
 import { dataFreshness } from '@/services/data-freshness';
 import { mlWorker } from '@/services/ml-worker';
 import { UnifiedSettings } from '@/components/UnifiedSettings';
+import { WM_OPEN_NOTIFICATIONS_FOR_COUNTRY } from '@/utils/notify-country-link';
 import { AuthLauncher } from '@/components/AuthLauncher';
 import { AuthHeaderWidget } from '@/components/AuthHeaderWidget';
 import { t } from '@/services/i18n';
 import { TvModeController } from '@/services/tv-mode';
 import { getAuthState, subscribeAuthState } from '@/services/auth-state';
+import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
+
 
 export interface EventHandlerCallbacks {
   updateSearchIndex: () => void;
@@ -107,6 +113,7 @@ export class EventHandlerManager implements AppModule {
   private boundPanelCloseHandler: ((e: Event) => void) | null = null;
   private boundWidgetModifyHandler: ((e: Event) => void) | null = null;
   private boundUndoHandler: ((e: KeyboardEvent) => void) | null = null;
+  private boundNotifyForCountryHandler: ((e: Event) => void) | null = null;
   private proGateUnsubscribers: Array<() => void> = [];
   private closedPanelStack: string[] = []; // max-items: 20
   private idleTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -140,11 +147,28 @@ export class EventHandlerManager implements AppModule {
   private performUndo(): void {
     const panelId = this.closedPanelStack.pop();
     if (!panelId) return;
+    this.enablePanelById(panelId);
+  }
+
+  /**
+   * Enables a registered panel (undo-restore, CMD+K "Add", etc.). Returns
+   * false when the panel is unknown or the free-tier cap blocks it. Already
+   * enabled → true (no-op). Single source of truth for runtime panel-enable
+   * so search-add and undo-restore stay in lockstep.
+   */
+  enablePanelById(panelId: string): boolean {
     const config = this.ctx.panelSettings[panelId];
-    if (!config) return;
+    if (!config) return false;
+    if (config.enabled) return true;
     if (!isProUser()) {
       const enabledCount = Object.entries(this.ctx.panelSettings).filter(([k, p]) => p.enabled && !k.startsWith('cw-')).length;
-      if (enabledCount >= FREE_MAX_PANELS) return;
+      if (enabledCount >= FREE_MAX_PANELS) {
+        // Tell the user why nothing happened instead of failing silently.
+        // (Undo-restore can't reach this branch — closing a panel frees a
+        // slot first — so only the CMD+K "Add" path surfaces the toast.)
+        showToast(t('modals.settingsWindow.freePanelLimit', { max: String(FREE_MAX_PANELS) }));
+        return false;
+      }
     }
     config.enabled = true;
     trackPanelToggled(panelId, true);
@@ -157,6 +181,7 @@ export class EventHandlerManager implements AppModule {
     if (panel && 'fetchData' in panel && typeof (panel as { fetchData: unknown }).fetchData === 'function') {
       (panel as { fetchData: () => void }).fetchData();
     }
+    return true;
   }
 
   private setupTvMode(): void {
@@ -303,6 +328,13 @@ export class EventHandlerManager implements AppModule {
     if (this.boundUndoHandler) {
       document.removeEventListener('keydown', this.boundUndoHandler);
       this.boundUndoHandler = null;
+    }
+    if (this.boundNotifyForCountryHandler) {
+      window.removeEventListener(
+        WM_OPEN_NOTIFICATIONS_FOR_COUNTRY,
+        this.boundNotifyForCountryHandler,
+      );
+      this.boundNotifyForCountryHandler = null;
     }
     for (const unsub of this.proGateUnsubscribers) unsub();
     this.proGateUnsubscribers = [];
@@ -792,12 +824,12 @@ export class EventHandlerManager implements AppModule {
         `<a class="dl-dd-btn ${b.cls}" href="${b.href}">${b.label}</a>`
       ).join('');
 
-      dropdown.innerHTML = `
+      setTrustedHtml(dropdown, trustedHtml(`
         <div class="dl-dd-tagline">${t('modals.downloadBanner.description')}</div>
         <div class="dl-dd-buttons">${primaryHtml}</div>
         ${others.length ? `<button class="dl-dd-toggle" id="dlDdToggle">${t('modals.downloadBanner.showAllPlatforms')}</button>
         <div class="dl-dd-others" id="dlDdOthers">${othersHtml}</div>` : ''}
-      `;
+      `, "legacy direct innerHTML migration"));
 
       dropdown.querySelectorAll<HTMLAnchorElement>('.dl-dd-btn').forEach(a => {
         a.addEventListener('click', (e) => {
@@ -1107,16 +1139,37 @@ export class EventHandlerManager implements AppModule {
     if (mobileBtn) {
       mobileBtn.addEventListener('click', () => this.ctx.unifiedSettings?.open());
     }
+
+    // U8 (degraded path) — listen for the deep-dive "Notify me about this
+    // country" sub-action and open the notifications tab. Today the
+    // event detail.country is informational only; when the alertRules
+    // schema PR lands, the future PR will read it here and forward to
+    // a pre-filled create-form open. See plan U8 R9 + the TODO inside
+    // src/utils/notify-country-link.ts.
+    //
+    // Stored on a bound handler field so `destroy()` can remove it.
+    // Same-document reinit (HMR, test harnesses, multiple App instances)
+    // would otherwise accumulate anonymous listeners that retain the
+    // stale AppContext closure — every click would fire all of them.
+    this.boundNotifyForCountryHandler = (_e: Event) => {
+      this.ctx.unifiedSettings?.open('notifications');
+    };
+    window.addEventListener(
+      WM_OPEN_NOTIFICATIONS_FOR_COUNTRY,
+      this.boundNotifyForCountryHandler,
+    );
   }
 
   setupAuthWidget(): void {
     const modal = new AuthLauncher();
     this.ctx.authModal = modal;
 
-    const widget = new AuthHeaderWidget(
-      () => modal.open(),
-      () => this.ctx.unifiedSettings?.open(),
-    );
+    // The settings gear is rendered once by the standalone unifiedSettings
+    // button (#unifiedSettingsMount), which is mounted regardless of auth state
+    // (so signed-out users keep it too). Passing onSettingsClick here makes
+    // AuthHeaderWidget render a second gear next to the avatar for signed-in
+    // users — a duplicate. Leave it unset.
+    const widget = new AuthHeaderWidget(() => modal.open());
     this.ctx.authHeaderWidget = widget;
     const mount = document.getElementById('authWidgetMount');
     if (mount) {
@@ -1513,7 +1566,7 @@ export class EventHandlerManager implements AppModule {
       isFullscreen = !isFullscreen;
       mapSection.classList.toggle('live-news-fullscreen', isFullscreen);
       document.body.classList.toggle('live-news-fullscreen-active', isFullscreen);
-      btn.innerHTML = isFullscreen ? shrinkSvg : expandSvg;
+      setTrustedHtml(btn, trustedHtml(isFullscreen ? shrinkSvg : expandSvg, "legacy direct innerHTML migration"));
       btn.title = isFullscreen ? 'Exit fullscreen' : 'Fullscreen';
       this.syncMapAfterLayoutChange();
     };
@@ -1537,9 +1590,10 @@ export class EventHandlerManager implements AppModule {
 
   getAllSourceNames(): string[] {
     const sources = new Set<string>();
-    Object.values(FEEDS).forEach(feeds => {
-      if (feeds) feeds.forEach(f => sources.add(f.name));
-    });
+    // Preset feeds + sources from any custom news panels the user added, so
+    // the source manager stays in sync with what loadNews() actually fetches.
+    const categories = resolveNewsCategories(FEEDS, CANONICAL_FEEDS, enabledNewsCategoryKeys(this.ctx.newsPanels, this.ctx.panels, this.ctx.panelSettings));
+    categories.forEach(({ feeds }) => feeds.forEach(f => sources.add(f.name)));
     INTEL_SOURCES.forEach(f => sources.add(f.name));
     return Array.from(sources).sort((a, b) => a.localeCompare(b));
   }

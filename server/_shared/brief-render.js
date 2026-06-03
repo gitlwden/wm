@@ -633,16 +633,54 @@ function buildTrackedSourceUrl(raw, issueDate, rank) {
 }
 
 /**
- * @param {{ story: BriefStory; rank: number; palette: 'light' | 'dark'; pageIndex: number; totalPages: number; issueDate: string }} opts
+ * Extract ISO-2 country tokens from a `BriefStory.country` string.
+ * The contract allows composite forms like "IL / LB" and "IL/LB" —
+ * we split on whitespace and `/` and keep tokens that are exactly
+ * two ASCII letters. Used solely to compute the `data-followed`
+ * stamp on the magazine source-link; never affects visible content.
+ *
+ * @param {string} country
+ * @returns {string[]} uppercase ISO-2 tokens (may be empty)
  */
-function renderStoryPage({ story, rank, palette, pageIndex, totalPages, issueDate }) {
+function extractIso2Tokens(country) {
+  if (typeof country !== 'string' || country.length === 0) return [];
+  /** @type {string[]} */
+  const out = [];
+  for (const raw of country.split(/[\s/]+/)) {
+    if (raw.length === 2 && /^[a-zA-Z]{2}$/.test(raw)) {
+      out.push(raw.toUpperCase());
+    }
+  }
+  return out;
+}
+
+/**
+ * @param {{ story: BriefStory; rank: number; palette: 'light' | 'dark'; pageIndex: number; totalPages: number; issueDate: string; followedSet: Set<string> }} opts
+ */
+function renderStoryPage({ story, rank, palette, pageIndex, totalPages, issueDate, followedSet }) {
   const threatClass = HIGHLIGHTED_LEVELS.has(story.threatLevel) ? ' crit' : '';
   const threatLabel = THREAT_LABELS[story.threatLevel];
+  // U11 telemetry stamps. Pick the first ISO-2 token as the primary
+  // country (composite stories like "IL / LB" still get a single
+  // primary-country event property; a secondary country whose only
+  // role is to qualify the headline is dropped to keep the analytics
+  // dimension cardinality bounded). `followed` is true when ANY
+  // token in the story's country field appears in the recipient's
+  // watchlist — composite stories that mention a followed country
+  // count as followed even if the primary token doesn't.
+  const iso2Tokens = extractIso2Tokens(story.country);
+  const primaryCountry = iso2Tokens[0] ?? '';
+  const followed = iso2Tokens.some((c) => followedSet.has(c));
+  const dataAttrs =
+    ' data-thread-open="1"' +
+    (primaryCountry ? ` data-country="${escapeHtml(primaryCountry)}"` : '') +
+    ` data-severity="${escapeHtml(story.threatLevel)}"` +
+    ` data-followed="${followed ? '1' : '0'}"`;
   // v1 envelopes don't carry sourceUrl — render the source as plain
   // text (matching pre-v2 appearance). v2 envelopes always have a
   // validated URL, so we wrap in a UTM-tracked anchor.
   const sourceBlock = story.sourceUrl
-    ? `<a class="source-link" href="${escapeHtml(buildTrackedSourceUrl(story.sourceUrl, issueDate, rank))}" target="_blank" rel="noopener noreferrer">${escapeHtml(story.source)}</a>`
+    ? `<a class="source-link" href="${escapeHtml(buildTrackedSourceUrl(story.sourceUrl, issueDate, rank))}" target="_blank" rel="noopener noreferrer"${dataAttrs}>${escapeHtml(story.source)}</a>`
     : escapeHtml(story.source);
   return (
     `<section class="page story ${palette}">` +
@@ -759,7 +797,22 @@ const STYLE_BLOCK = `<style>
   .page {
     flex: 0 0 100vw; width: 100vw; height: 100vh;
     padding: 6vh 6vw 10vh;
-    position: relative; overflow: hidden;
+    /* overflow-y: auto so pages whose content exceeds 100vh become
+       internally scrollable instead of silently clipping (user-reported
+       on desktop where vw-scaled body copy can be ~10-20% taller than
+       viewport; iPhone Pro Max responsive mode "worked" because narrow
+       viewport scaled the vw text down until it fit). overflow-x stays
+       hidden so the deck-level horizontal carousel isn't fought by a
+       per-page horizontal scrollbar. Pair with the wheel handler in
+       NAV_SCRIPT which now defers to native scroll when the current
+       page has remaining scroll in the wheel direction. */
+    position: relative; overflow-x: hidden; overflow-y: auto;
+    /* Smooth out the deck-level transform vs in-page scroll interaction
+       on touch + trackpad: contain scroll within the page so a fast
+       trackpad flick doesn't bubble to the body (body has overflow:hidden
+       anyway, but overscroll-behavior also disables the iOS rubber-band
+       effect that visually fights the deck transform). */
+    overscroll-behavior: contain;
     display: flex; flex-direction: column;
   }
   .mono {
@@ -784,8 +837,9 @@ const STYLE_BLOCK = `<style>
   }
   .cover .hero h1 {
     font-family: 'Playfair Display', serif; font-weight: 900;
-    font-size: 10vw; line-height: 0.92; letter-spacing: -0.03em;
+    font-size: clamp(72px, 10vw, 156px); line-height: 0.92; letter-spacing: -0.03em;
     margin-bottom: 6vh;
+    overflow-wrap: anywhere;
   }
   .cover .hero .kicker {
     font-family: 'IBM Plex Mono', monospace;
@@ -799,7 +853,7 @@ const STYLE_BLOCK = `<style>
   .cover.back { align-items: center; justify-content: center; text-align: center; }
   .cover.back .hero { align-items: center; flex: 0; }
   .cover.back .centered-logo { margin-bottom: 5vh; opacity: 0.9; }
-  .cover.back .hero h1 { font-size: 8vw; }
+  .cover.back .hero h1 { font-size: clamp(64px, 8vw, 132px); }
   .cover.back .meta-bottom {
     width: 100%; position: absolute; bottom: 6vh; left: 0; padding: 0 6vw;
   }
@@ -819,14 +873,16 @@ const STYLE_BLOCK = `<style>
   .digest .label { color: var(--sienna); margin-bottom: 5vh; }
   .digest h2 {
     font-family: 'Playfair Display', serif; font-weight: 900;
-    font-size: 7vw; line-height: 0.98; letter-spacing: -0.02em;
+    font-size: clamp(54px, 7vw, 112px); line-height: 0.98; letter-spacing: -0.02em;
     margin-bottom: 6vh; max-width: 18ch;
+    overflow-wrap: anywhere;
   }
   .digest blockquote {
     font-family: 'Source Serif 4', serif; font-style: italic;
-    font-size: 2vw; line-height: 1.38; max-width: 32ch;
+    font-size: clamp(20px, 2vw, 34px); line-height: 1.38; max-width: 32ch;
     margin-bottom: 5vh; padding-left: 2vw;
     border-left: 3px solid var(--sienna);
+    overflow-wrap: anywhere;
   }
   .digest .rule {
     border: none; height: 2px; background: var(--sienna);
@@ -841,19 +897,21 @@ const STYLE_BLOCK = `<style>
   .digest .stat-row:last-child { border-bottom: none; }
   .digest .stat-num {
     font-family: 'Playfair Display', serif; font-weight: 900;
-    font-size: 11vw; line-height: 0.9; color: var(--cream-ink);
+    font-size: clamp(84px, 11vw, 168px); line-height: 0.9; color: var(--cream-ink);
   }
   .digest .stat-label {
     font-family: 'Source Serif 4', serif; font-style: italic;
     font-size: max(18px, 1.7vw); line-height: 1.3;
     color: var(--cream-ink); opacity: 0.85;
+    overflow-wrap: anywhere;
   }
   .digest .footer-caption { margin-top: 4vh; color: var(--sienna); opacity: 0.85; }
   .digest .threads { display: flex; flex-direction: column; gap: 3.2vh; max-width: 62ch; }
   .digest .thread {
     font-family: 'Source Serif 4', serif;
-    font-size: max(17px, 1.55vw); line-height: 1.45;
+    font-size: clamp(17px, 1.55vw, 28px); line-height: 1.45;
     color: var(--cream-ink);
+    overflow-wrap: anywhere;
   }
   .digest .thread .tag {
     font-family: 'IBM Plex Mono', monospace; font-weight: 600;
@@ -862,9 +920,10 @@ const STYLE_BLOCK = `<style>
   .digest .signals { display: flex; flex-direction: column; gap: 3.5vh; max-width: 60ch; }
   .digest .signal {
     font-family: 'Source Serif 4', serif;
-    font-size: max(18px, 1.65vw); line-height: 1.45;
+    font-size: clamp(18px, 1.65vw, 30px); line-height: 1.45;
     color: var(--cream-ink); padding-left: 2vw;
     border-left: 2px solid var(--sienna);
+    overflow-wrap: anywhere;
   }
   .digest .end-marker {
     margin-top: 5vh; display: flex; align-items: center; gap: 1.5vw;
@@ -897,18 +956,21 @@ const STYLE_BLOCK = `<style>
     font-size: max(11px, 0.85vw); font-weight: 600;
     letter-spacing: 0.22em; text-transform: uppercase;
     padding: 0.5em 1em; border: 1px solid currentColor; opacity: 0.82;
+    max-width: 100%; overflow-wrap: anywhere;
   }
   .story .tag.crit { background: currentColor; color: var(--paper); }
   .story.dark .tag.crit { background: var(--bone); color: var(--ink); border-color: var(--bone); }
   .story h3 {
     font-family: 'Playfair Display', serif; font-weight: 900;
-    font-size: 5vw; line-height: 0.98; letter-spacing: -0.02em;
+    font-size: clamp(44px, 5vw, 86px); line-height: 0.98; letter-spacing: -0.02em;
     margin-bottom: 5vh; max-width: 18ch;
+    overflow-wrap: anywhere;
   }
   .story .desc {
     font-family: 'Source Serif 4', serif;
-    font-size: max(17px, 1.55vw); line-height: 1.45;
+    font-size: clamp(17px, 1.55vw, 28px); line-height: 1.45;
     max-width: 40ch; margin-bottom: 4vh; opacity: 0.88;
+    overflow-wrap: anywhere;
   }
   .story.dark .desc { opacity: 0.85; }
   /* Source line — the one editorial accent on story pages. Sits at
@@ -919,6 +981,7 @@ const STYLE_BLOCK = `<style>
     font-family: 'IBM Plex Mono', monospace;
     font-size: max(11px, 0.9vw); letter-spacing: 0.2em;
     text-transform: uppercase;
+    overflow-wrap: anywhere;
   }
   .story.light .source { color: var(--sienna); }
   .story.dark  .source { color: var(--mint); }
@@ -961,7 +1024,8 @@ const STYLE_BLOCK = `<style>
   }
   .story .callout .note {
     font-family: 'Source Serif 4', serif;
-    font-size: max(17px, 1.55vw); line-height: 1.5; opacity: 0.82;
+    font-size: clamp(17px, 1.55vw, 28px); line-height: 1.5; opacity: 0.82;
+    overflow-wrap: anywhere;
   }
   .nav-dots {
     position: fixed; bottom: 3.5vh; left: 50%;
@@ -1158,6 +1222,58 @@ const SHARE_SCRIPT = `<script>
 })();
 </script>`;
 
+// Umami analytics loader, mirroring the production snippet in
+// index.html. Hosted magazine pages are served from worldmonitor.app
+// (the auth'd route) and the public-share hash mirror — both within
+// `data-domains`. The `async` script never blocks rendering; if it's
+// blocked by an extension, BRIEF_THREAD_OPEN_SCRIPT silently no-ops.
+// Same data-website-id as the dashboard so events land in the same
+// project — segmentation is via event properties, not website ids.
+const UMAMI_LOADER = '<script async src="https://abacus.worldmonitor.app/script.js" data-website-id="e8800335-c853-46a8-8497-c993ed2f58bc" data-domains="worldmonitor.app,tech.worldmonitor.app,finance.worldmonitor.app,commodity.worldmonitor.app,happy.worldmonitor.app"></script>';
+
+/**
+ * U11 telemetry: emit a `brief-thread-open` event whenever a story
+ * source-link is clicked from inside the magazine. Properties are
+ * baked at render time as `data-*` attributes on the anchor:
+ *   - data-country  : ISO-2 (or absent on stories without one)
+ *   - data-severity : 'critical' | 'high' | 'medium' | 'low'
+ *   - data-followed : '1' | '0' (renderer reads recipient watchlist)
+ *
+ * Fire-and-forget. `window.umami?.track(...)` short-circuits when
+ * the script blocked / hasn't loaded — the click then proceeds to
+ * navigation as if no tracker existed. We do NOT preventDefault
+ * even on transient analytics failure: the user clicked a source
+ * link and they get the source.
+ */
+const BRIEF_THREAD_OPEN_SCRIPT = `<script>
+(function() {
+  function emit(el) {
+    try {
+      if (!window.umami || typeof window.umami.track !== 'function') return;
+      var country = el.dataset.country || null;
+      var severity = el.dataset.severity || null;
+      var followed = el.dataset.followed === '1';
+      window.umami.track('brief-thread-open', {
+        country: country,
+        followed: followed,
+        severity: severity,
+        source: 'magazine',
+      });
+    } catch (e) { /* swallow — never break navigation */ }
+  }
+  document.addEventListener('click', function(ev) {
+    var el = ev.target;
+    while (el && el.nodeType === 1) {
+      if (el.dataset && el.dataset.threadOpen === '1') {
+        emit(el);
+        return;
+      }
+      el = el.parentNode;
+    }
+  }, { capture: true });
+})();
+</script>`;
+
 const NAV_SCRIPT = `<script>
 (function() {
   var deck = document.getElementById('deck');
@@ -1189,15 +1305,50 @@ const NAV_SCRIPT = `<script>
   function next() { go(current + 1); }
   function prev() { go(current - 1); }
   window.addEventListener('keydown', function(e) {
-    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); next(); }
-    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    // ArrowRight/Left are the deck axis — always paginate, no scroll
+    // conflict. PageDown/PageUp/Space conventionally scroll a long page
+    // in normal browsers; defer to native page scroll when the current
+    // page has remaining scroll in that direction, paginate only at the
+    // scroll edge. Matches the wheel-handler behaviour so keyboard and
+    // mouse users see the same model.
+    if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    else if (e.key === 'PageDown' || e.key === ' ') {
+      if (pageCanScrollVertical(pages[current], 1)) return;
+      e.preventDefault(); next();
+    } else if (e.key === 'PageUp') {
+      if (pageCanScrollVertical(pages[current], -1)) return;
+      e.preventDefault(); prev();
+    }
     else if (e.key === 'Home') { e.preventDefault(); go(0); }
     else if (e.key === 'End') { e.preventDefault(); go(total - 1); }
   });
+  // Wheel handler defers to per-page native scroll first. The page CSS
+  // is overflow-y: auto, so content longer than 100vh scrolls inside the
+  // page. Only advance/retreat the deck when the user is wheeling
+  // PAST the scroll edge in that direction — otherwise a long page is
+  // unreachable past 100vh because every wheel tick paginates instead
+  // of scrolling (user-reported: "if I try to scroll down to read it,
+  // it just goes to the next page instead"). Vertical wheel falls
+  // through to the page; horizontal wheel still paginates immediately
+  // (the deck axis IS horizontal, no scroll conflict to resolve).
+  function pageCanScrollVertical(page, deltaY) {
+    if (!page) return false;
+    var maxScroll = page.scrollHeight - page.clientHeight;
+    if (maxScroll <= 0) return false;   // page content fits — paginate
+    if (deltaY > 0) return page.scrollTop < maxScroll - 1;   // room to scroll down
+    if (deltaY < 0) return page.scrollTop > 1;               // room to scroll up
+    return false;
+  }
   window.addEventListener('wheel', function(e) {
     if (wheelLock) return;
-    var delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    var isVertical = Math.abs(e.deltaY) > Math.abs(e.deltaX);
+    var delta = isVertical ? e.deltaY : e.deltaX;
     if (Math.abs(delta) < 12) return;
+    if (isVertical && pageCanScrollVertical(pages[current], e.deltaY)) {
+      // Let the native scroll on .page take this wheel event.
+      return;
+    }
     wheelLock = true;
     if (delta > 0) next(); else prev();
     setTimeout(function() { wheelLock = false; }, 620);
@@ -1323,6 +1474,25 @@ export function renderBriefMagazine(envelope, options = {}) {
   const shareUrl = !publicMode && typeof options.shareUrl === 'string' && options.shareUrl.length > 0
     ? options.shareUrl
     : '';
+  // U11 telemetry plumbing. The auth'd magazine route fetches the
+  // recipient's followed-countries via the relay and passes them
+  // here; the public-mirror route MUST NOT (no recipient identity).
+  // Defensive filter: each entry must be a non-empty string we can
+  // upper-case — anything else (null, number, the symbol-shaped
+  // entry an upstream regression once produced) gets dropped before
+  // the Set is built so a renderer crash can't leak from a relay bug.
+  const rawFollowed = Array.isArray(options.followedCountries)
+    ? options.followedCountries
+    : [];
+  /** @type {Set<string>} */
+  const followedSet = new Set();
+  if (!publicMode) {
+    for (const entry of rawFollowed) {
+      if (typeof entry === 'string' && entry.length > 0) {
+        followedSet.add(entry.toUpperCase());
+      }
+    }
+  }
   const rawData = publicMode ? redactForPublic(envelope.data) : envelope.data;
   const { user, issue, date, dateLong, digest, stories } = rawData;
   const [, month, day] = date.split('-');
@@ -1425,6 +1595,7 @@ export function renderBriefMagazine(envelope, options = {}) {
         pageIndex: ++p,
         totalPages,
         issueDate: date,
+        followedSet,
       }),
     );
   });
@@ -1482,6 +1653,7 @@ export function renderBriefMagazine(envelope, options = {}) {
     '<link rel="preconnect" href="https://fonts.googleapis.com">' +
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
     `<link href="${FONTS_HREF}" rel="stylesheet">` +
+    UMAMI_LOADER +
     STYLE_BLOCK +
     '</head>' +
     '<body>' +
@@ -1494,6 +1666,7 @@ export function renderBriefMagazine(envelope, options = {}) {
     '<div class="nav-dots" id="navDots"></div>' +
     '<div class="hint">← → / swipe / scroll</div>' +
     (shareUrl ? SHARE_SCRIPT : '') +
+    BRIEF_THREAD_OPEN_SCRIPT +
     NAV_SCRIPT +
     '</body>' +
     '</html>'

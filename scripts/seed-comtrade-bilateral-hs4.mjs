@@ -96,6 +96,8 @@ const require = createRequire(import.meta.url);
 const COUNTRY_PORT_CLUSTERS = require('./shared/country-port-clusters.json');
 /** @type {Record<string, string>} */
 const UN_TO_ISO2 = require('./shared/un-to-iso2.json');
+/** @type {Record<string, string>} */
+const COMTRADE_REPORTER_OVERRIDES = require('./shared/comtrade-reporter-overrides.json');
 
 const ISO2_TO_UN = Object.fromEntries(
   Object.entries(UN_TO_ISO2).map(([un, iso2]) => [iso2, un]),

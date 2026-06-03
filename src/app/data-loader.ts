@@ -13,9 +13,11 @@ import {
   MARKET_SYMBOLS,
   SITE_VARIANT,
   LAYER_TO_SOURCE,
+  isPanelInVariantDefaults,
 } from '@/config';
 import { INTEL_HOTSPOTS, CONFLICT_ZONES } from '@/config/geo';
 import { tokenizeForMatch, matchKeyword } from '@/utils/keyword-match';
+import { withTimeout } from '@/utils/with-timeout';
 import {
   fetchCategoryFeeds,
   getFeedFailures,
@@ -89,6 +91,7 @@ import {
   fetchStoredStockBacktests,
   getMissingOrStaleStoredStockBacktests,
   hasFreshStoredStockBacktests,
+  type StockBacktestResult,
 } from '@/services/stock-backtest';
 import {
   fetchStockAnalysisHistory,
@@ -99,6 +102,7 @@ import {
   type StockAnalysisHistory,
 } from '@/services/stock-analysis-history';
 import { checkBatchForBreakingAlerts, dispatchOrefBreakingAlert } from '@/services/breaking-news-alerts';
+import { effectivePubDateMs } from '@/services/feed-date';
 import { mlWorker } from '@/services/ml-worker';
 import { clusterNewsHybrid } from '@/services/clustering';
 import { ingestProtests, ingestFlights, ingestVessels, ingestEarthquakes, detectGeoConvergence, geoConvergenceToSignal } from '@/services/geo-convergence';
@@ -430,7 +434,7 @@ export class DataLoaderManager implements AppModule {
   private getStaleNewsItems(category: string): NewsItem[] {
     const staleItems = this.ctx.newsByCategory[category];
     if (!Array.isArray(staleItems) || staleItems.length === 0) return [];
-    return [...staleItems].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+    return [...staleItems].sort((a, b) => effectivePubDateMs(b) - effectivePubDateMs(a));
   }
 
   private selectLimitedFeeds<T>(feeds: T[], maxFeeds: number): T[] {
@@ -613,7 +617,13 @@ export class DataLoaderManager implements AppModule {
       tasks.push({ name: 'radiation', task: runGuarded('radiation', () => this.loadRadiationWatch()) });
     }
 
-    if (SITE_VARIANT !== 'happy') {
+    // tech-readiness is only seeded on full + tech variants (api/bootstrap.js +
+    // scripts/seed-wb-indicators.mjs); on commodity/finance/energy the 5s fetch
+    // at services/economic/index.ts:694 just times out. shouldLoad() alone is
+    // not enough — loadAllData(true) on boot (App.ts:1226) bypasses the viewport
+    // check via forceAll. Gate on variant defaults so this only fires where the
+    // seed actually exists.
+    if (isPanelInVariantDefaults('tech-readiness') && shouldLoad('tech-readiness')) {
       tasks.push({ name: 'techReadiness', task: runGuarded('techReadiness', () => (this.ctx.panels['tech-readiness'] as TechReadinessPanel)?.refresh()) });
     }
     if (SITE_VARIANT !== 'happy' && shouldLoad('thermal-escalation')) {
@@ -869,8 +879,16 @@ export class DataLoaderManager implements AppModule {
     if (range === 'all') return items;
     const cutoff = Date.now() - this.getTimeRangeWindowMs(range);
     return items.filter((item) => {
-      const ts = item.pubDate instanceof Date ? item.pubDate.getTime() : new Date(item.pubDate).getTime();
-      return Number.isFinite(ts) ? ts >= cutoff : true;
+      // effectivePubDateMs returns 0 for items that cannot claim a real
+      // freshness rank: pubDateMissing items (the U3 contract) AND items
+      // whose pubDate is NaN/Infinity/Invalid Date (the helper's value-
+      // sanitization branch). All such items are EXCLUDED from positive-
+      // window ranges. Previous behavior wrapped raw pubDate.getTime() in
+      // Number.isFinite() and fell through to `true` on non-finite — that
+      // included corrupt-stamp items in time-range views, arguably a bug.
+      // The current shape treats untrustworthy timestamps uniformly: they
+      // never claim freshness and never appear in a "last 24h" view.
+      return effectivePubDateMs(item) >= cutoff;
     });
   }
 
@@ -908,7 +926,11 @@ export class DataLoaderManager implements AppModule {
     this.applyTimeRangeFilterToNewsPanelsDebounced();
   }
 
-  private async loadNewsCategory(category: string, feeds: typeof FEEDS.politics, digest?: ListFeedDigestResponse | null): Promise<NewsItem[]> {
+  // `isCustom` marks a category from a user-added panel that isn't in the
+  // active variant's preset. The per-variant server digest never carries it,
+  // so it skips the digest-availability gate and fetches its full feed set
+  // directly client-side (the cost is borne only by users who customize).
+  private async loadNewsCategory(category: string, feeds: typeof FEEDS.politics, digest?: ListFeedDigestResponse | null, isCustom = false): Promise<NewsItem[]> {
     try {
       const panel = this.ctx.newsPanels[category];
       if (category === 'vcblogs') {
@@ -1015,8 +1037,15 @@ export class DataLoaderManager implements AppModule {
         }
       };
 
+      // Preset categories: serve last-known-good while the digest is briefly
+      // unavailable. Custom categories are NEVER in the digest, so this branch
+      // would fire on every refresh after the first load — getStaleNewsItems
+      // reads ctx.newsByCategory, which the prior cycle's direct fetch already
+      // populated — and freeze the panel on stale headlines. Skip it for them
+      // and fall through to the direct fetch; the panel keeps showing its
+      // current batch until fresh data lands (no blank flash).
       const staleItems = this.getStaleNewsItems(category).filter(i => enabledNames.has(i.source));
-      if (staleItems.length > 0) {
+      if (!isCustom && staleItems.length > 0) {
         console.warn(`[News] Digest missing for "${category}", serving stale headlines (${staleItems.length})`);
         this.renderNewsForCategory(category, staleItems);
         this.ctx.statusPanel?.updateFeed(category.charAt(0).toUpperCase() + category.slice(1), {
@@ -1411,7 +1440,22 @@ export class DataLoaderManager implements AppModule {
         }
         return;
       }
-      panel.renderBacktests(results);
+      // Build a combined view so a partial refetch does not shrink the panel:
+      // keep still-fresh cached backtests for symbols we did NOT refetch, swap
+      // in live results for the ones we did. Watchlist order is preserved.
+      const resultBySymbol = new Map(results.map((r) => [r.symbol, r]));
+      const storedBySymbol = new Map(stored.map((s) => [s.symbol, s]));
+      const combined: StockBacktestResult[] = [];
+      for (const target of targets) {
+        const live = resultBySymbol.get(target.symbol);
+        if (live) {
+          combined.push(live);
+          continue;
+        }
+        const cached = storedBySymbol.get(target.symbol);
+        if (cached) combined.push(cached);
+      }
+      panel.renderBacktests(combined.length > 0 ? combined : results);
     } catch (error) {
       console.error('[StockBacktest] failed:', error);
       const stored = await fetchStoredStockBacktests().catch(() => []);
@@ -1692,7 +1736,14 @@ export class DataLoaderManager implements AppModule {
     this.ctx.inFlight.add('dailyMarketBrief');
     try {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      const cached = await getCachedDailyMarketBrief(timezone);
+      // Bound the IndexedDB cache read so a hung persistent-cache layer
+      // can't keep the panel on its default Loading state forever — fall
+      // through to "build from scratch" instead.
+      const cached = await withTimeout(
+        getCachedDailyMarketBrief(timezone),
+        3_000,
+        'daily-brief-cache-read',
+      ).catch(() => null);
 
       if (cached?.available) {
         this.callPanel('daily-market-brief', 'renderBrief', cached, 'cached');
@@ -1722,29 +1773,51 @@ export class DataLoaderManager implements AppModule {
         this.callPanel('daily-market-brief', 'showLoading', 'Building daily market brief...');
       }
 
+      // Each context collector calls a generated RPC client without its
+      // own timeout (`getFearGreedIndex`, `getFredSeriesBatch`); the
+      // `try { ... } catch` inside each collector only handles rejections
+      // — a hung RPC sits forever and `Promise.allSettled` waits with it.
+      // That's the same hang-class this PR was opened to fix; an earlier
+      // commit missed these three call sites because they were two layers
+      // up from the `summaryProvider` await I was hunting. 8s per
+      // collector is generous for an RPC and leaves >36s of the outer
+      // 60s budget for the actual LLM call.
+      // `_collectSectorContext` is sync (reads only hydrated data) so it
+      // needs no wrapping; allSettled accepts non-promises directly.
       const [r0, r1, r2] = await Promise.allSettled([
-        this._collectRegimeContext(),
-        this._collectYieldCurveContext(),
+        withTimeout(this._collectRegimeContext(), 8_000, 'daily-brief-regime-context'),
+        withTimeout(this._collectYieldCurveContext(), 8_000, 'daily-brief-yield-context'),
         this._collectSectorContext(),
       ]);
       const regimeContext = r0.status === 'fulfilled' ? r0.value : undefined;
       const yieldCurveContext = r1.status === 'fulfilled' ? r1.value : undefined;
       const sectorContext = r2.status === 'fulfilled' ? r2.value : undefined;
 
-      const brief = await buildDailyMarketBrief({
-        markets: this.ctx.latestMarkets,
-        newsByCategory: this.ctx.newsByCategory,
-        timezone,
-        regimeContext,
-        yieldCurveContext,
-        sectorContext,
-        frameworkAppend: getActiveFrameworkForPanel('daily-market-brief')?.systemPromptAppend,
-        newsCategories: SITE_VARIANT === 'commodity'
-          ? ['commodity-news', 'gold-silver', 'mining-news', 'energy', 'critical-minerals']
-          : SITE_VARIANT === 'energy'
-            ? ['live-news', 'energy', 'supply-chain']
-            : undefined,
-      });
+      // Wall-clock budget on the whole build. The inner summarizer has its
+      // own 45s cap (SUMMARIZER_TIMEOUT_MS in daily-market-brief.ts) and
+      // falls back to rules-based output, so this outer 60s budget only
+      // fires if the rules-based path itself hangs (shouldn't, but defensive
+      // — covers e.g. a getDefaultSummarizer() dynamic-import that never
+      // resolves). On timeout the existing catch below serves the cached
+      // version or shows an error, never letting the panel stay stuck.
+      const brief = await withTimeout(
+        buildDailyMarketBrief({
+          markets: this.ctx.latestMarkets,
+          newsByCategory: this.ctx.newsByCategory,
+          timezone,
+          regimeContext,
+          yieldCurveContext,
+          sectorContext,
+          frameworkAppend: getActiveFrameworkForPanel('daily-market-brief')?.systemPromptAppend,
+          newsCategories: SITE_VARIANT === 'commodity'
+            ? ['commodity-news', 'gold-silver', 'mining-news', 'energy', 'critical-minerals']
+            : SITE_VARIANT === 'energy'
+              ? ['live-news', 'energy', 'supply-chain']
+              : undefined,
+        }),
+        60_000,
+        'daily-brief-total-build',
+      );
 
       if (this.dailyBriefGeneration !== gen) return;
 
@@ -1755,12 +1828,37 @@ export class DataLoaderManager implements AppModule {
         return;
       }
 
-      await cacheDailyMarketBrief(brief);
+      // Render first, persist after. The previous order `await
+      // cacheDailyMarketBrief(brief); render(brief)` meant a hung
+      // IndexedDB / Tauri-Store write blocked the panel from ever
+      // displaying the finished brief — the build budget proved nothing
+      // by itself. Now: user sees the brief immediately; the cache write
+      // runs fire-and-forget with its own 5s budget so a hung backend
+      // becomes "no warmup for tomorrow's load" instead of "panel stuck
+      // on Building forever."
       this.callPanel('daily-market-brief', 'renderBrief', brief, 'live');
+      void withTimeout(
+        cacheDailyMarketBrief(brief),
+        5_000,
+        'daily-brief-cache-write',
+      ).catch((err) => {
+        console.warn('[DailyBrief] cache write failed or timed out:', (err as Error).message);
+      });
     } catch (error) {
       console.warn('[DailyBrief] Failed to build daily market brief:', error);
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      const cached = await getCachedDailyMarketBrief(timezone).catch(() => null);
+      // Same 3s cap as the upfront cache read above — covers the
+      // "build hung AND IndexedDB also degraded" double-failure mode
+      // (Greptile #3718 P2): without this guard the recovery path can
+      // itself hang, leaving the panel stuck on whatever the previous
+      // state was. .catch(() => null) absorbs both the TimeoutError and
+      // any persistent-cache read failure into the same null-result
+      // branch that the existing showError fallback already handles.
+      const cached = await withTimeout(
+        getCachedDailyMarketBrief(timezone),
+        3_000,
+        'daily-brief-cache-read-recovery',
+      ).catch(() => null);
       if (cached?.available) {
         this.callPanel('daily-market-brief', 'renderBrief', cached, 'cached');
         return;
@@ -3190,7 +3288,14 @@ export class DataLoaderManager implements AppModule {
     }
   }
 
-  private static readonly HAPPY_ITEMS_CACHE_KEY = 'happy-all-items';
+  // Bumped to v2 alongside src/services/rss.ts CACHE_PREFIX (`feed:` →
+  // `feed:v2:`). Pre-v2 entries here serialize NewsItem WITHOUT the new
+  // `pubDateMissing` flag — on hydrate they get `undefined`, which
+  // `effectivePubDateMs` treats as `false`, so items that previously had
+  // synthesized `Date.now()` stamps would fraudulently claim freshness
+  // for the 24h gate window. Pre-v2 entries are left to TTL out (no
+  // explicit invalidation needed).
+  private static readonly HAPPY_ITEMS_CACHE_KEY = 'happy-all-items:v2';
 
   async hydrateHappyPanelsFromCache(): Promise<void> {
     try {
@@ -3210,10 +3315,10 @@ export class DataLoaderManager implements AppModule {
       );
       this.callPanel('spotlight', 'setHeroStory',
         items.filter(item => item.happyCategory === 'humanity-kindness')
-          .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())[0]
+          .sort((a, b) => effectivePubDateMs(b) - effectivePubDateMs(a))[0]
       );
       this.callPanel('digest', 'setStories',
-        [...items].sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime()).slice(0, 5)
+        [...items].sort((a, b) => effectivePubDateMs(b) - effectivePubDateMs(a)).slice(0, 5)
       );
       this.callPanel('positive-feed', 'renderPositiveNews', items);
     } catch (err) {
@@ -3247,7 +3352,7 @@ export class DataLoaderManager implements AppModule {
 
     if (supplementary.length > 0) {
       const merged = [...curated, ...supplementary];
-      merged.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+      merged.sort((a, b) => effectivePubDateMs(b) - effectivePubDateMs(a));
       this.callPanel('positive-feed', 'renderPositiveNews', merged);
     }
 
@@ -3259,11 +3364,11 @@ export class DataLoaderManager implements AppModule {
 
     const heroItem = this.ctx.happyAllItems
       .filter(item => item.happyCategory === 'humanity-kindness')
-      .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())[0];
+      .sort((a, b) => effectivePubDateMs(b) - effectivePubDateMs(a))[0];
     this.callPanel('spotlight', 'setHeroStory', heroItem);
 
     const digestItems = [...this.ctx.happyAllItems]
-      .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
+      .sort((a, b) => effectivePubDateMs(b) - effectivePubDateMs(a))
       .slice(0, 5);
     this.callPanel('digest', 'setStories', digestItems);
 
@@ -3311,8 +3416,8 @@ export class DataLoaderManager implements AppModule {
   }
 
   private async loadProgressData(): Promise<void> {
-    const datasets = await fetchProgressData();
-    this.callPanel('progress', 'setData', datasets);
+    const result = await fetchProgressData();
+    this.callPanel('progress', 'setData', result);
   }
 
   private async loadSpeciesData(): Promise<void> {

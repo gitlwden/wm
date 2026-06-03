@@ -3,7 +3,8 @@ import type { McpPanelSpec } from '@/services/mcp-store';
 import { t } from '@/services/i18n';
 import { h } from '@/utils/dom-utils';
 import { proxyUrl, widgetAgentUrl } from '@/utils/proxy';
-import { escapeHtml } from '@/utils/sanitize';
+import { premiumFetch } from '@/services/premium-fetch';
+import { escapeHtml, unsafeRawHtml } from '@/utils/sanitize';
 import { isProWidgetEnabled, getBrowserTesterKey, getWidgetAgentKey, getProWidgetKey } from '@/services/widget-store';
 import { wrapProWidgetHtml } from '@/utils/widget-sanitizer';
 
@@ -89,7 +90,11 @@ export class McpDataPanel extends Panel {
   async fetchData(): Promise<void> {
     this.showLoading();
     try {
-      const resp = await fetch(proxyUrl('/api/mcp-proxy'), {
+      // premiumFetch attaches the Clerk Pro Bearer for normal web Pro
+      // users. /api/mcp-proxy is in PREMIUM_RPC_PATHS so the path gate
+      // fires; the server-side isCallerPremium check accepts Bearer,
+      // wm_ user keys, and enterprise keys (PR #3768).
+      const resp = await premiumFetch(proxyUrl('/api/mcp-proxy'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,10 +121,10 @@ export class McpDataPanel extends Panel {
     if (jsonData !== null && isProWidgetEnabled()) {
       const hash = JSON.stringify(jsonData).slice(0, 8192);
       if (hash === this.lastJsonHash && this.cachedWidgetHtml) {
-        this.setContent(`
+        this.setSafeContent(unsafeRawHtml(`
           <div class="mcp-panel-meta">${this.buildMetaLine()}</div>
           <div class="mcp-panel-content mcp-panel-widget">${wrapProWidgetHtml(this.cachedWidgetHtml)}</div>
-        `);
+        `, 'legacy Panel.setContent() migration'));
         return;
       }
       this.lastJsonHash = hash;
@@ -130,10 +135,10 @@ export class McpDataPanel extends Panel {
 
     const meta = this.buildMetaLine();
     const content = this.extractText(result);
-    this.setContent(`
+    this.setSafeContent(unsafeRawHtml(`
       <div class="mcp-panel-meta">${meta}</div>
       <div class="mcp-panel-content">${content}</div>
-    `);
+    `, 'legacy Panel.setContent() migration'));
   }
 
   private extractJsonData(result: McpResult): unknown | null {
@@ -159,13 +164,13 @@ export class McpDataPanel extends Panel {
     this.visualizing = true;
     this.pendingHash = startHash;
 
-    this.setContent(`
+    this.setSafeContent(unsafeRawHtml(`
       <div class="mcp-panel-meta">${this.buildMetaLine()}</div>
       <div class="mcp-panel-content mcp-panel-visualizing">
         <div class="panel-loading-radar"><span class="panel-radar-sweep"></span><span class="panel-radar-dot"></span></div>
         <span class="mcp-vis-label">${escapeHtml(t('mcp.generatingVisualization'))}</span>
       </div>
-    `);
+    `, 'legacy Panel.setContent() migration'));
 
     const toolName = this.spec.toolName.slice(0, 100);
     const preview = JSON.stringify(jsonData, null, 2).slice(0, 3000);
@@ -216,10 +221,10 @@ export class McpDataPanel extends Panel {
             // Only cache and render if data hasn't changed since we started
             if (this.pendingHash === this.lastJsonHash) {
               this.cachedWidgetHtml = resultHtml;
-              this.setContent(`
+              this.setSafeContent(unsafeRawHtml(`
                 <div class="mcp-panel-meta">${this.buildMetaLine()}</div>
                 <div class="mcp-panel-content mcp-panel-widget">${wrapProWidgetHtml(resultHtml)}</div>
-              `);
+              `, 'legacy Panel.setContent() migration'));
               rendered = true;
             }
           } else if (event.type === 'error') {
@@ -232,10 +237,10 @@ export class McpDataPanel extends Panel {
       if (!rendered) {
         if (resultHtml && this.pendingHash === this.lastJsonHash) {
           this.cachedWidgetHtml = resultHtml;
-          this.setContent(`
+          this.setSafeContent(unsafeRawHtml(`
             <div class="mcp-panel-meta">${this.buildMetaLine()}</div>
             <div class="mcp-panel-content mcp-panel-widget">${wrapProWidgetHtml(resultHtml)}</div>
-          `);
+          `, 'legacy Panel.setContent() migration'));
         } else if (!resultHtml) {
           this.cachedWidgetHtml = null;
           this.lastJsonHash = null;

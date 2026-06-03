@@ -5,7 +5,7 @@ import type { MapView } from '@/components';
 import type { Command } from '@/config/commands';
 import { SearchModal } from '@/components';
 import { CIIPanel } from '@/components';
-import { SITE_VARIANT, STORAGE_KEYS } from '@/config';
+import { SITE_VARIANT, STORAGE_KEYS, ALL_PANELS, getEffectivePanelConfig, isPanelEntitled } from '@/config';
 import { getAllowedLayerKeys, isLayerExecutable } from '@/config/map-layer-definitions';
 import type { MapRenderer } from '@/config/map-layer-definitions';
 import type { MapVariant } from '@/config/map-layer-definitions';
@@ -34,6 +34,8 @@ import { getAuthState } from '@/services/auth-state';
 
 export interface SearchManagerCallbacks {
   openCountryBriefByCode: (code: string, country: string) => void;
+  /** Enables a currently-disabled panel (CMD+K "Add"). Returns false if blocked (unknown / free-tier cap). */
+  enablePanel: (panelId: string) => boolean;
 }
 
 export class SearchManager implements AppModule {
@@ -209,9 +211,7 @@ export class SearchManager implements AppModule {
 
     this.ctx.searchModal.registerSource('country', this.buildCountrySearchItems());
 
-    this.ctx.searchModal.setActivePanels(
-      Object.entries(this.ctx.panelSettings).filter(([, v]) => v.enabled).map(([k]) => k)
-    );
+    this.syncPanelSearchIndex();
     // Filter CMD+K layer commands by (a) variant-allowed, (b) renderer
     // compatibility, (c) DeckGL state for deckGLOnly layers. Without this,
     // layer commands surface in CMD+K on variants where they'd silently
@@ -534,9 +534,25 @@ export class SearchManager implements AppModule {
         break;
       }
 
-      case 'panel':
-        this.scrollToPanel(action);
+      case 'panel': {
+        // CMD+K can now surface disabled-but-available panels (Add affordance).
+        // Enable first so the element exists, then scroll once it renders.
+        // An optional `@<tab>` suffix deep-links to a specific tab within the
+        // panel (e.g. `consumer-prices@world` → global inflation view).
+        const [panelId, subTab] = action.split('@');
+        if (!panelId) break;
+        const cfg = this.ctx.panelSettings[panelId];
+        if (cfg && !cfg.enabled) {
+          if (this.callbacks.enablePanel(panelId)) {
+            this.scrollToPanelWhenReady(panelId);
+            if (subTab) this.dispatchPanelTab(panelId, subTab);
+            break;
+          }
+        }
+        this.scrollToPanel(panelId);
+        if (subTab) this.dispatchPanelTab(panelId, subTab);
         break;
+      }
 
       case 'view':
         if (action === 'dark' || action === 'light') {
@@ -608,6 +624,38 @@ export class SearchManager implements AppModule {
     }
   }
 
+  /**
+   * Scrolls to a panel that may have just been enabled. Async-mounted panels
+   * (e.g. deduction, regional-intelligence mount via dynamic import) aren't in
+   * the DOM on the next tick, so retry over ~1s before giving up. The panel is
+   * already enabled regardless — only the scroll is best-effort.
+   */
+  private scrollToPanelWhenReady(panelId: string, attemptsLeft = 12): void {
+    if (document.querySelector(`[data-panel="${panelId}"]`)) {
+      this.scrollToPanel(panelId);
+      return;
+    }
+    if (attemptsLeft <= 0) return;
+    setTimeout(() => this.scrollToPanelWhenReady(panelId, attemptsLeft - 1), 80);
+  }
+
+  /**
+   * Deep-links to a tab inside a panel by dispatching the panel's open-tab
+   * event once it's mounted. The element existing in the DOM implies the
+   * panel's constructor (and its event listener) has run, so we retry until
+   * then — mirrors scrollToPanelWhenReady for async-mounted panels.
+   */
+  private dispatchPanelTab(panelId: string, tab: string, attemptsLeft = 12): void {
+    // Currently only Consumer Prices exposes a tab deep-link contract.
+    if (panelId !== 'consumer-prices') return;
+    if (document.querySelector(`[data-panel="${panelId}"]`)) {
+      window.dispatchEvent(new CustomEvent('wm-consumer-prices-open-tab', { detail: { tab } }));
+      return;
+    }
+    if (attemptsLeft <= 0) return;
+    setTimeout(() => this.dispatchPanelTab(panelId, tab, attemptsLeft - 1), 80);
+  }
+
   private scrollToPanel(panelId: string): void {
     const panel = document.querySelector(`[data-panel="${panelId}"]`);
     if (panel) {
@@ -667,9 +715,7 @@ export class SearchManager implements AppModule {
   updateSearchIndex(): void {
     if (!this.ctx.searchModal) return;
 
-    this.ctx.searchModal.setActivePanels(
-      Object.entries(this.ctx.panelSettings).filter(([, v]) => v.enabled).map(([k]) => k)
-    );
+    this.syncPanelSearchIndex();
     this.ctx.searchModal.registerSource('country', this.buildCountrySearchItems());
 
     const newsItems = this.ctx.allNews.slice(0, 500).map(n => ({
@@ -698,6 +744,31 @@ export class SearchManager implements AppModule {
         data: m,
       })));
     }
+  }
+
+  /**
+   * Feeds CMD+K two panel sets: `active` (currently enabled) and `available`
+   * (every entitled panel the user could cross-enable on this variant — all
+   * of ALL_PANELS merge into panelSettings per App.ts). The modal surfaces
+   * available-but-disabled panels with an "Add" affordance; selecting one
+   * routes through enablePanel(). Without the available set, search could
+   * only jump to panels already on screen — the core discoverability gap.
+   */
+  private syncPanelSearchIndex(): void {
+    if (!this.ctx.searchModal) return;
+    // isProUser() already folds in getAuthState().user?.role === 'pro'.
+    const isPro = isProUser();
+    this.ctx.searchModal.setActivePanels(
+      Object.entries(this.ctx.panelSettings).filter(([, v]) => v.enabled).map(([k]) => k)
+    );
+    this.ctx.searchModal.setAvailablePanels(
+      Object.keys(this.ctx.panelSettings).filter((k) => {
+        // Keep unregistered/dynamic keys out of search; the resolver would
+        // otherwise return a disabled synthetic fallback for unknown keys.
+        const cfg = ALL_PANELS[k] ? getEffectivePanelConfig(k, SITE_VARIANT) : undefined;
+        return cfg ? isPanelEntitled(k, cfg, isPro) : false;
+      })
+    );
   }
 
   private buildCountrySearchItems(): { id: string; title: string; subtitle: string; data: { code: string; name: string } }[] {

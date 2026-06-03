@@ -300,14 +300,11 @@ const EXTRACTION_RULES = {
   gasShare: { type: 'energy-mix-field', field: 'gasShare' },
   coalShare: { type: 'energy-mix-field', field: 'coalShare' },
   renewShare: { type: 'energy-mix-field', field: 'renewShare' },
-  gasStorageStress: { type: 'gas-storage-field', field: 'fillPct' },
+  euGasStorageStress: { type: 'gas-storage-field', field: 'fillPct' },
   energyPriceStress: { type: 'not-implemented', reason: 'Scorer input is a global mean across commodity price changes; no per-country variance' },
   electricityConsumption: { type: 'static-wb-infrastructure', code: 'EG.USE.ELEC.KH.PC' },
-  // PR 1 v2 energy indicators — `tier: 'experimental'` until seeders
-  // land. The extractor reads the same bulk-payload shape the scorer
-  // reads: { countries: { [ISO2]: { value, year } } }. When seed is
-  // absent the pairedSampleSize drops to 0 and Pearson returns 0,
-  // surfacing the "no influence yet" state in the harness output.
+  // PR 1 v2 energy indicators. The extractor reads the same bulk-payload
+  // shape the scorer reads: { countries: { [ISO2]: { value, year } } }.
   // importedFossilDependence is a SCORER-LEVEL COMPOSITE, not a direct
   // seed-key read: scoreEnergyV2 computes
   //   fossilElectricityShare × max(netImports, 0) / 100
@@ -366,6 +363,7 @@ const EXTRACTION_RULES = {
   recoveryGovRevenue: { type: 'recovery-country-field', key: 'resilience:recovery:fiscal-space:v1', field: 'govRevenuePct' },
   recoveryFiscalBalance: { type: 'recovery-country-field', key: 'resilience:recovery:fiscal-space:v1', field: 'fiscalBalancePct' },
   recoveryDebtToGdp: { type: 'recovery-country-field', key: 'resilience:recovery:fiscal-space:v1', field: 'debtToGdpPct' },
+  debtSustainabilityGap: { type: 'recovery-country-field', key: 'resilience:recovery:fiscal-space:v1', field: 'debtSustainabilityGapPct' },
   recoveryReserveMonths: { type: 'recovery-country-field', key: 'resilience:recovery:reserve-adequacy:v1', field: 'reserveMonths' },
   // PR 2 §3.4: replacement for recoveryReserveMonths at the tighter 1..12
   // anchor. Same seed key + field; the harness extracts the same value
@@ -376,8 +374,8 @@ const EXTRACTION_RULES = {
   recoveryFuelStockDays: { type: 'recovery-country-field', key: 'resilience:recovery:fuel-stocks:v1', field: 'stockDays' },
   // PR 2 §3.4: SWF seed. Field is totalEffectiveMonths (pre-haircut sum
   // across a country's manifest funds). Countries without a manifest
-  // entry score 0 via the substantive-no-SWF branch in the scorer;
-  // the harness treats "absent from payload" as 0 for correlation math.
+  // entry are structurally not-applicable in the scorer; the harness
+  // treats "absent from payload" as 0 for correlation math.
   recoverySovereignWealthEffectiveMonths: { type: 'recovery-country-field', key: 'resilience:recovery:sovereign-wealth:v1', field: 'totalEffectiveMonths' },
 
   // ── stateContinuity derived signals ─────────────────────────────────

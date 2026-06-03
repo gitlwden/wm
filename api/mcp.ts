@@ -1,32 +1,5 @@
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
-// @ts-expect-error — JS module, no declaration file
-import { getPublicCorsHeaders } from './_cors.js';
-// @ts-expect-error — JS module, no declaration file
-import { jsonResponse } from './_json-response.js';
-// @ts-expect-error — JS module, no declaration file
-import { readJsonFromUpstash, redisPipeline as rawRedisPipeline, getRedisCredentials } from './_upstash-json.js';
-// @ts-expect-error — JS module, no declaration file
-import { resolveBearerToContext } from './_oauth-token.js';
-// @ts-expect-error — JS module, no declaration file
-import { timingSafeIncludes } from './_crypto.js';
-// @ts-expect-error — JS module, no declaration file
-import { captureSilentError } from './_sentry-edge.js';
-import COUNTRY_BBOXES from '../shared/country-bboxes.js';
-// @ts-expect-error — generated JS module, no declaration file
-import MINING_SITES_RAW from '../shared/mining-sites.js';
-import { getEntitlements } from '../server/_shared/entitlement-check';
-import {
-  validateProMcpTokenOrNull,
-  dailyCounterKey,
-  secondsUntilUtcMidnight,
-  PRO_DAILY_QUOTA_LIMIT,
-  PRO_DAILY_QUOTA_TTL_SECONDS,
-} from '../server/_shared/pro-mcp-token';
-import {
-  signInternalMcpRequest,
-  buildInternalMcpHeaders,
-} from '../server/_shared/mcp-internal-hmac';
+// Vercel-edge route entry. The implementation lives under ./mcp/; this file
+// stays here so the deployed route URL (`/api/mcp`) doesn't move.
 
 export const config = { runtime: 'edge' };
 
@@ -1848,6 +1821,37 @@ export default async function handler(
 // or `_coverageKeys` (RpcToolDef hybrid), or explicitly excluded via the
 // test's EXCLUDED_FROM_MCP map with a documented reason.
 // ---------------------------------------------------------------------------
+export {
+  emitTelemetry,
+  MCP_TOOLCALL_TELEMETRY_KEYS,
+  MCP_TOOLS_LIST_TELEMETRY_KEYS,
+  principalIdForLog,
+  telemetryEnabled,
+} from './mcp/telemetry';
+export type {
+  ApplyJmespathResult,
+  JmespathFailKind,
+  McpAuthContext,
+  McpHandlerDeps,
+  PublicToolShape,
+} from './mcp/types';
+export { compressDescription, utf8ByteLength } from './mcp/utils';
+
+export { buildPromptResponse, PROMPT_LIST_RESPONSE, PROMPT_REGISTRY } from './mcp/prompts/index';
+export { buildResourceResponse, RESOURCE_LIST_RESPONSE, RESOURCE_REGISTRY } from './mcp/resources/index';
+export { CHOKEPOINT_SLUGS } from './mcp/resources/slugs';
+
+// Test-only escape hatch. Exposes the TOOL_REGISTRY by REFERENCE so mutations
+// inside `tests/mcp-tool-output-contracts.test.mjs` (which monkey-patches
+// `_execute` on individual RPC tools) propagate through the live binding.
+// PROMPT_REGISTRY + RESOURCE_REGISTRY follow the same live-binding contract
+// so tests that monkey-patch one (e.g. sabotage cases) observe the same
+// array the handler dispatches against.
+import { PROMPT_REGISTRY as __PROMPT_REGISTRY } from './mcp/prompts/index';
+import { RESOURCE_REGISTRY as __RESOURCE_REGISTRY } from './mcp/resources/index';
+import { TOOL_REGISTRY as __TOOL_REGISTRY } from './mcp/registry/index';
 export const __testing__ = {
-  TOOL_REGISTRY,
+  TOOL_REGISTRY: __TOOL_REGISTRY,
+  PROMPT_REGISTRY: __PROMPT_REGISTRY,
+  RESOURCE_REGISTRY: __RESOURCE_REGISTRY,
 };

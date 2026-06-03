@@ -1,4 +1,5 @@
-import type { ResilienceDimensionId } from './_dimension-scorers.ts';
+import type { ResilienceDimensionId } from './_dimension-scorers';
+import { MACRO_FISCAL_INDICATOR_WEIGHTS } from './_macro-fiscal-weights';
 
 // Phase 2 T2.2a signal tiering. See docs/internal/country-resilience-upgrade-plan.md
 // section "Signal tiering (Core / Enrichment / Experimental)".
@@ -24,7 +25,11 @@ export type IndicatorSpec = {
   direction: 'higherBetter' | 'lowerBetter';
   goalposts: { worst: number; best: number };
   weight: number;
+  // Primary source key for legacy callers and simple one-source indicators.
   sourceKey: string;
+  // Composite indicators can list every upstream source they depend on.
+  // Must include `sourceKey`; freshness/source-failure audits expand this list.
+  sourceKeys?: readonly [string, ...string[]];
   scope: 'global' | 'curated';
   cadence: 'realtime' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'annual';
   imputation?: { type: 'absenceSignal' | 'conservative'; score: number; certainty: number };
@@ -48,15 +53,21 @@ export type IndicatorSpec = {
   comprehensive: boolean;
 };
 
+export function getIndicatorSourceKeys(
+  indicator: Pick<IndicatorSpec, 'sourceKey' | 'sourceKeys'>,
+): readonly [string, ...string[]] {
+  return indicator.sourceKeys ?? [indicator.sourceKey];
+}
+
 export const INDICATOR_REGISTRY: IndicatorSpec[] = [
-  // ── macroFiscal (4 sub-metrics) ───────────────────────────────────────────
+  // ── macroFiscal (5 sub-metrics) ───────────────────────────────────────────
   {
     id: 'govRevenuePct',
     dimension: 'macroFiscal',
     description: 'Government revenue as % of GDP (IMF GGR_G01_GDP_PT); fiscal capacity proxy',
     direction: 'higherBetter',
     goalposts: { worst: 5, best: 45 },
-    weight: 0.4,
+    weight: MACRO_FISCAL_INDICATOR_WEIGHTS.govRevenuePct,
     sourceKey: 'economic:imf:macro:v2',
     scope: 'global',
     cadence: 'annual',
@@ -71,7 +82,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'Annual debt growth rate; rapid accumulation signals fiscal stress',
     direction: 'lowerBetter',
     goalposts: { worst: 20, best: 0 },
-    weight: 0.2,
+    weight: MACRO_FISCAL_INDICATOR_WEIGHTS.debtGrowthRate,
     sourceKey: 'economic:national-debt:v1',
     scope: 'global',
     cadence: 'annual',
@@ -86,7 +97,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'Current account balance as % of GDP (IMF); external position vulnerability',
     direction: 'higherBetter',
     goalposts: { worst: -20, best: 20 },
-    weight: 0.2,
+    weight: MACRO_FISCAL_INDICATOR_WEIGHTS.currentAccountPct,
     sourceKey: 'economic:imf:macro:v2',
     scope: 'global',
     cadence: 'annual',
@@ -101,7 +112,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'Unemployment rate (IMF WEO LUR); higher = labor-market slack & lower fiscal absorption capacity',
     direction: 'lowerBetter',
     goalposts: { worst: 25, best: 3 },
-    weight: 0.15,
+    weight: MACRO_FISCAL_INDICATOR_WEIGHTS.unemploymentPct,
     sourceKey: 'economic:imf:labor:v1',
     scope: 'global',
     cadence: 'annual',
@@ -116,7 +127,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'BIS household debt service ratio (% income, quarterly). DSR > 10% precedes banking crises (Drehmann 2011). Lower is safer; goalposts anchor 20% → 0, 0% → 100.',
     direction: 'lowerBetter',
     goalposts: { worst: 20, best: 0 },
-    weight: 0.05,
+    weight: MACRO_FISCAL_INDICATOR_WEIGHTS.householdDebtService,
     sourceKey: 'economic:bis:dsr:v1',
     scope: 'curated',
     cadence: 'quarterly',
@@ -492,18 +503,22 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     comprehensive: false,
   },
 
-  // ── energy (7 sub-metrics) ────────────────────────────────────────────────
+  // ── energy (active production construct = v2) ─────────────────────────────
+  // The legacy standalone indicators remain registered for rollback/docs and
+  // the compare harness, but the production runtime manifest reports
+  // constructVersions.energy='v2'. The flat tier field therefore represents
+  // the active production construct, not the dormant rollback path.
   {
     id: 'energyImportDependency',
     dimension: 'energy',
-    description: 'IEA energy import dependency (% of total energy supply from imports)',
+    description: 'LEGACY rollback standalone input: IEA energy import dependency (% of total energy supply from imports). In active energy v2 this source is absorbed into importedFossilDependence rather than scored as its own indicator.',
     direction: 'lowerBetter',
     goalposts: { worst: 100, best: 0 },
     weight: 0.25,
     sourceKey: 'resilience:static:{ISO2}',
     scope: 'global',
     cadence: 'annual',
-    tier: 'core',
+    tier: 'experimental',
     coverage: 188,
     license: 'open-data',
     comprehensive: true,
@@ -511,14 +526,14 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'gasShare',
     dimension: 'energy',
-    description: 'Natural gas share of energy mix (%); high share = single-source vulnerability',
+    description: 'LEGACY rollback standalone input: natural gas share of energy mix (%). Retired under active energy v2 because it conflates domestic fossil generation with import exposure.',
     direction: 'lowerBetter',
     goalposts: { worst: 100, best: 0 },
     weight: 0.12,
     sourceKey: 'energy:mix:v1:{ISO2}',
     scope: 'global',
     cadence: 'annual',
-    tier: 'core',
+    tier: 'experimental',
     coverage: 195,
     license: 'open-attribution',
     comprehensive: true,
@@ -526,14 +541,14 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'coalShare',
     dimension: 'energy',
-    description: 'Coal share of energy mix (%); high share = transition risk and pollution',
+    description: 'LEGACY rollback standalone input: coal share of energy mix (%). Retired under active energy v2 because domestic coal is not an import-dependence signal.',
     direction: 'lowerBetter',
     goalposts: { worst: 100, best: 0 },
     weight: 0.08,
     sourceKey: 'energy:mix:v1:{ISO2}',
     scope: 'global',
     cadence: 'annual',
-    tier: 'core',
+    tier: 'experimental',
     coverage: 195,
     license: 'open-attribution',
     comprehensive: true,
@@ -541,22 +556,22 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'renewShare',
     dimension: 'energy',
-    description: 'Renewable energy share of energy mix (%); diversification and resilience',
+    description: 'LEGACY rollback standalone input: renewable energy share of energy mix (%). Absorbed by active energy v2 lowCarbonGenerationShare, which also credits nuclear and hydroelectric generation.',
     direction: 'higherBetter',
     goalposts: { worst: 0, best: 100 },
     weight: 0.05,
     sourceKey: 'energy:mix:v1:{ISO2}',
     scope: 'global',
     cadence: 'annual',
-    tier: 'core',
+    tier: 'experimental',
     coverage: 195,
     license: 'open-attribution',
     comprehensive: true,
   },
   {
-    id: 'gasStorageStress',
+    id: 'euGasStorageStress',
     dimension: 'energy',
-    description: 'Gas storage fill stress: (80 - fillPct) / 80 clamped to [0,1], scaled to 0-100',
+    description: 'EU gas storage fill stress: (80 - fillPct) / 80 clamped to [0,1], scaled to 0-100. Active energy v2 scopes the signal to EU gas-storage countries and contributes null outside that set.',
     direction: 'lowerBetter',
     goalposts: { worst: 100, best: 0 },
     weight: 0.1,
@@ -576,7 +591,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'Mean absolute energy price change across commodities',
     direction: 'lowerBetter',
     goalposts: { worst: 25, best: 0 },
-    weight: 0.1,
+    weight: 0.15,
     sourceKey: 'economic:energy:v1:all',
     scope: 'global',
     cadence: 'daily',
@@ -588,25 +603,22 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'electricityConsumption',
     dimension: 'energy',
-    description: 'Per-capita electricity consumption (kWh/year, World Bank EG.USE.ELEC.KH.PC); low = grid collapse',
+    description: 'LEGACY rollback standalone input: per-capita electricity consumption (kWh/year, World Bank EG.USE.ELEC.KH.PC). Retired under active energy v2 because it is a wealth/load proxy rather than a resilience mechanism.',
     direction: 'higherBetter',
     goalposts: { worst: 200, best: 8000 },
     weight: 0.3,
     sourceKey: 'resilience:static:{ISO2}',
     scope: 'global',
     cadence: 'annual',
-    tier: 'core',
+    tier: 'experimental',
     coverage: 217,
     license: 'open-data',
     comprehensive: true,
   },
 
-  // ── PR 1 energy-construct v2 (tier='experimental' until RESILIENCE_ENERGY_V2_ENABLED ──
-  // flips default-on and seeders land). Indicators are registered so
-  // the per-indicator harness in scripts/compare-resilience-current-vs-
-  // proposed.mjs can begin tracking them, but the 'experimental' tier
-  // keeps them OUT of the Core coverage gate (>=180 countries required
-  // per Phase 2 A4) until seed coverage is confirmed at flag-flip.
+  // ── energy v2 global inputs ───────────────────────────────────────────────
+  // Production is flipped to energy v2, so these now participate in the Core
+  // coverage/license gates. The required seed coverage is >=188 countries.
   {
     id: 'importedFossilDependence',
     dimension: 'energy',
@@ -615,10 +627,14 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     goalposts: { worst: 100, best: 0 },
     weight: 0.35,
     sourceKey: 'resilience:fossil-electricity-share:v1',
+    sourceKeys: [
+      'resilience:fossil-electricity-share:v1',
+      'resilience:static:{ISO2}',
+    ],
     scope: 'global',
     cadence: 'annual',
     imputation: { type: 'conservative', score: 50, certainty: 0.3 },
-    tier: 'experimental',
+    tier: 'core',
     coverage: 190,
     license: 'open-data',
     comprehensive: true,
@@ -634,7 +650,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     scope: 'global',
     cadence: 'annual',
     imputation: { type: 'conservative', score: 30, certainty: 0.3 },
-    tier: 'experimental',
+    tier: 'core',
     coverage: 190,
     license: 'open-data',
     comprehensive: true,
@@ -650,7 +666,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     scope: 'global',
     cadence: 'annual',
     imputation: { type: 'conservative', score: 50, certainty: 0.3 },
-    tier: 'experimental',
+    tier: 'core',
     coverage: 188,
     license: 'open-data',
     comprehensive: true,
@@ -809,7 +825,11 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     comprehensive: false,
   },
 
-  // ── borderSecurity (2 sub-metrics) ────────────────────────────────────────
+  // ── borderSecurity / "Conflict & Displacement" (2 sub-metrics) ───────────
+  // #3737 — internal id stays `borderSecurity` for proto / cache stability,
+  // but the dimension measures armed-conflict event intensity + refugee
+  // displacement, not border-control infrastructure. User-facing label is
+  // "Conflict" (widget) / "Conflict & Displacement" (methodology doc).
   {
     id: 'ucdpConflict',
     dimension: 'borderSecurity',
@@ -847,10 +867,11 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   },
 
   // ── informationCognitive (3 sub-metrics) ──────────────────────────────────
-  // Promoted back to Core in T2.9 after language / source-density
-  // normalization landed (getLanguageCoverageFactor in _language-coverage.ts).
-  // Social velocity and news threat scores are now adjusted by the
-  // English-language coverage factor before normalization.
+  // The velocity + news-threat sub-indicators are weight-attenuated by
+  // `getLanguageCoverageFactor` (_language-coverage.ts) so that countries with
+  // sparse English-language news coverage lean more heavily on the static RSF
+  // press-freedom indicator (which is coverage-independent). See #3736 for the
+  // earlier divide-amplification bug this replaced.
   {
     id: 'rsfPressFreedom',
     dimension: 'informationCognitive',
@@ -869,7 +890,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'socialVelocity',
     dimension: 'informationCognitive',
-    description: 'Reddit social velocity score (log10(velocity+1)); language-normalized viral narrative stress',
+    description: 'Reddit social velocity score (log10(velocity+1)); sub-indicator weight scales with English-language coverage',
     direction: 'lowerBetter',
     goalposts: { worst: 3, best: 0 },
     weight: 0.15,
@@ -884,7 +905,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'newsThreatScore',
     dimension: 'informationCognitive',
-    description: 'AI news threat summary (critical=4x, high=2x, medium=1x, low=0.5x); language-normalized',
+    description: 'AI news threat summary (critical=4x, high=2x, medium=1x, low=0.5x); sub-indicator weight scales with English-language coverage',
     direction: 'lowerBetter',
     goalposts: { worst: 20, best: 0 },
     weight: 0.3,
@@ -1011,14 +1032,18 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     comprehensive: true,
   },
 
-  // ── fiscalSpace (3 sub-metrics) ──────────────────────────────────────────
+  // ── fiscalSpace (4 sub-metrics) ──────────────────────────────────────────
+  // Weights rebalanced from 0.4/0.3/0.3 → 0.25/0.20/0.20/0.35 to make room
+  // for debtSustainabilityGap as the largest single slice (it's the most
+  // informative single signal — integrates pb, r, g, d, and their
+  // interaction). Sum invariant: 0.25 + 0.20 + 0.20 + 0.35 = 1.0.
   {
     id: 'recoveryGovRevenue',
     dimension: 'fiscalSpace',
     description: 'Government revenue as % of GDP (IMF GGR_G01_GDP_PT); fiscal mobilization capacity for recovery',
     direction: 'higherBetter',
     goalposts: { worst: 5, best: 45 },
-    weight: 0.4,
+    weight: 0.25,
     sourceKey: 'resilience:recovery:fiscal-space:v1',
     scope: 'global',
     cadence: 'annual',
@@ -1033,7 +1058,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'General government net lending/borrowing as % of GDP (IMF GGXCNL_G01_GDP_PT); deficit signals reduced recovery firepower',
     direction: 'higherBetter',
     goalposts: { worst: -15, best: 5 },
-    weight: 0.3,
+    weight: 0.20,
     sourceKey: 'resilience:recovery:fiscal-space:v1',
     scope: 'global',
     cadence: 'annual',
@@ -1048,12 +1073,34 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'General government gross debt as % of GDP (IMF GGXWDG_NGDP_PT); high debt limits recovery borrowing capacity',
     direction: 'lowerBetter',
     goalposts: { worst: 150, best: 0 },
-    weight: 0.3,
+    weight: 0.20,
     sourceKey: 'resilience:recovery:fiscal-space:v1',
     scope: 'global',
     cadence: 'annual',
     tier: 'core',
     coverage: 190,
+    license: 'open-data',
+    comprehensive: true,
+  },
+  {
+    id: 'debtSustainabilityGap',
+    dimension: 'fiscalSpace',
+    description: 'Primary-balance gap to debt-stabilizing level: gap = pb − ((r−g)/(1+g))·d (IMF DSA construct). Positive = debt path declining, negative = rising. r derived from interest expense / debt (overall balance minus primary balance); g from compounded real growth × (1+CPI). Inflation cap at 10% drops gap to null for inflation-tax-regime countries (Argentina, Turkey, Lebanon, Egypt, Nigeria, Ethiopia, etc.) where high nominal-GDP growth mechanically erodes debt while masking underlying fiscal pathology; fiscal-3 still scores them.',
+    direction: 'higherBetter',
+    goalposts: { worst: -5, best: 3 },
+    weight: 0.35,
+    sourceKey: 'resilience:recovery:fiscal-space:v1',
+    scope: 'global',
+    cadence: 'annual',
+    // Tier: 'enrichment' — the indicator excludes inflation-tax-regime
+    // countries by design (CPI > 10% → gap=null), so it structurally cannot
+    // meet the Core-tier ≥180 countries coverage invariant. Scorer doesn't
+    // filter by tier; this is a quality classification. The 3 sibling
+    // fiscalSpace indicators (revenue/balance/debt) remain Core at coverage
+    // 190. Cap tightened from 25% in 2026-05-19 follow-up to PR #3669 after
+    // Lebanon scored #1 at 14.6% inflation.
+    tier: 'enrichment',
+    coverage: 140,
     license: 'open-data',
     comprehensive: true,
   },
@@ -1109,11 +1156,12 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   // transform: score = 100 × (1 − exp(−effectiveMonths / 12)) to prevent
   // Norway-type outliers from dominating the recovery pillar.
   //
-  // Coverage for the registry entry is the current manifest size (8
-  // funds across NO / AE / SA / KW / QA / SG). Countries NOT in the
-  // manifest score 0 with full coverage (substantive "no SWF" signal,
-  // not imputation) — this is by design per plan §3.4 "What happens to
-  // no-SWF countries."
+  // Registry coverage remains 8 as conservative metadata from the first
+  // SWF seed rollout; it is not the live YAML manifest count and not the
+  // per-country Path 3 coverage. Countries NOT in the manifest are
+  // not-applicable for this construct when the SWF payload is present
+  // (score 0, coverage 0, imputationClass 'not-applicable'), distinct
+  // from missing-seed IMPUTE.
   {
     id: 'recoverySovereignWealthEffectiveMonths',
     dimension: 'sovereignFiscalBuffer',
@@ -1124,7 +1172,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     sourceKey: 'resilience:recovery:sovereign-wealth:v1',
     scope: 'global',
     cadence: 'quarterly',
-    // tier='experimental' because the manifest ships with 8 funds (< the
+    // tier='experimental' because the manifest ships below the
     // 180-country core-tier threshold / 137-country §3.6 gate). Non-SWF
     // countries are scored as dim-not-applicable (score 0, coverage 0,
     // imputationClass 'not-applicable') per plan 2026-04-26-001 §U3 —
@@ -1245,7 +1293,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'recoveryFuelStockDays',
     dimension: 'fuelStockDays',
-    description: 'RETIRED in PR 3. Legacy days-of-fuel-stock-cover (IEA Oil Stocks / EIA Weekly Petroleum Status). Does not contribute to the score — scoreFuelStockDays returns coverage=0 + imputationClass=null, and the dimension is excluded from confidence/coverage averages via the RESILIENCE_RETIRED_DIMENSIONS registry. Kept in the registry as tier=experimental for structural continuity; a globally-comparable recovery-fuel concept could replace this in a future PR.',
+    description: 'RETIRED in PR 3. Legacy days-of-fuel-stock-cover (IEA Oil Stocks / EIA Weekly Petroleum Status). Does not contribute to the score — scoreFuelStockDays returns coverage=0 + imputationClass=null, and the dimension is excluded from confidence/coverage averages via the RESILIENCE_RETIRED_DIMENSIONS registry. Kept in the registry as tier=experimental for structural continuity; a globally-comparable recovery-fuel concept could replace this in a future PR. NOTE: the seed-recovery-fuel-stocks Railway slot continues to populate `sourceKey` weekly even though scoreFuelStockDays does not read it — the data is preserved so a replacement dimension has historical timeseries to draw on. The matching /api/health probe was removed in PR #3764 because reporting STATUS:OK on data nothing reads was actively misleading.',
     direction: 'higherBetter',
     goalposts: { worst: 0, best: 120 },
     weight: 1.0,

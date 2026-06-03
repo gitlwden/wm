@@ -1,4 +1,5 @@
 import { isSessionTokenShape, validateSessionToken } from './_session.js';
+import { timingSafeIncludes } from './_crypto.js';
 
 const DESKTOP_ORIGIN_PATTERNS = [
   /^https?:\/\/tauri\.localhost(:\d+)?$/,
@@ -11,10 +12,26 @@ function isDesktopOrigin(origin) {
   return Boolean(origin) && DESKTOP_ORIGIN_PATTERNS.some(p => p.test(origin));
 }
 
-function isValidEnterpriseKey(key) {
+async function isValidEnterpriseKey(key) {
   if (!key) return false;
   const validKeys = (process.env.WORLDMONITOR_VALID_KEYS || '').split(',').filter(Boolean);
-  return validKeys.includes(key);
+  return timingSafeIncludes(key, validKeys);
+}
+
+function getCookie(req, name) {
+  const raw = req.headers.get('Cookie') || req.headers.get('cookie') || '';
+  if (!raw) return '';
+  const prefix = `${name}=`;
+  for (const part of raw.split(';')) {
+    const trimmed = part.trim();
+    if (!trimmed.startsWith(prefix)) continue;
+    try {
+      return decodeURIComponent(trimmed.slice(prefix.length));
+    } catch {
+      return trimmed.slice(prefix.length);
+    }
+  }
+  return '';
 }
 
 // Note: HTTP headers like Origin / Referer / Sec-Fetch-Site are entirely
@@ -38,7 +55,10 @@ function isValidEnterpriseKey(key) {
 // All call sites await this — see grep for migration history.
 export async function validateApiKey(req, options = {}) {
   const forceKey = options.forceKey === true;
-  const key = req.headers.get('X-WorldMonitor-Key') || req.headers.get('X-Api-Key');
+  const headerKey = req.headers.get('X-WorldMonitor-Key') || req.headers.get('X-Api-Key') || '';
+  const sessionCookie = getCookie(req, 'wm-session');
+  const testerCookie = getCookie(req, 'wm-pro-key') || getCookie(req, 'wm-widget-key');
+  const key = headerKey || testerCookie || sessionCookie;
   const origin = req.headers.get('Origin') || '';
 
   // Desktop app — when a key is present, validate it as enterprise. When no key
@@ -79,7 +99,7 @@ export async function validateApiKey(req, options = {}) {
   // Collision risk is negligible (wm_ user keys carry ≥192 bits of entropy
   // and would have to be added to the static env list to be honored at all,
   // which itself requires server-env-write access).
-  if (key && isValidEnterpriseKey(key)) {
+  if (key && await isValidEnterpriseKey(key)) {
     return { valid: true, required: true, kind: 'enterprise' };
   }
 

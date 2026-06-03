@@ -27,6 +27,7 @@ import type * as contactMessages from "../contactMessages.js";
 import type * as crons from "../crons.js";
 import type * as emailSuppressions from "../emailSuppressions.js";
 import type * as entitlements from "../entitlements.js";
+import type * as followedCountries from "../followedCountries.js";
 import type * as http from "../http.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_dodo from "../lib/dodo.js";
@@ -76,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   emailSuppressions: typeof emailSuppressions;
   entitlements: typeof entitlements;
+  followedCountries: typeof followedCountries;
   http: typeof http;
   "lib/auth": typeof lib_auth;
   "lib/dodo": typeof lib_dodo;

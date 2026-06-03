@@ -38,6 +38,73 @@ export function describeErr(err) {
 }
 
 /**
+ * Fetch only configured CoinPaprika ticker IDs instead of the full /tickers
+ * catalog. The catalog endpoint currently returns 13k+ records; seeders only
+ * need a small mapped subset, so per-ID reads avoid Edge/cron memory and
+ * latency spikes while preserving the same ticker shape.
+ *
+ * @param {string[]} paprikaIds CoinPaprika ids, e.g. btc-bitcoin
+ * @param {{ fetchFn?: typeof fetch, headers?: Record<string, string>, timeoutMs?: number }} [options]
+ * @returns {Promise<object[]>}
+ */
+export async function fetchCoinPaprikaTickersById(paprikaIds, options = {}) {
+  const ids = [...new Set(paprikaIds.filter(Boolean))];
+  if (ids.length === 0) return [];
+
+  const fetchFn = options.fetchFn || fetch;
+  const headers = { Accept: 'application/json', 'User-Agent': CHROME_UA, ...(options.headers || {}) };
+  const timeoutMs = options.timeoutMs || 15_000;
+  const concurrency = Math.max(1, Math.min(Number(options.concurrency || 4), ids.length));
+
+  const results = await allSettledWithConcurrency(ids, concurrency, async (id) => {
+    const resp = await fetchFn(`https://api.coinpaprika.com/v1/tickers/${encodeURIComponent(id)}?quotes=USD`, {
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!resp.ok) throw new Error(`CoinPaprika ${id} HTTP ${resp.status}`);
+    return resp.json();
+  });
+
+  const tickers = [];
+  const failures = [];
+  for (let i = 0; i < results.length; i += 1) {
+    const result = results[i];
+    if (result.status === 'fulfilled') {
+      tickers.push(result.value);
+    } else {
+      failures.push(result.reason);
+      console.warn(`[CoinPaprika] Skipping ${ids[i]}: ${describeErr(result.reason)}`);
+    }
+  }
+
+  if (tickers.length === 0 && failures.length > 0) {
+    throw new Error(`All ${failures.length} CoinPaprika ticker request(s) failed`);
+  }
+
+  return tickers;
+}
+
+async function allSettledWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(concurrency, items.length);
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      try {
+        results[index] = { status: 'fulfilled', value: await mapper(items[index], index) };
+      } catch (reason) {
+        results[index] = { status: 'rejected', reason };
+      }
+    }
+  }));
+
+  return results;
+}
+
+/**
  * Return the bundle-run start timestamp injected by `_bundle-runner.mjs`
  * as the `BUNDLE_RUN_STARTED_AT_MS` env var, or `null` when the seeder
  * is running STANDALONE (manual invocation outside the bundle).
@@ -73,7 +140,7 @@ export function getBundleRunStartedAtMs() {
 // Single source of truth shared by seed-bigmac, seed-grocery-basket, seed-fx-rates.
 // EGP: 0.0192 is the most recently observed live rate (2026-03-21 seed run).
 export const SHARED_FX_FALLBACKS = {
-  USD: 1.0000, GBP: 1.2700, EUR: 1.0850, JPY: 0.0067, CHF: 1.1300,
+  USD: 1, GBP: 1.2700, EUR: 1.0850, JPY: 0.0067, CHF: 1.1300,
   CNY: 0.1380, INR: 0.0120, AUD: 0.6500, CAD: 0.7400, NZD: 0.5900,
   BRL: 0.1900, MXN: 0.0490, ZAR: 0.0540, TRY: 0.0290, KRW: 0.0007,
   SGD: 0.7400, HKD: 0.1280, TWD: 0.0310, THB: 0.0280, IDR: 0.000063,
@@ -1083,19 +1150,30 @@ export async function httpsProxyFetchRaw(url, proxyAuth, { accept = '*/*', timeo
   return { buffer: result.buffer, contentType: result.contentType };
 }
 
+// Whether a proxy error should be retried (the Decodo proxy rotates exit IP per
+// attempt). Covers 5xx/522, DNS/socket errors, AND mid-handshake TLS tears — the
+// last group is load-bearing: if a TLS-tear isn't classified transient, the
+// retry loop breaks on attempt 1 and falls to a direct FRED fetch, which a
+// datacenter IP gets rate-limited/blocked on → the whole batch fails. Exported
+// for unit testing (the proxy fetch itself is network-bound and not injectable).
+export function isTransientProxyError(message) {
+  return /HTTP 5\d{2}|522|timeout|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|EPIPE|socket (disconnected|hang up)|TLS connection|tls_get_more_records|packet length too long|SSL routines|secure TLS connection/i.test(message || '');
+}
+
 // Fetch JSON from a FRED URL, routing through proxy when available.
 // Proxy-first: FRED consistently blocks/throttles Railway datacenter IPs,
 // so try proxy first to avoid 20s timeout on every direct attempt.
 export async function fredFetchJson(url, proxyAuth) {
   if (proxyAuth) {
-    // Decodo proxy flaps on 5xx/522 — retry up to 3 times with backoff before falling back direct.
+    // Retry the proxy (rotates exit IP per attempt) before falling back direct.
+    // isTransientProxyError covers TLS-handshake tears — see its doc comment.
     let lastProxyErr;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         return await httpsProxyFetchJson(url, proxyAuth);
       } catch (proxyErr) {
         lastProxyErr = proxyErr;
-        const transient = /HTTP 5\d{2}|522|timeout|ECONNRESET|ETIMEDOUT|EAI_AGAIN/i.test(proxyErr.message || '');
+        const transient = isTransientProxyError(proxyErr.message);
         if (attempt < 3 && transient) {
           await new Promise((r) => setTimeout(r, 400 * attempt + Math.random() * 300));
           continue;

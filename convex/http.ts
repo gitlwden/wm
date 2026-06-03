@@ -233,19 +233,31 @@ http.route({
   path: "/api/telegram-pair-callback",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    // Always return 200 — non-200 triggers Telegram retry storm
+    // Always return 200 — non-200 triggers Telegram retry storm.
+    // Fail closed: drop the update unless the request carries the secret
+    // header set when we registered the webhook. Returning 200 without
+    // processing keeps Telegram from retrying spoofed requests while still
+    // refusing to run the pairing-token claim path on unauthenticated input.
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
-    const provided =
-      request.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
-
-    // Drop only when a secret header IS provided but doesn't match (spoofing).
-    // If the header is absent, Telegram's secret_token registration may have
-    // silently failed — the pairing token (43-char, single-use, 15-min TTL)
-    // provides sufficient defence against token guessing.
-    if (provided && secret && !(await timingSafeEqualStrings(provided, secret))) {
+    if (!secret) {
+      console.error(
+        "[telegram-webhook] TELEGRAM_WEBHOOK_SECRET not configured — rejecting all requests",
+      );
       return new Response("OK", { status: 200 });
     }
-    if (!provided) console.warn("[telegram-webhook] secret header absent — relying on pairing token auth");
+    const provided =
+      request.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
+    if (!provided) {
+      // Helps ops spot webhook re-registration drift (Telegram dropped the
+      // header) without re-enabling the bypass.
+      console.warn(
+        "[telegram-webhook] secret header absent — rejecting request",
+      );
+      return new Response("OK", { status: 200 });
+    }
+    if (!(await timingSafeEqualStrings(provided, secret))) {
+      return new Response("OK", { status: 200 });
+    }
 
     let update: {
       message?: {
@@ -434,6 +446,7 @@ http.route({
       digestHour?: number;
       digestTimezone?: string;
       aiDigestEnabled?: boolean;
+      countries?: string[];
     };
     try {
       body = await request.json() as typeof body;
@@ -546,7 +559,8 @@ http.route({
           typeof body.enabled !== "boolean" ||
           !Array.isArray(body.eventTypes) ||
           !Array.isArray(body.channels) ||
-          (body.sensitivity !== undefined && !VALID_SENSITIVITY.has(body.sensitivity as string))
+          (body.sensitivity !== undefined && !VALID_SENSITIVITY.has(body.sensitivity as string)) ||
+          (body.countries !== undefined && !Array.isArray(body.countries))
         ) {
           return new Response(JSON.stringify({ error: "MISSING_REQUIRED_FIELDS" }), { status: 400, headers: { "Content-Type": "application/json" } });
         }
@@ -565,6 +579,8 @@ http.route({
           sensitivity: body.sensitivity as "all" | "high" | "critical" | undefined,
           channels: body.channels as Array<"telegram" | "slack" | "email">,
           aiDigestEnabled: typeof body.aiDigestEnabled === "boolean" ? body.aiDigestEnabled : undefined,
+          // ISO-3166 alpha-2 country-scope; mutation re-validates + normalizes.
+          countries: Array.isArray(body.countries) ? (body.countries as string[]) : undefined,
         });
         return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
@@ -585,6 +601,7 @@ http.route({
           quietHoursEnd: body.quietHoursEnd,
           quietHoursTimezone: body.quietHoursTimezone,
           quietHoursOverride: body.quietHoursOverride as "critical_only" | "silence_all" | "batch_on_wake" | undefined,
+          countries: Array.isArray(body.countries) ? (body.countries as string[]) : undefined,
         });
         return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
@@ -603,6 +620,7 @@ http.route({
           digestMode: body.digestMode as "realtime" | "daily" | "twice_daily" | "weekly",
           digestHour: typeof body.digestHour === "number" ? body.digestHour : undefined,
           digestTimezone: typeof body.digestTimezone === "string" ? body.digestTimezone : undefined,
+          countries: Array.isArray(body.countries) ? (body.countries as string[]) : undefined,
         });
         return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
@@ -624,6 +642,9 @@ http.route({
         if (body.digestMode !== undefined && !VALID_DIGEST_MODE.has(body.digestMode as string)) {
           return new Response(JSON.stringify({ error: "INVALID_DIGEST_MODE" }), { status: 400, headers: { "Content-Type": "application/json" } });
         }
+        if (body.countries !== undefined && !Array.isArray(body.countries)) {
+          return new Response(JSON.stringify({ error: "COUNTRIES_MUST_BE_ARRAY" }), { status: 400, headers: { "Content-Type": "application/json" } });
+        }
         try {
           await ctx.runMutation((internal as any).alertRules.setNotificationConfigForUser, {
             userId,
@@ -636,6 +657,7 @@ http.route({
             digestMode: body.digestMode as "realtime" | "daily" | "twice_daily" | "weekly" | undefined,
             digestHour: typeof body.digestHour === "number" ? body.digestHour : undefined,
             digestTimezone: typeof body.digestTimezone === "string" ? body.digestTimezone : undefined,
+            countries: Array.isArray(body.countries) ? (body.countries as string[]) : undefined,
           });
         } catch (err: unknown) {
           // Translate structured ConvexError codes into machine-readable HTTP
@@ -729,6 +751,56 @@ http.route({
       { userId: body.userId, variant: body.variant },
     );
     return new Response(JSON.stringify(prefs?.data ?? null), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// Followed-countries relay (plan U14). Mirrors `/relay/user-preferences`:
+// shared-secret auth in the Authorization header, POST {userId} body, returns
+// `{ countries: string[] }`. Used by server-side cron consumers (PR C brief
+// composer) that need a typed `string[]` watchlist for a given user without
+// going through the Clerk-authenticated `listFollowed` query.
+http.route({
+  path: "/relay/followed-countries",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const secret = process.env.RELAY_SHARED_SECRET ?? "";
+    const provided = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/, "");
+    if (!secret || !(await timingSafeEqualStrings(provided, secret))) {
+      return new Response(JSON.stringify({ error: "UNAUTHORIZED" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    let body: { userId?: unknown };
+    try {
+      body = await request.json() as typeof body;
+    } catch {
+      return new Response(JSON.stringify({ error: "INVALID_BODY" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    // P2 #19 — Mirror /relay/user-preferences validation rigor: userId
+    // must be a non-empty string with bounded length (Clerk subjects are
+    // short, ~30 chars; cap at 256 defensively).
+    if (
+      typeof body.userId !== "string" ||
+      body.userId.length === 0 ||
+      body.userId.length > 256
+    ) {
+      return new Response(JSON.stringify({ error: "userId required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const countries = await ctx.runQuery(
+      internal.followedCountries.internalListFollowedForUser,
+      { userId: body.userId },
+    );
+    return new Response(JSON.stringify({ countries }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

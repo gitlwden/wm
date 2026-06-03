@@ -15,21 +15,22 @@ import { TIER1_COUNTRIES } from './_shared';
 
 // ========================================================================
 // Country risk baselines and multipliers
+// ------------------------------------------------------------------------
+// Editorial values — see docs/methodology/cii-risk-scores.mdx for the
+// published table and the rationale. The authoritative coefficient table
+// lives in shared/cii-weights.ts so browser-side scoring and server-side
+// scoring cannot drift.
+//
+// Change protocol when editing coefficient values in shared/cii-weights.ts:
+//   1. Bump CII_FORMULA_VERSION in ./_risk-config.ts if server/API scores shift.
+//   2. Update docs/methodology/cii-risk-scores.mdx in the SAME commit.
+//   3. Mention the change in CHANGELOG.md (public-facing section).
 // ========================================================================
 
-const BASELINE_RISK: Record<string, number> = {
-  US: 5, RU: 35, CN: 25, UA: 50, IR: 40, IL: 45, TW: 30, KP: 45,
-  SA: 20, TR: 25, PL: 10, DE: 5, FR: 10, GB: 5, IN: 20, PK: 35,
-  SY: 50, YE: 50, MM: 45, VE: 40, CU: 45, MX: 35, BR: 15, AE: 10,
-  KR: 15, IQ: 40, AF: 45, LB: 40, EG: 20, JP: 5, QA: 10,
-};
-
-const EVENT_MULTIPLIER: Record<string, number> = {
-  US: 0.3, RU: 2.0, CN: 2.5, UA: 0.8, IR: 2.0, IL: 0.7, TW: 1.5, KP: 3.0,
-  SA: 2.0, TR: 1.2, PL: 0.8, DE: 0.5, FR: 0.6, GB: 0.5, IN: 0.8, PK: 1.5,
-  SY: 0.7, YE: 0.7, MM: 1.8, VE: 1.8, CU: 2.0, MX: 1.0, BR: 0.6, AE: 1.5,
-  KR: 0.8, IQ: 1.2, AF: 0.8, LB: 1.5, EG: 1.0, JP: 0.5, QA: 0.8,
-};
+// Exported so tests and any internal diagnostics can assert the published
+// methodology doc rows match the shared source exactly.
+export const BASELINE_RISK: Record<string, number> = { ...CII_BASELINE_RISK };
+export const EVENT_MULTIPLIER: Record<string, number> = { ...CII_EVENT_MULTIPLIER };
 
 const COUNTRY_KEYWORDS: Record<string, string[]> = {
   US: ['united states', 'usa', 'america', 'washington', 'biden', 'trump', 'pentagon'],
@@ -65,7 +66,9 @@ const COUNTRY_KEYWORDS: Record<string, string[]> = {
   QA: ['qatar', 'qatari', 'doha', 'al jazeera'],
 };
 
-const COUNTRY_BBOX: Record<string, { minLat: number; maxLat: number; minLon: number; maxLon: number }> = {
+// Exported so the seed-military-cii.mjs drift-guard test can assert its re-embedded copy
+// stays in sync (scripts/ cannot import from server/ at runtime, but tests can).
+export const COUNTRY_BBOX: Record<string, { minLat: number; maxLat: number; minLon: number; maxLon: number }> = {
   US: { minLat: 24.5, maxLat: 49.4, minLon: -125.0, maxLon: -66.9 },
   RU: { minLat: 41.2, maxLat: 81.9, minLon: 19.6, maxLon: 180.0 },
   CN: { minLat: 18.2, maxLat: 53.6, minLon: 73.5, maxLon: 135.1 },
@@ -128,7 +131,10 @@ const BBOX_BY_AREA = Object.entries(COUNTRY_BBOX)
   .map(([code, b]) => ({ code, ...b, area: (b.maxLat - b.minLat) * (b.maxLon - b.minLon) }))
   .sort((a, b) => a.area - b.area);
 
-function geoToCountry(lat: number, lon: number): string | null {
+// Exported so scripts/seed-military-cii.mjs's re-embedded copy can be cross-checked
+// for parity in tests/seed-military-cii-table-drift.test.mts. The seed cannot import
+// from server/ under Railway nixpacks packaging.
+export function geoToCountry(lat: number, lon: number): string | null {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   for (const b of BBOX_BY_AREA) {
     if (lat >= b.minLat && lat <= b.maxLat && lon >= b.minLon && lon <= b.maxLon) return b.code;
@@ -139,6 +145,12 @@ function geoToCountry(lat: number, lon: number): string | null {
 function safeNum(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
+}
+
+function logScaledScore(raw: number, cap: number, pivot: number): number {
+  const value = Math.max(0, raw);
+  if (value === 0) return 0;
+  return Math.min(cap, (Math.log1p(value) / Math.log1p(pivot)) * cap);
 }
 
 const ISO3_TO_ISO2: Record<string, string> = iso3ToIso2Json;
@@ -158,8 +170,11 @@ interface CountrySignals {
   outageMajorCount: number;
   outagePartialCount: number;
   climateSeverity: number;
-  cyberCount: number;
+  cyberCriticalCount: number;
+  cyberHighCount: number;
+  cyberMediumCount: number;
   fireCount: number;
+  fireHighCount: number;
   gpsHighCount: number;
   gpsMediumCount: number;
   iranStrikes: number;
@@ -170,6 +185,29 @@ interface CountrySignals {
   totalDisplaced: number;
   newsScore: number;
   threatSummaryScore: number;
+  // High-severity unrest event count (Phase 3b / C1) — a "high-severity" unrest event is
+  // one that killed someone OR is a riot, matching seed-unrest-events.mjs classifySeverity.
+  highSeverityUnrest: number;
+  // Phase 1 (CII unification, plans/unify-cii-single-source.md) — gathered, not yet scored.
+  aviationClosureCount: number;
+  aviationSevereCount: number;
+  aviationMajorCount: number;
+  aviationModerateCount: number;
+  earthquakeSignificantCount: number;
+  earthquakeMajorCount: number;
+  earthquakeSevereCount: number;
+  sanctionsEntryCount: number;
+  sanctionsNewEntryCount: number;
+  temporalAnomalyCount: number;
+  temporalAnomalyCriticalCount: number;
+  // Phase 2 (CII unification) — military activity, gathered, not yet scored.
+  militaryOwnFlights: number;
+  militaryForeignFlights: number;
+  militaryOwnVessels: number;
+  militaryForeignVessels: number;
+  aisDisruptionHighCount: number;
+  aisDisruptionElevatedCount: number;
+  aisDisruptionLowCount: number;
 }
 
 function emptySignals(): CountrySignals {
@@ -178,7 +216,9 @@ function emptySignals(): CountrySignals {
     fatalities: 0, protestFatalities: 0, conflictFatalities: 0,
     ucdpWar: false, ucdpMinor: false,
     outageTotalCount: 0, outageMajorCount: 0, outagePartialCount: 0,
-    climateSeverity: 0, cyberCount: 0, fireCount: 0,
+    climateSeverity: 0,
+    cyberCriticalCount: 0, cyberHighCount: 0, cyberMediumCount: 0,
+    fireCount: 0, fireHighCount: 0,
     gpsHighCount: 0, gpsMediumCount: 0,
     iranStrikes: 0, highSeverityStrikes: 0,
     orefAlertCount: 0, orefHistoryCount24h: 0,
@@ -186,6 +226,14 @@ function emptySignals(): CountrySignals {
     totalDisplaced: 0,
     newsScore: 0,
     threatSummaryScore: 0,
+    highSeverityUnrest: 0,
+    aviationClosureCount: 0, aviationSevereCount: 0, aviationMajorCount: 0, aviationModerateCount: 0,
+    earthquakeSignificantCount: 0, earthquakeMajorCount: 0, earthquakeSevereCount: 0,
+    sanctionsEntryCount: 0, sanctionsNewEntryCount: 0,
+    temporalAnomalyCount: 0, temporalAnomalyCriticalCount: 0,
+    militaryOwnFlights: 0, militaryForeignFlights: 0,
+    militaryOwnVessels: 0, militaryForeignVessels: 0,
+    aisDisruptionHighCount: 0, aisDisruptionElevatedCount: 0, aisDisruptionLowCount: 0,
   };
 }
 
@@ -218,6 +266,14 @@ interface AuxiliarySources {
   newsTopStories: Array<{ countryCode: string | null; threatLevel: string; primaryTitle: string }>;
   // Per-country classified headline counts from relay seedClassify() — written to news:threat:summary:v1
   threatSummaryByCountry: Record<string, { critical: number; high: number; medium: number; low: number; info: number }> | null;
+  // Phase 1 (CII unification) — additive signal sources, all backed by an existing Redis key.
+  aviationAlerts: any[];
+  earthquakes: any[];
+  sanctionsCountries: any[];
+  temporalAnomalies: any[];
+  // Phase 2 (CII unification) — per-country military activity from intelligence:military-cii:v1
+  // (written by scripts/seed-military-cii.mjs). Keyed by ISO2.
+  militaryCii: Record<string, any> | null;
 }
 
 async function fetchAuxiliarySources(): Promise<AuxiliarySources> {
@@ -303,6 +359,13 @@ async function fetchAuxiliarySources(): Promise<AuxiliarySources> {
     displacedByIso3,
     newsTopStories,
     threatSummaryByCountry,
+    aviationAlerts: arr(aviationRaw, 'alerts'),
+    earthquakes: arr(earthquakesRaw, 'earthquakes'),
+    sanctionsCountries: arr(sanctionsRaw, 'countries'),
+    temporalAnomalies: arr(temporalRaw, 'anomalies'),
+    militaryCii: militaryCiiRaw && typeof militaryCiiRaw === 'object' && (militaryCiiRaw as any).byCountry
+      ? (militaryCiiRaw as any).byCountry
+      : null,
   };
 }
 
@@ -337,9 +400,13 @@ export function computeCIIScores(
     if (type.includes('protest')) {
       data[code].protests += weight;
       data[code].protestFatalities += fat;
+      // High-severity = the event killed someone (classifySeverity rule).
+      if (safeNum(ev.fatalities) > 0) data[code].highSeverityUnrest += weight;
     } else if (type.includes('riot')) {
       data[code].riots += weight;
       data[code].protestFatalities += fat;
+      // A riot is always high-severity (classifySeverity rule).
+      data[code].highSeverityUnrest += weight;
     } else if (type.includes('battle')) {
       data[code].battles += weight;
       data[code].conflictFatalities += fat;
@@ -385,7 +452,20 @@ export function computeCIIScores(
   // --- Cyber ---
   for (const t of aux.cyber) {
     const code = (t.country || '').toUpperCase();
-    if (data[code]) data[code].cyberCount++;
+    if (!data[code]) continue;
+    // Split by the severity the cached cyber threat already carries (Phase 3b / D7).
+    // seed-cyber-threats.mjs emits the proto enum form ('CRITICALITY_LEVEL_CRITICAL' etc.)
+    // — strip the prefix so bare lowercase fixtures and the production enum both bucket.
+    // NOTE: 'low' / 'info' / unknown severities are intentionally dropped. Pre-unification
+    // the server used a flat `cyberCount++` for every threat regardless of severity, but
+    // the only consumer (cyberBoost in the blend below) reads critical/high/medium with
+    // weights 3 / 1.8 / 0.9 — matching the frontend formula at
+    // src/services/country-instability.ts:609. A 'low' would have no coefficient to land
+    // on, so counting it would be a no-op anyway; the drop just makes the contract explicit.
+    const sev = String(t.severity || '').toLowerCase().replace(/^criticality_level_/, '');
+    if (sev === 'critical') data[code].cyberCriticalCount++;
+    else if (sev === 'high') data[code].cyberHighCount++;
+    else if (sev === 'medium') data[code].cyberMediumCount++;
   }
 
   // --- Fires ---
@@ -393,7 +473,10 @@ export function computeCIIScores(
     const lat = safeNum(f.lat || f.latitude || f.location?.latitude);
     const lon = safeNum(f.lon || f.longitude || f.location?.longitude);
     const code = geoToCountry(lat, lon);
-    if (code && data[code]) data[code].fireCount++;
+    if (!code || !data[code]) continue;
+    data[code].fireCount++;
+    // "High" fire — bright or high radiative power (Phase 3b / D8, matches the frontend).
+    if (safeNum(f.brightness) >= 360 || safeNum(f.frp) >= 50) data[code].fireHighCount++;
   }
 
   // --- GPS hex severity split ---
@@ -404,6 +487,66 @@ export function computeCIIScores(
     if (!code || !data[code]) continue;
     if (h.level === 'high') data[code].gpsHighCount++;
     else data[code].gpsMediumCount++;
+  }
+
+  // --- Aviation disruptions (Phase 1 — gathered, not yet scored) ---
+  // country is a name; delayType/severity may be lowercase or proto-enum form
+  // (FLIGHT_DELAY_TYPE_CLOSURE / FLIGHT_DELAY_SEVERITY_SEVERE) — substring match handles both.
+  for (const a of aux.aviationAlerts ?? []) {
+    const code = normalizeCountryName(String(a.country || ''));
+    if (!code || !data[code]) continue;
+    const dt = String(a.delayType || '').toLowerCase();
+    const sev = String(a.severity || '').toLowerCase();
+    if (dt.includes('closure')) data[code].aviationClosureCount++;
+    else if (sev.includes('severe')) data[code].aviationSevereCount++;
+    else if (sev.includes('major')) data[code].aviationMajorCount++;
+    else if (sev.includes('moderate')) data[code].aviationModerateCount++;
+  }
+
+  // --- Earthquakes (Phase 1) — magnitude >= 5.5, within 7-day lookback ---
+  const eqCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  for (const eq of aux.earthquakes ?? []) {
+    const mag = safeNum(eq.magnitude);
+    if (mag < 5.5) continue;
+    if (safeNum(eq.occurredAt) < eqCutoff) continue;
+    const code = geoToCountry(safeNum(eq.location?.latitude), safeNum(eq.location?.longitude));
+    if (!code || !data[code]) continue;
+    if (mag >= 7.5) data[code].earthquakeSevereCount++;
+    else if (mag >= 6.5) data[code].earthquakeMajorCount++;
+    else data[code].earthquakeSignificantCount++;
+  }
+
+  // --- Sanctions pressure (Phase 1) — direct ISO2 attribution ---
+  for (const c of aux.sanctionsCountries ?? []) {
+    const code = String(c.countryCode || '').toUpperCase();
+    if (!data[code]) continue;
+    // Accumulate (not assign): the producer keys per-country rows by `code:name`, so one
+    // ISO2 can appear in multiple rows when the source spells the name differently.
+    data[code].sanctionsEntryCount += safeNum(c.entryCount);
+    data[code].sanctionsNewEntryCount += safeNum(c.newEntryCount);
+  }
+
+  // --- Temporal anomalies (Phase 1) — region is ISO2 or country name; skip 'global' ---
+  for (const an of aux.temporalAnomalies ?? []) {
+    const region = String(an.region || '').trim();
+    if (!region || region.toLowerCase() === 'global') continue;
+    const code = data[region.toUpperCase()] ? region.toUpperCase() : normalizeCountryName(region);
+    if (!code || !data[code]) continue;
+    data[code].temporalAnomalyCount++;
+    if (String(an.severity || '').toLowerCase() === 'critical') data[code].temporalAnomalyCriticalCount++;
+  }
+
+  // --- Military activity (Phase 2) — per-country aggregate from intelligence:military-cii:v1 ---
+  for (const [code, m] of Object.entries(aux.militaryCii ?? {})) {
+    const d = data[code];
+    if (!d || !m || typeof m !== 'object') continue;
+    d.militaryOwnFlights = safeNum((m as any).ownFlights);
+    d.militaryForeignFlights = safeNum((m as any).foreignFlights);
+    d.militaryOwnVessels = safeNum((m as any).ownVessels);
+    d.militaryForeignVessels = safeNum((m as any).foreignVessels);
+    d.aisDisruptionHighCount = safeNum((m as any).aisDisruptionHigh);
+    d.aisDisruptionElevatedCount = safeNum((m as any).aisDisruptionElevated);
+    d.aisDisruptionLowCount = safeNum((m as any).aisDisruptionLow);
   }
 
   // --- Iran strikes with severity ---
@@ -456,8 +599,8 @@ export function computeCIIScores(
   const scores: CiiScore[] = [];
   for (const code of Object.keys(TIER1_COUNTRIES)) {
     const d = data[code]!;
-    const baseline = BASELINE_RISK[code] || 20;
-    const multiplier = EVENT_MULTIPLIER[code] || 1.0;
+    const baseline = BASELINE_RISK[code] ?? DEFAULT_CII_BASELINE_RISK;
+    const multiplier = EVENT_MULTIPLIER[code] ?? DEFAULT_CII_EVENT_MULTIPLIER;
 
     // --- Unrest score (ported from frontend calcUnrestScore) ---
     const unrestCount = d.protests + d.riots;
@@ -466,11 +609,18 @@ export function computeCIIScores(
       : unrestCount * multiplier;
     const unrestBase = Math.min(50, adjustedCount * 8);
     const unrestFatalityBoost = Math.min(30, d.protestFatalities * 5 * multiplier);
+    // severityBoost (Phase 3b / C1) — ported from the frontend calcUnrestScore.
+    const unrestSeverityBoost = Math.min(20, d.highSeverityUnrest * 10 * multiplier);
     const outageBoost = Math.min(50, d.outageTotalCount * 30 + d.outageMajorCount * 15 + d.outagePartialCount * 5);
-    const unrest = Math.min(100, Math.round(unrestBase + unrestFatalityBoost + outageBoost));
+    const unrest = Math.min(100, Math.round(unrestBase + unrestFatalityBoost + unrestSeverityBoost + outageBoost));
 
     // --- Conflict score (ported from frontend calcConflictScore) ---
-    const acledScore = Math.min(50, Math.round((d.battles * 3 + d.explosions * 4 + d.civilianViolence * 5) * multiplier));
+    const conflictActivityRaw = (d.battles * 3 + d.explosions * 4 + d.civilianViolence * 5) * multiplier;
+    const acledScore = Math.round(logScaledScore(
+      conflictActivityRaw,
+      CII_CONFLICT_ACTIVITY_CAP,
+      CII_CONFLICT_ACTIVITY_PIVOT,
+    ));
     const fatalityScore = Math.min(40, Math.round(Math.sqrt(d.conflictFatalities) * 5 * multiplier));
     const civilianBoost = Math.min(10, d.civilianViolence * 3);
     const strikeBoost = Math.min(50, d.iranStrikes * 3 + d.highSeverityStrikes * 5);
@@ -479,17 +629,37 @@ export function computeCIIScores(
       : 0;
     const conflict = Math.min(100, acledScore + fatalityScore + civilianBoost + strikeBoost + orefBoost);
 
-    // --- Security score (ported from frontend calcSecurityScore) ---
+    // --- Security score (Phase 3b / decision C3 — full 4-input calcSecurityScore) ---
+    // Was GPS-only (issue #3738). Now flights + vessels + aviation + GPS, matching the
+    // frontend. Military counts reconstruct the frontend's array length: foreign presence
+    // is weighted ×2 (the intent of ingestMilitaryForCII's synthetic-{} push), applied
+    // here in the formula instead of as a representation hack.
+    const milFlights = d.militaryOwnFlights + d.militaryForeignFlights * 2;
+    const milVessels = d.militaryOwnVessels + d.militaryForeignVessels * 2;
+    const flightScore = Math.min(50, milFlights * 3);
+    const vesselScore = Math.min(30, milVessels * 5);
+    const aviationScore = Math.min(
+      40,
+      d.aviationClosureCount * 20 + d.aviationSevereCount * 15
+        + d.aviationMajorCount * 10 + d.aviationModerateCount * 5,
+    );
     const gpsJammingScore = Math.min(35, d.gpsHighCount * 5 + d.gpsMediumCount * 2);
-    const security = Math.min(100, Math.round(gpsJammingScore));
+    const security = Math.min(100, Math.round(flightScore + vesselScore + aviationScore + gpsJammingScore));
 
-    const information = Math.min(20, d.newsScore + d.threatSummaryScore);
+    // information cap raised 20 → 100 to match unrest/conflict/security ranges.
+    // Previous cap silently limited information's max contribution to 5 points
+    // (20 × 0.25) vs 25 for any other component despite the equal 0.25 weight.
+    // Issue #3739.
+    const information = Math.min(100, d.newsScore + d.threatSummaryScore);
 
     const eventScore = unrest * 0.25 + conflict * 0.30 + security * 0.20 + information * 0.25;
 
     const climateBoost = Math.min(15, d.climateSeverity * 3);
-    const cyberBoost = Math.min(10, Math.floor(d.cyberCount / 5));
-    const fireBoost = Math.min(8, Math.floor(d.fireCount / 10));
+    // cyber + fire (Phase 3b / D7, D8) — severity-weighted, ported from the frontend
+    // getSupplementalSignalBoost. Was total-count based; the cached cyber/fire feeds
+    // already carry severity / brightness, so this is a faithful port, not a partial one.
+    const cyberBoost = Math.min(12, d.cyberCriticalCount * 3 + d.cyberHighCount * 1.8 + d.cyberMediumCount * 0.9);
+    const fireBoost = Math.min(8, d.fireHighCount * 1.5 + Math.min(20, d.fireCount) * 0.25);
 
     // --- Advisory boost ---
     const advisoryBoost = d.advisoryLevel === 'do-not-travel' ? 15
@@ -503,12 +673,40 @@ export function computeCIIScores(
 
     // --- Displacement boost (UNHCR — persists after ceasefires) ---
     // Ramp anchored so the scale spans meaningful crisis sizes:
-    //   100K  → +4  |  500K → +9  |  1M → +12  |  5M → +18  |  10M+ → +20
+    //   100K  → +4  |  500K → +10  |  1M → +12  |  5M → +18  |  10M+ → +20
     // Formula: (log10(n) - 5) * 8 + 4, clamped [0, 20].
     // Below ~32K displaced → 0; cap reached at 10M.
     const displacementBoost = d.totalDisplaced > 0
       ? Math.min(20, Math.max(0, Math.round((Math.log10(d.totalDisplaced) - 5) * 8 + 4)))
       : 0;
+
+    // --- Phase 3b blend reconciliation (decisions D2/D4/D5/D6) ---
+    // newsUrgencyBoost (D2): pure function of the information component.
+    const newsUrgencyBoost = information >= 70 ? 5 : information >= 50 ? 3 : 0;
+    // earthquakeBoost (D5): ported verbatim from the frontend getEarthquakeBoost.
+    const earthquakeBoost = Math.min(
+      25,
+      d.earthquakeSevereCount * 10 + d.earthquakeMajorCount * 5 + d.earthquakeSignificantCount * 2,
+    );
+    // sanctionsBoost (D6): ported verbatim from the frontend getSanctionsBoost.
+    let sanctionsBoost = 0;
+    if (d.sanctionsEntryCount > 0) {
+      sanctionsBoost = d.sanctionsEntryCount >= 2000 ? 12
+        : d.sanctionsEntryCount >= 501 ? 8
+        : d.sanctionsEntryCount >= 101 ? 5 : 3;
+      if (d.sanctionsNewEntryCount > 0) sanctionsBoost += 2;
+    }
+    // supplementalSignalBoost (D4): the frontend's helper sums AIS + fire + cyber +
+    // temporal. AIS is its own blend term below; cyber + fire are the severity-weighted
+    // terms above. The temporal sub-boost is NOT wired — the temporal:anomalies:v1
+    // producer (list-temporal-anomalies.ts) emits every anomaly with region:'global', so
+    // they cannot be country-attributed. `temporalAnomaly*Count` stay gathered-not-scored
+    // (Phase 1 intent); re-wire a temporalBoost only if the producer emits country-scoped
+    // anomalies. The frontend's temporal sub-boost has the same dormancy for the same reason.
+    const aisBoost = Math.min(
+      10,
+      d.aisDisruptionHighCount * 2.5 + d.aisDisruptionElevatedCount * 1.5 + d.aisDisruptionLowCount * 0.5,
+    );
 
     const blended = baseline * 0.4
       + eventScore * 0.6
@@ -517,7 +715,11 @@ export function computeCIIScores(
       + fireBoost
       + advisoryBoost
       + orefBlendBoost
-      + displacementBoost;
+      + displacementBoost
+      + newsUrgencyBoost
+      + earthquakeBoost
+      + sanctionsBoost
+      + aisBoost;
 
     // --- Floors ---
     const ucdpFloor = d.ucdpWar ? 70 : (d.ucdpMinor ? 50 : 0);
@@ -540,6 +742,11 @@ export function computeCIIScores(
         militaryActivity: security,
       },
       computedAt: Date.now(),
+      // Disclosure fields (issue #3725) — make the editorial weights and
+      // formula version visible on the wire so API clients can detect drift.
+      // See docs/methodology/cii-risk-scores.mdx.
+      eventMultiplier: multiplier,
+      methodologyVersion: CII_FORMULA_VERSION,
     });
   }
 
@@ -547,12 +754,18 @@ export function computeCIIScores(
   return scores;
 }
 
-function computeStrategicRisks(ciiScores: CiiScore[]): StrategicRisk[] {
-  const top5 = ciiScores.slice(0, 5);
-  const weights = top5.map((_, i) => 1 - i * 0.15);
+export function computeStrategicRisks(ciiScores: CiiScore[]): StrategicRisk[] {
+  // Editorial roll-up: see ./_risk-config.ts and
+  // docs/methodology/cii-risk-scores.mdx for rationale and band derivation.
+  const topN = ciiScores.slice(0, STRATEGIC_RISK_TOP_N);
+  const weights = topN.map((_, i) => 1 - i * STRATEGIC_RISK_POSITIONAL_DECAY);
   const totalWeight = weights.reduce((sum, w) => sum + w, 0);
-  const weightedSum = top5.reduce((sum, s, i) => sum + s.combinedScore * weights[i]!, 0);
-  const overallScore = Math.min(100, Math.round((weightedSum / totalWeight) * 0.7 + 15));
+  const weightedSum = topN.reduce((sum, s, i) => sum + s.combinedScore * weights[i]!, 0);
+  const weightedAvg = totalWeight > 0 ? weightedSum / totalWeight : 0;
+  const overallScore = Math.min(
+    100,
+    Math.round(weightedAvg * STRATEGIC_RISK_SCALE_FACTOR + STRATEGIC_RISK_SCALE_FLOOR),
+  );
 
   return [
     {
@@ -563,7 +776,7 @@ function computeStrategicRisks(ciiScores: CiiScore[]): StrategicRisk[] {
           ? 'SEVERITY_LEVEL_MEDIUM'
           : 'SEVERITY_LEVEL_LOW') as SeverityLevel,
       score: overallScore,
-      factors: top5.map((s) => s.region),
+      factors: topN.map((s) => s.region),
       trend: 'TREND_DIRECTION_STABLE' as TrendDirection,
     },
   ];
@@ -573,8 +786,16 @@ function computeStrategicRisks(ciiScores: CiiScore[]): StrategicRisk[] {
 // Cache keys
 // ========================================================================
 
-const RISK_CACHE_KEY = 'risk:scores:sebuf:v1';
-const RISK_STALE_CACHE_KEY = 'risk:scores:sebuf:stale:v1';
+// Payload key family is bumped when CII_FORMULA_VERSION changes so old
+// methodology payloads cannot survive deploy via Redis. Bump propagated to
+// every reader: get-country-risk.ts, chat-analyst-context.ts,
+// brief-story-context.ts, server/_shared/cache-keys.ts, api/bootstrap.js,
+// api/health.js, api/mcp.ts, scripts/seed-cross-source-signals.mjs,
+// scripts/seed-forecasts.mjs, scripts/regional-snapshot/*. The seed-meta key
+// (`seed-meta:risk:scores:sebuf`) is unchanged — that's freshness tracking,
+// not the payload itself.
+const RISK_CACHE_KEY = 'risk:scores:sebuf:v3';
+const RISK_STALE_CACHE_KEY = 'risk:scores:sebuf:stale:v3';
 const RISK_CACHE_TTL = 600;
 const RISK_STALE_TTL = 3600;
 
@@ -639,7 +860,7 @@ export async function getRiskScores(
 
   const stale = (await getCachedJson(RISK_STALE_CACHE_KEY)) as GetRiskScoresResponse | null;
   if (stale) return stale;
-  const emptyAux: AuxiliarySources = { ucdpEvents: [], outages: [], climate: [], cyber: [], fires: [], gpsHexes: [], iranEvents: [], orefData: null, advisories: null, displacedByIso3: {}, newsTopStories: [], threatSummaryByCountry: null };
+  const emptyAux: AuxiliarySources = { ucdpEvents: [], outages: [], climate: [], cyber: [], fires: [], gpsHexes: [], iranEvents: [], orefData: null, advisories: null, displacedByIso3: {}, newsTopStories: [], threatSummaryByCountry: null, aviationAlerts: [], earthquakes: [], sanctionsCountries: [], temporalAnomalies: [], militaryCii: null };
   const ciiScores = computeCIIScores([], emptyAux);
   return { ciiScores, strategicRisks: computeStrategicRisks(ciiScores) };
 }
