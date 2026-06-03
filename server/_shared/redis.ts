@@ -177,7 +177,7 @@ async function readCachedJson(key: string, raw = false): Promise<CacheReadResult
     const finalKey = raw ? key : prefixKey(key);
     const resp = await fetch(`${url}/get/${encodeURIComponent(finalKey)}`, {
       headers: { Authorization: `Bearer ${token}` },
-      signal: AbortSignal.timeout(REDIS_OP_TIMEOUT_MS),
+      signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
     });
     if (!resp.ok) throw new Error(`Redis HTTP ${resp.status}`);
     const data = (await resp.json()) as { result?: string };
@@ -206,7 +206,7 @@ function logCacheReadError(key: string, err: unknown): void {
   // never fired — every timeout fell through to the generic console.warn.
   const isTimeout = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError');
   if (isTimeout) {
-    console.error(`[REDIS-TIMEOUT] getCachedJson key=${key} timeoutMs=${REDIS_OP_TIMEOUT_MS}`);
+    console.error(`[REDIS-TIMEOUT] getCachedJson key=${key} timeoutMs=${KV_OP_TIMEOUT_MS}`);
   } else {
     console.warn('[redis] getCachedJson failed:', errMsg(err));
   }
@@ -397,7 +397,7 @@ export async function setCachedJson(key: string, value: unknown, ttlSeconds: num
 
   try {
     const finalKey = raw ? key : prefixKey(key);
-    await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}?expiration_ttl=${ttlSeconds}`, {
+    const resp = await fetch(`${kvBase(creds)}/values/${encodeURIComponent(finalKey)}?expiration_ttl=${ttlSeconds}`, {
       method: 'PUT',
       headers: kvHeaders(creds.token, 'application/json'),
       body: JSON.stringify(value),
@@ -664,7 +664,7 @@ export async function compareAndDeleteRedisKey(key: string, expectedValue: strin
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(['EVAL', script, '1', finalKey, expectedValue]),
-      signal: AbortSignal.timeout(REDIS_PIPELINE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(KV_OP_TIMEOUT_MS),
     });
     if (!response.ok) {
       console.warn(`[redis] compareAndDeleteRedisKey HTTP ${response.status}`);
