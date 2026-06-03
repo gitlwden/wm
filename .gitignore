@@ -86,3 +86,6 @@ docs/plans/
 docs/brainstorms/
 playground-pricing.html
 .proxy-cache.json
+
+# LLM provider cache (generated at runtime)
+.llm-provider-cache.json

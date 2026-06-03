@@ -1,6 +1,6 @@
 {
-  "provider": "nvidia",
-  "model": "meta/llama-3.3-70b-instruct",
-  "latencyMs": 210,
-  "timestamp": 1780462088158
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "latencyMs": 231,
+  "timestamp": 1780462472552
 }
