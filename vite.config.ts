@@ -976,6 +976,7 @@ export default defineConfig(({ mode }) => {
           // Cache file
           const CACHE_PATH = join(process.cwd(), '.llm-provider-cache.json');
           let llmCache = null;
+          const failedProviders = new Set(); // Track failed providers
 
           // Load cache
           function loadCache() {
@@ -997,18 +998,24 @@ export default defineConfig(({ mode }) => {
             } catch {}
           }
 
-          // Get best provider
-          async function getBestProvider() {
-            if (llmCache) return llmCache;
-
-            llmCache = loadCache();
-            if (llmCache) {
-              console.log(`[widget-agent] Using cached provider: ${llmCache.provider}/${llmCache.model}`);
-              return llmCache;
+          // Invalidate cache and mark provider as failed
+          function invalidateCache(reason) {
+            console.log(`[widget-agent] Invalidating cache: ${reason}`);
+            if (llmCache?.provider) {
+              failedProviders.add(llmCache.provider);
             }
+            llmCache = null;
+            try {
+              if (existsSync(CACHE_PATH)) {
+                writeFileSync(CACHE_PATH, '');
+              }
+            } catch {}
+          }
 
+          // Benchmark all available providers
+          async function benchmarkProviders() {
             console.log('[widget-agent] Benchmarking LLM providers...');
-            const available = LLM_PROVIDERS.filter(p => process.env[p.envKey]);
+            const available = LLM_PROVIDERS.filter(p => process.env[p.envKey] && !failedProviders.has(p.name));
 
             const results = await Promise.all(available.map(async (provider) => {
               const start = Date.now();
@@ -1022,36 +1029,74 @@ export default defineConfig(({ mode }) => {
                 if (resp.ok) {
                   return { ...provider, latencyMs: Date.now() - start, success: true };
                 }
-              } catch {}
+                console.log(`[widget-agent] ${provider.name}: HTTP ${resp.status}`);
+              } catch (err) {
+                console.log(`[widget-agent] ${provider.name}: ${err.message}`);
+              }
               return null;
             }));
 
-            const winner = results.filter(Boolean).sort((a, b) => a.latencyMs - b.latencyMs)[0];
-            if (winner) {
+            return results.filter(Boolean).sort((a, b) => a.latencyMs - b.latencyMs);
+          }
+
+          // Get best provider
+          async function getBestProvider() {
+            // Return cached if valid and not failed
+            if (llmCache && !failedProviders.has(llmCache.provider)) {
+              return llmCache;
+            }
+
+            // Try loading from file
+            llmCache = loadCache();
+            if (llmCache && !failedProviders.has(llmCache.provider)) {
+              console.log(`[widget-agent] Using cached provider: ${llmCache.provider}/${llmCache.model}`);
+              return llmCache;
+            }
+
+            // Benchmark
+            const winners = await benchmarkProviders();
+            if (winners.length === 0) {
+              // Reset failed providers and try again
+              failedProviders.clear();
+              const retryWinners = await benchmarkProviders();
+              if (retryWinners.length === 0) {
+                throw new Error('No LLM provider available');
+              }
+              const winner = retryWinners[0];
               llmCache = { provider: winner.name, model: winner.model, latencyMs: winner.latencyMs, timestamp: Date.now() };
               saveCache(llmCache);
               console.log(`[widget-agent] Winner: ${winner.name}/${winner.model} (${winner.latencyMs}ms)`);
               return llmCache;
             }
 
-            throw new Error('No LLM provider available');
+            const winner = winners[0];
+            llmCache = { provider: winner.name, model: winner.model, latencyMs: winner.latencyMs, timestamp: Date.now() };
+            saveCache(llmCache);
+            console.log(`[widget-agent] Winner: ${winner.name}/${winner.model} (${winner.latencyMs}ms)`);
+            return llmCache;
           }
 
-          // Call LLM
-          async function callLlm(messages, tools) {
+          // Call LLM with retry logic
+          async function callLlm(messages, tools, retryCount = 0) {
+            if (retryCount >= 3) {
+              throw new Error('All LLM providers failed after retries');
+            }
+
             const provider = await getBestProvider();
-            const apiKey = process.env[LLM_PROVIDERS.find(p => p.name === provider.provider).envKey];
+            const providerConfig = LLM_PROVIDERS.find(p => p.name === provider.provider);
+            const apiKey = process.env[providerConfig.envKey];
 
             const openaiTools = tools.map(t => ({
               type: 'function',
               function: { name: t.name, description: t.description, parameters: t.input_schema },
             }));
 
-            const resp = await fetch(LLM_PROVIDERS.find(p => p.name === provider.provider).url, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ model: provider.model, messages, max_tokens: 4096, tools: openaiTools, tool_choice: 'auto' }),
-              signal: AbortSignal.timeout(60000),
+            try {
+              const resp = await fetch(providerConfig.url, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: provider.model, messages, max_tokens: 4096, tools: openaiTools, tool_choice: 'auto' }),
+                signal: AbortSignal.timeout(60000),
             });
 
             if (!resp.ok) throw new Error(`LLM error: ${resp.status}`);
@@ -1068,6 +1113,16 @@ export default defineConfig(({ mode }) => {
             }
 
             return { stop_reason: choice.finish_reason === 'tool_calls' ? 'tool_use' : 'end_turn', content };
+
+            } catch (err) {
+              // If rate limited (429) or server error (5xx), invalidate and retry
+              if (err.message.includes('429') || err.message.includes('5')) {
+                console.log(`[widget-agent] Provider ${provider.provider} failed: ${err.message}, retrying...`);
+                invalidateCache(`${provider.provider}: ${err.message}`);
+                return callLlm(messages, tools, retryCount + 1);
+              }
+              throw err;
+            }
           }
 
           // Health check
