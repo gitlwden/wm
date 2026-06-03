@@ -352,8 +352,6 @@ export async function fetchRouteImpact(
 const emptyProducts: GetCountryProductsResponse = { iso2: '', products: [], fetchedAt: '' };
 
 export async function fetchCountryProducts(iso2: string): Promise<GetCountryProductsResponse> {
-  // Pro-gated path — see fetchCountryChokepointIndex.
-  if (!hasPremiumAccess()) return { ...emptyProducts, iso2 };
   try {
     return await client.getCountryProducts({ iso2 });
   } catch {

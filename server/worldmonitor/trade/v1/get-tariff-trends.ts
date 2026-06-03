@@ -8,7 +8,6 @@ import type {
   GetTariffTrendsResponse,
 } from '../../../../src/generated/server/worldmonitor/trade/v1/service_server';
 import { getCachedJson } from '../../../_shared/redis';
-import { isCallerPremium } from '../../../_shared/premium-check';
 
 const SEED_KEY_PREFIX = 'trade:tariffs:v1';
 
@@ -17,12 +16,9 @@ function isValidCode(c: string): boolean {
 }
 
 export async function getTariffTrends(
-  ctx: ServerContext,
+  _ctx: ServerContext,
   req: GetTariffTrendsRequest,
 ): Promise<GetTariffTrendsResponse> {
-  const isPro = await isCallerPremium(ctx.request);
-  if (!isPro) return { datapoints: [], fetchedAt: '', upstreamUnavailable: true };
-
   try {
     const reporter = isValidCode(req.reportingCountry) ? req.reportingCountry : '840';
     const productSector = isValidCode(req.productSector) ? req.productSector : '';

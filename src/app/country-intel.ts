@@ -487,10 +487,6 @@ export class CountryIntelManager implements AppModule {
         if (hasPremiumAccess(getAuthState())) this.ctx.countryBriefPage.updateMultiSectorCostShock?.(null);
       });
 
-    // if (hasPremiumAccess(getAuthState())) {
-    //   this.fetchProSections(code);
-    // }
-
     this.fetchProSections(code);
     this.mountCountryTimeline(code, country);
 
@@ -646,12 +642,7 @@ export class CountryIntelManager implements AppModule {
     });
 
     const unCode = iso2ToComtradeReporterCode(code);
-    // Trade RPCs (listComtradeFlows + getTariffTrends) are PRO-gated and
-    // 401 for anonymous/free users. Mirror the hasPremiumAccess() guard
-    // already used above for the other premium country-brief cards so we
-    // don't spray the console with 401s on every country click.
-    const hasPremium = hasPremiumAccess(getAuthState());
-    if (unCode && hasPremium) {
+    if (unCode) {
       tradeClient.listComtradeFlows({ reporterCode: unCode, cmdCode: '', anomaliesOnly: false }).then(resp => {
         if (this.ctx.countryBriefPage?.getCode() !== code) return;
         const topFlows = (resp.flows || [])
