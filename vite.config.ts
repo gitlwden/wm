@@ -1203,10 +1203,28 @@ export default defineConfig(({ mode }) => {
 
                       if (block.name === 'fetch_worldmonitor_data') {
                         try {
-                          const url = new URL(block.input.endpoint, 'http://localhost:5173');
-                          const dataRes = await fetch(url.toString());
+                          const endpoint = block.input.endpoint;
+                          const params = block.input.params || {};
+
+                          // Use actual WorldMonitor API
+                          const url = new URL(endpoint, 'https://api.worldmonitor.app');
+                          for (const [k, v] of Object.entries(params)) {
+                            url.searchParams.set(k, String(v));
+                          }
+
+                          const dataRes = await fetch(url.toString(), {
+                            headers: { 'User-Agent': 'WorldMonitor-WidgetAgent/1.0' },
+                            signal: AbortSignal.timeout(15000),
+                          });
                           const data = await dataRes.text();
-                          toolResults.push({ role: 'tool', tool_call_id: block.id, content: data.slice(0, 10000) });
+
+                          // Check if response is HTML (error) instead of JSON
+                          const trimmed = data.trimStart();
+                          if (trimmed.startsWith('<!DOCTYPE') || trimmed.startsWith('<html')) {
+                            toolResults.push({ role: 'tool', tool_call_id: block.id, content: 'Error: endpoint returned HTML instead of JSON. No data available.' });
+                          } else {
+                            toolResults.push({ role: 'tool', tool_call_id: block.id, content: data.slice(0, 10000) });
+                          }
                         } catch (err) {
                           toolResults.push({ role: 'tool', tool_call_id: block.id, content: `Error: ${err.message}` });
                         }
