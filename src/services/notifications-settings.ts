@@ -429,6 +429,9 @@ export function renderNotificationsSettings(host: NotificationsSettingsHost): No
       let alertRuleDebounceTimer: ReturnType<typeof setTimeout> | null = null;
       let qhDebounceTimer: ReturnType<typeof setTimeout> | null = null;
       let digestDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+      let pendingAlertRuleCb: (() => void) | null = null;
+      let pendingQhCb: (() => void) | null = null;
+      let pendingDigestCb: (() => void) | null = null;
 
       function reloadNotifSection(): void {
         const loadingEl = container.querySelector<HTMLElement>('#usNotifLoading');
@@ -483,9 +486,8 @@ export function renderNotificationsSettings(host: NotificationsSettingsHost): No
             onChange: () => {
               // Debounced save through the existing alertRule pipeline.
               if (alertRuleDebounceTimer) clearTimeout(alertRuleDebounceTimer);
-              alertRuleDebounceTimer = setTimeout(() => {
-                saveCurrentAlertRule();
-              }, 800);
+              pendingAlertRuleCb = () => saveCurrentAlertRule();
+              alertRuleDebounceTimer = setTimeout(pendingAlertRuleCb, 800);
             },
           });
         }).catch((err) => {
@@ -578,9 +580,31 @@ export function renderNotificationsSettings(host: NotificationsSettingsHost): No
         }
       });
 
+      /** Flush any pending debounced saves so changes aren't lost on close. */
+      function flushPendingSaves(): void {
+        if (alertRuleDebounceTimer !== null) {
+          clearTimeout(alertRuleDebounceTimer);
+          alertRuleDebounceTimer = null;
+          try { pendingAlertRuleCb?.(); } catch {}
+          pendingAlertRuleCb = null;
+        }
+        if (qhDebounceTimer !== null) {
+          clearTimeout(qhDebounceTimer);
+          qhDebounceTimer = null;
+          try { pendingQhCb?.(); } catch {}
+          pendingQhCb = null;
+        }
+        if (digestDebounceTimer !== null) {
+          clearTimeout(digestDebounceTimer);
+          digestDebounceTimer = null;
+          try { pendingDigestCb?.(); } catch {}
+          pendingDigestCb = null;
+        }
+      }
+
       const saveQuietHours = () => {
         if (qhDebounceTimer) clearTimeout(qhDebounceTimer);
-        qhDebounceTimer = setTimeout(() => {
+        pendingQhCb = () => {
           const enabledEl = container.querySelector<HTMLInputElement>('#usQhEnabled');
           const startEl = container.querySelector<HTMLSelectElement>('#usQhStart');
           const endEl = container.querySelector<HTMLSelectElement>('#usQhEnd');
@@ -595,12 +619,13 @@ export function renderNotificationsSettings(host: NotificationsSettingsHost): No
             quietHoursOverride: (overrideEl?.value ?? 'critical_only') as QuietHoursOverride,
             countries: countryPicker ? countryPicker.getValue() : undefined,
           });
-        }, 800);
+        };
+        qhDebounceTimer = setTimeout(pendingQhCb, 800);
       };
 
       const saveDigestSettings = () => {
         if (digestDebounceTimer) clearTimeout(digestDebounceTimer);
-        digestDebounceTimer = setTimeout(() => {
+        pendingDigestCb = () => {
           const modeEl = container.querySelector<HTMLSelectElement>('#usDigestMode');
           const hourEl = container.querySelector<HTMLSelectElement>('#usDigestHour');
           const tzEl = container.querySelector<HTMLSelectElement>('#usSharedTimezone');
@@ -611,7 +636,8 @@ export function renderNotificationsSettings(host: NotificationsSettingsHost): No
             digestTimezone: tzEl?.value || detectedTz,
             countries: countryPicker ? countryPicker.getValue() : undefined,
           });
-        }, 800);
+        };
+        digestDebounceTimer = setTimeout(pendingDigestCb, 800);
       };
 
       container.addEventListener('change', (e) => {
@@ -676,7 +702,7 @@ export function renderNotificationsSettings(host: NotificationsSettingsHost): No
           const hourEl = container.querySelector<HTMLSelectElement>('#usDigestHour');
           const tzEl = container.querySelector<HTMLSelectElement>('#usSharedTimezone');
           if (digestDebounceTimer) clearTimeout(digestDebounceTimer);
-          digestDebounceTimer = setTimeout(() => {
+          pendingDigestCb = () => {
             void (async () => {
               try {
                 const state = getCurrentAlertRuleFormState();
@@ -697,7 +723,8 @@ export function renderNotificationsSettings(host: NotificationsSettingsHost): No
                 throw err;
               }
             })();
-          }, 800);
+          };
+          digestDebounceTimer = setTimeout(pendingDigestCb, 800);
 
           if (!isRt) {
             const enabledEl = container.querySelector<HTMLInputElement>('#usNotifEnabled');
@@ -724,30 +751,27 @@ export function renderNotificationsSettings(host: NotificationsSettingsHost): No
         }
         if (target.id === 'usAiDigestEnabled') {
           if (alertRuleDebounceTimer) clearTimeout(alertRuleDebounceTimer);
-          alertRuleDebounceTimer = setTimeout(() => {
-            // Source from the centralized helper so `countries` flows through.
-            // Override aiDigestEnabled with the just-toggled value (the helper
-            // reads from the DOM, which has already been updated by the time
-            // the debounce fires, but explicit override avoids any race).
+          pendingAlertRuleCb = () => {
             const state = getCurrentAlertRuleFormState();
             void saveAlertRules({
               variant: SITE_VARIANT,
               ...state,
               aiDigestEnabled: target.checked,
             });
-          }, 500);
+          };
+          alertRuleDebounceTimer = setTimeout(pendingAlertRuleCb, 500);
           return;
         }
         if (target.id === 'usNotifEnabled' || target.id === 'usNotifSensitivity') {
           if (alertRuleDebounceTimer) clearTimeout(alertRuleDebounceTimer);
-          alertRuleDebounceTimer = setTimeout(() => {
-            // Source from the centralized helper so `countries` flows through.
+          pendingAlertRuleCb = () => {
             const state = getCurrentAlertRuleFormState();
             void saveAlertRules({
               variant: SITE_VARIANT,
               ...state,
             });
-          }, 1000);
+          };
+          alertRuleDebounceTimer = setTimeout(pendingAlertRuleCb, 1000);
         }
       }, { signal });
 
@@ -1041,7 +1065,7 @@ export function renderNotificationsSettings(host: NotificationsSettingsHost): No
       };
       window.addEventListener('message', onMessage, { signal });
 
-      return () => ac.abort();
+      return () => { flushPendingSaves(); ac.abort(); };
     },
   };
 }
