@@ -15,7 +15,7 @@ import { isEntitled, hasFeature, onEntitlementChange, getEntitlementState } from
 import { hasPremiumAccess } from '@/services/panel-gating';
 import { getSubscription, openBillingPortal, prereserveBillingPortalTab } from '@/services/billing';
 import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyInfo } from '@/services/api-keys';
-import { listMcpClients, revokeMcpClient, fetchMcpQuota, type McpClientInfo, type McpQuota } from '@/services/mcp-clients';
+import { listMcpClients, revokeMcpClient, fetchMcpCallLog, type McpClientInfo, type McpCallLogPage } from '@/services/mcp-clients';
 import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
 
 
@@ -69,9 +69,8 @@ export class UnifiedSettings {
   private mcpClients: McpClientInfo[] = [];
   private mcpClientsLoading = false;
   private mcpClientsError = '';
-  private mcpQuota: McpQuota | null = null;
-  /** setInterval handle for quota auto-refresh; cleared on close()/destroy()/tab-switch. */
-  private mcpQuotaTimer: ReturnType<typeof setInterval> | null = null;
+  private mcpLogPage: McpCallLogPage = { entries: [], total: 0, page: 1, pageSize: 20 };
+  private mcpLogLoading = false;
   private unsubscribeEntitlement: (() => void) | null = null;
   // Bounded "entitlement snapshot might still arrive" window. Starts false
   // on open() when currentState is null, flips true on first snapshot OR
@@ -283,6 +282,13 @@ export class UnifiedSettings {
         }
         return;
       }
+
+      const logPageBtn = target.closest<HTMLElement>('.mcp-calllog-page-btn');
+      if (logPageBtn?.dataset.mcpLogPage) {
+        const p = Number(logPageBtn.dataset.mcpLogPage);
+        if (p >= 1) void this.loadMcpCallLog(p);
+        return;
+      }
     });
 
     this.overlay.addEventListener('input', (e) => {
@@ -377,7 +383,6 @@ export class UnifiedSettings {
       clearTimeout(this.entitlementReadyTimer);
       this.entitlementReadyTimer = null;
     }
-    this.stopMcpQuotaPolling();
     this.resetPanelDraft();
     localStorage.removeItem('wm-settings-open');
     document.removeEventListener('keydown', this.escapeHandler);
@@ -416,7 +421,6 @@ export class UnifiedSettings {
       clearTimeout(this.entitlementReadyTimer);
       this.entitlementReadyTimer = null;
     }
-    this.stopMcpQuotaPolling();
     document.removeEventListener('keydown', this.escapeHandler);
     this.overlay.remove();
   }
@@ -544,7 +548,6 @@ export class UnifiedSettings {
     }
     if (this.activeTab === 'mcp-clients' && getAuthState().user && hasFeature('mcpAccess')) {
       void this.loadMcpClients();
-      this.startMcpQuotaPolling();
     }
   }
 
@@ -567,11 +570,6 @@ export class UnifiedSettings {
 
     if (tab === 'mcp-clients' && getAuthState().user && hasFeature('mcpAccess')) {
       void this.loadMcpClients();
-      this.startMcpQuotaPolling();
-    } else {
-      // Stop polling when switching away — no need to keep the timer running
-      // for a hidden tab.
-      this.stopMcpQuotaPolling();
     }
 
     if (tab === 'notifications') {
@@ -1243,36 +1241,18 @@ export class UnifiedSettings {
         <div class="mcp-clients-header">
           <p class="mcp-clients-desc">Connect Claude Desktop, Cursor, and other AI clients to your WorldMonitor account. Each client gets its own credential — revoke any time.</p>
         </div>
-        <div class="mcp-clients-quota" id="usMcpQuota" aria-live="polite">${this.renderMcpQuotaText()}</div>
         <div class="mcp-clients-error" id="usMcpClientsError" style="display:none;"></div>
         <div class="mcp-clients-list" id="usMcpClientsList">
           <div class="mcp-clients-loading">Loading...</div>
         </div>
+        <div class="mcp-calllog-section">
+          <div class="mcp-calllog-header">Today's MCP Call Log</div>
+          <div class="mcp-calllog-table" id="usMcpCallLog">
+            <div class="mcp-clients-loading">Loading...</div>
+          </div>
+          <div class="mcp-calllog-pagination" id="usMcpCallLogPager"></div>
+        </div>
       </div>`;
-  }
-
-  private renderMcpQuotaText(): string {
-    const q = this.mcpQuota;
-    if (!q) {
-      return `<span class="mcp-clients-quota-loading">Loading quota...</span>`;
-    }
-    const reset = this.formatQuotaReset(q.resetsAt);
-    return `<span class="mcp-clients-quota-label">MCP daily quota:</span>
-      <strong>${q.used} / ${q.limit}</strong>
-      <span class="mcp-clients-quota-reset">used today, resets ${escapeHtml(reset)}</span>`;
-  }
-
-  private formatQuotaReset(iso: string): string {
-    const ts = Date.parse(iso);
-    if (!Number.isFinite(ts)) return 'at next UTC midnight';
-    const ms = ts - Date.now();
-    if (ms <= 0) return 'momentarily';
-    const totalSec = Math.floor(ms / 1000);
-    const hrs = Math.floor(totalSec / 3600);
-    const mins = Math.floor((totalSec % 3600) / 60);
-    if (hrs > 0) return `in ${hrs}h ${mins}m`;
-    if (mins > 0) return `in ${mins}m`;
-    return 'in under a minute';
   }
 
   private async loadMcpClients(): Promise<void> {
@@ -1289,44 +1269,66 @@ export class UnifiedSettings {
       this.renderMcpClientsList();
     }
 
-    // Kick a fresh quota fetch alongside the list so the user sees current
-    // numbers immediately on tab open (the polling timer takes 30s otherwise).
-    void this.refreshMcpQuota();
+    void this.loadMcpCallLog(1);
   }
 
-  private async refreshMcpQuota(): Promise<void> {
+  private async loadMcpCallLog(page: number): Promise<void> {
+    this.mcpLogLoading = true;
+    this.renderMcpCallLog();
     try {
-      this.mcpQuota = await fetchMcpQuota();
+      this.mcpLogPage = await fetchMcpCallLog(page, 20);
     } catch {
-      // fetchMcpQuota already returns sane fallbacks, but defensive catch.
-      this.mcpQuota = null;
+      this.mcpLogPage = { entries: [], total: 0, page, pageSize: 20 };
+    } finally {
+      this.mcpLogLoading = false;
+      this.renderMcpCallLog();
     }
-    this.renderMcpQuotaInPlace();
   }
 
-  private renderMcpQuotaInPlace(): void {
-    const el = this.overlay.querySelector<HTMLElement>('#usMcpQuota');
-    if (el) setTrustedHtml(el, trustedHtml(this.renderMcpQuotaText(), "legacy direct innerHTML migration"));
-  }
+  private renderMcpCallLog(): void {
+    const tableEl = this.overlay.querySelector<HTMLElement>('#usMcpCallLog');
+    const pagerEl = this.overlay.querySelector<HTMLElement>('#usMcpCallLogPager');
+    if (!tableEl) return;
 
-  /**
-   * Auto-refresh the quota counter every 30s while the tab is visible.
-   * Cleared on tab-switch, close(), and destroy() — see stopMcpQuotaPolling.
-   */
-  private startMcpQuotaPolling(): void {
-    if (this.mcpQuotaTimer) return; // idempotent
-    this.mcpQuotaTimer = setInterval(() => {
-      // Skip silently if the tab is no longer visible — can happen if the
-      // overlay was hidden via display:none rather than full destroy().
-      if (this.activeTab !== 'mcp-clients') return;
-      void this.refreshMcpQuota();
-    }, 30_000);
-  }
+    if (this.mcpLogLoading && this.mcpLogPage.entries.length === 0) {
+      setTrustedHtml(tableEl, trustedHtml('<div class="mcp-clients-loading">Loading...</div>', "legacy direct innerHTML migration"));
+      if (pagerEl) pagerEl.textContent = '';
+      return;
+    }
 
-  private stopMcpQuotaPolling(): void {
-    if (this.mcpQuotaTimer) {
-      clearInterval(this.mcpQuotaTimer);
-      this.mcpQuotaTimer = null;
+    const { entries, total, page, pageSize } = this.mcpLogPage;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    if (entries.length === 0) {
+      setTrustedHtml(tableEl, trustedHtml('<div class="mcp-calllog-empty">No calls recorded today.</div>', "legacy direct innerHTML migration"));
+      if (pagerEl) pagerEl.textContent = '';
+      return;
+    }
+
+    const formatTime = (iso: string) => {
+      const d = new Date(iso);
+      return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
+
+    const rows = entries.map(e => `
+      <div class="mcp-calllog-row${e.s === 'error' ? ' mcp-calllog-error' : ''}">
+        <span class="mcp-calllog-time">${escapeHtml(formatTime(e.t))}</span>
+        <span class="mcp-calllog-tool">${escapeHtml(e.tool)}</span>
+        <span class="mcp-calllog-status">${e.s === 'ok' ? '✓' : '✗'}</span>
+        <span class="mcp-calllog-ms">${e.ms}ms</span>
+      </div>
+    `).join('');
+
+    setTrustedHtml(tableEl, trustedHtml(rows, "legacy direct innerHTML migration"));
+
+    if (pagerEl) {
+      const prevDisabled = page <= 1;
+      const nextDisabled = page >= totalPages;
+      setTrustedHtml(pagerEl, trustedHtml(`
+        <button class="mcp-calllog-page-btn" data-mcp-log-page="${page - 1}" ${prevDisabled ? 'disabled' : ''}>← Prev</button>
+        <span class="mcp-calllog-page-info">Page ${page} / ${totalPages} (${total} calls)</span>
+        <button class="mcp-calllog-page-btn" data-mcp-log-page="${page + 1}" ${nextDisabled ? 'disabled' : ''}>Next →</button>
+      `, "legacy direct innerHTML migration"));
     }
   }
 

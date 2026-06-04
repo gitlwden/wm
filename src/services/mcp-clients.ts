@@ -84,41 +84,35 @@ export async function revokeMcpClient(tokenId: string): Promise<void> {
   throw new Error(`Revoke failed (HTTP ${resp.status}).`);
 }
 
-/**
- * Fetch the caller's daily Pro MCP quota usage. Returns sane defaults on
- * any failure — the settings UI is informational and should never break
- * because the quota counter is unreachable.
- */
-export async function fetchMcpQuota(): Promise<McpQuota> {
-  const fallback: McpQuota = { used: 0, limit: 50, resetsAt: nextUtcMidnightIso() };
+export interface McpLogEntry {
+  t: string;   // ISO timestamp
+  tool: string;
+  s: string;   // "ok" | "error"
+  ms: number;  // duration in ms
+}
+
+export interface McpCallLogPage {
+  entries: McpLogEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Fetch one page of today's MCP call log. */
+export async function fetchMcpCallLog(page = 1, pageSize = 20): Promise<McpCallLogPage> {
+  const empty: McpCallLogPage = { entries: [], total: 0, page, pageSize };
 
   const token = await getClerkToken();
-  if (!token) return fallback;
+  if (!token) return empty;
 
   try {
-    const resp = await fetch('/api/user/mcp-quota', {
+    const resp = await fetch(`/api/user/mcp-logs?page=${page}&pageSize=${pageSize}`, {
       method: 'GET',
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!resp.ok) return fallback;
-    const data = (await resp.json()) as Partial<McpQuota>;
-    return {
-      used: typeof data.used === 'number' && data.used >= 0 ? data.used : 0,
-      limit: typeof data.limit === 'number' && data.limit > 0 ? data.limit : 50,
-      resetsAt: typeof data.resetsAt === 'string' ? data.resetsAt : fallback.resetsAt,
-    };
+    if (!resp.ok) return empty;
+    return (await resp.json()) as McpCallLogPage;
   } catch {
-    return fallback;
+    return empty;
   }
-}
-
-function nextUtcMidnightIso(): string {
-  const now = new Date();
-  const next = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate() + 1,
-    0, 0, 0, 0,
-  ));
-  return next.toISOString();
 }

@@ -61,6 +61,34 @@ function getMcpProMinRatelimit(): Ratelimit | null {
 }
 
 // ---------------------------------------------------------------------------
+// MCP call logging — daily call log per user, stored in Redis list.
+// Key: mcp:call-log:<userId>:<YYYY-MM-DD>, auto-expires after ~26h.
+// ---------------------------------------------------------------------------
+
+function mcpCallLogKey(userId: string, now: Date): string {
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(now.getUTCDate()).padStart(2, '0');
+  return `mcp:call-log:${userId}:${y}-${m}-${d}`;
+}
+
+async function logMcpCall(userId: string, tool: string, status: string, ms: number): Promise<void> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return;
+
+  const now = new Date();
+  const key = mcpCallLogKey(userId, now);
+  const entry = JSON.stringify({ t: now.toISOString(), tool, s: status, ms });
+
+  await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([['lpush', key, entry], ['ltrim', key, 0, 499], ['expire', key, 90000]]),
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Auth-context shape passed into tool _execute. U7 widened the previous
 // `apiKey: string` to a discriminated union so per-tool fetches can branch
 // header construction (`X-WorldMonitor-Key` for env_key, internal-HMAC for
@@ -1689,6 +1717,7 @@ async function dispatchToolsCall(
     proRollback = reservation.rollback;
   }
 
+  const t0 = Date.now();
   try {
     let result: unknown;
     if (tool._execute) {
@@ -1699,9 +1728,22 @@ async function dispatchToolsCall(
     }
     // Convex `internal-validate-pro-mcp-token` schedules touchProMcpTokenLastUsed
     // itself (convex/http.ts:1035-1040), so no waitUntil needed here.
+
+    // Fire-and-forget: log the call for the user's daily call log.
+    if (context.kind === 'pro') {
+      const logPromise = logMcpCall(context.userId, tool.name, 'ok', Date.now() - t0).catch(() => {});
+      ctx?.waitUntil(logPromise);
+    }
+
     return rpcOk(id, { content: [{ type: 'text', text: JSON.stringify(result) }] }, corsHeaders);
   } catch (err: unknown) {
     if (proRollback) await proRollback();
+
+    // Log the failed call too.
+    if (context.kind === 'pro') {
+      const logPromise = logMcpCall(context.userId, tool.name, 'error', Date.now() - t0).catch(() => {});
+      ctx?.waitUntil(logPromise);
+    }
     // HTTP 4xx from an internal sibling fetch (e.g. `feed-digest HTTP 401`)
     // is expected-but-trackable: transient HMAC/auth/quota drift, replay-window
     // skew, or a single user's expired context. Report at `warning` so single

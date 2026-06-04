@@ -23512,35 +23512,99 @@ body.map-width-resizing {
   margin-bottom: 12px;
 }
 
-.mcp-clients-quota {
-  font-size: 12px;
-  color: var(--text);
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+/* MCP Call Log */
+.mcp-calllog-section {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
 }
 
-.mcp-clients-quota-label {
-  font-weight: 600;
-}
-
-.mcp-clients-quota-reset {
+.mcp-calllog-header {
   font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   color: var(--text-dim);
+  margin-bottom: 8px;
 }
 
-.mcp-clients-quota-loading {
-  font-size: 12px;
+.mcp-calllog-table {
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+.mcp-calllog-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 24px 50px;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  align-items: center;
+}
+
+.mcp-calllog-time {
   color: var(--text-dim);
-  padding: 10px 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mcp-calllog-tool {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-calllog-status {
   text-align: center;
+}
+
+.mcp-calllog-error .mcp-calllog-status {
+  color: var(--red, #ff4444);
+}
+
+.mcp-calllog-ms {
+  color: var(--text-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.mcp-calllog-empty {
+  color: var(--text-dim);
+  font-size: 11px;
+  padding: 12px 0;
+  text-align: center;
+}
+
+.mcp-calllog-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.mcp-calllog-page-btn {
+  padding: 4px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.mcp-calllog-page-btn:hover:not(:disabled) {
+  border-color: var(--text-dim);
+}
+
+.mcp-calllog-page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mcp-calllog-page-info {
+  font-size: 10px;
+  color: var(--text-dim);
 }
 
 .mcp-clients-error {
