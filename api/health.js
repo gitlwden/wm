@@ -254,7 +254,7 @@ const SEED_META = {
   naturalEvents:    { key: 'seed-meta:natural:events',          maxStaleMin: 360 }, // 2h cron; 3x interval; was 120 (TTL was 60min — panel went dark before health alarmed)
   flightDelays:     { key: 'seed-meta:aviation:faa',            maxStaleMin: 90 }, // CACHE_TTL=7200s; matches notamClosures from same cron
   notamClosures:    { key: 'seed-meta:aviation:notam',          maxStaleMin: 240 }, // 2h interval; 240min = 2x interval
-  predictionMarkets: { key: 'seed-meta:prediction:markets',     maxStaleMin: 90 },
+  predictionMarkets: { key: 'seed-meta:prediction:markets',     maxStaleMin: 1500 },
   newsInsights:     { key: 'seed-meta:news:insights',           maxStaleMin: 30 },
   marketQuotes:     { key: 'seed-meta:market:stocks',         maxStaleMin: 30 },
   commodityQuotes:  { key: 'seed-meta:market:commodities',    maxStaleMin: 30 },

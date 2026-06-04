@@ -10,7 +10,7 @@ import predictionTags from './data/prediction-tags.json' with { type: 'json' };
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'prediction:markets-bootstrap:v1';
-const CACHE_TTL = 10800; // 3h — 6x the 30 min cron interval (gold standard: survive 5 missed runs)
+const CACHE_TTL = 90000; // 25h — daily cron at 07:37 UTC; survives one missed run
 
 const GAMMA_BASE = 'https://gamma-api.polymarket.com';
 const KALSHI_BASE = 'https://api.elections.kalshi.com/trade-api/v2';
@@ -201,6 +201,6 @@ await runSeed('prediction', 'markets', CANONICAL_KEY, fetchAllPredictions, {
 
   declareRecords,
   schemaVersion: 1,
-  maxStaleMin: 90,
+  maxStaleMin: 1500,
   sourceVersion: 'prediction-markets-v1',
 });
