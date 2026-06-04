@@ -17230,25 +17230,75 @@ a.prediction-link:hover {
   }
 }
 
-.unified-settings-modal .panel-toggle-grid,
+/* Scroll containers for panels/sources — pins pills, search, and footer */
+.panels-scroll,
+.sources-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Region pills: wrap instead of horizontal scroll */
+.unified-settings-modal .unified-settings-region-bar {
+  flex-wrap: wrap;
+  overflow-x: hidden;
+}
+
+/* Remove fade gradient when wrapping */
+.unified-settings-modal .unified-settings-region-wrapper::after,
+.unified-settings-modal .panels-scroll > .unified-settings-region-bar::after,
+.unified-settings-modal .sources-scroll > .unified-settings-region-bar::after {
+  display: none;
+}
+
+/* Sticky pin: pills stay at top */
+.unified-settings-modal .panels-scroll > .unified-settings-region-bar,
+.unified-settings-modal .sources-scroll > .unified-settings-region-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Sticky pin: search stays below pills */
+.unified-settings-modal .panels-search,
+.unified-settings-modal .sources-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  padding-bottom: 6px;
+  flex-shrink: 0;
+}
+
+/* Grid fills remaining space in scroll container */
+.unified-settings-modal .panel-toggle-grid {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
 .unified-settings-modal .sources-toggle-grid {
   flex: 1;
   min-height: 0;
   max-height: none;
 }
 
+/* Sticky pin: footer stays at bottom */
 .unified-settings-modal .panels-footer,
 .unified-settings-modal .sources-footer {
-  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
   padding-top: 8px;
   border-top: 1px solid var(--border);
   margin-top: 8px;
-}
-
-.unified-settings-modal .unified-settings-region-wrapper,
-.unified-settings-modal .panels-search,
-.unified-settings-modal .sources-search {
   flex-shrink: 0;
+  z-index: 1;
 }
 
 /* ============ Preferences Collapsible Groups ============ */

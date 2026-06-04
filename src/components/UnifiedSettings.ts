@@ -459,34 +459,34 @@ export class UnifiedSettings {
           ${this.renderUpgradeSection()}
         </div>
         <div class="unified-settings-tab-panel${this.activeTab === 'panels' ? ' active' : ''}" data-panel-id="panels" id="us-tab-panel-panels" role="tabpanel" aria-labelledby="us-tab-panels">
-          <div class="unified-settings-region-wrapper">
+          <div class="panels-scroll">
             <div class="unified-settings-region-bar" id="usPanelCatBar"></div>
-          </div>
-          <div class="panels-search">
-            <input type="text" placeholder="${t('header.filterPanels')}" value="${escapeHtml(this.panelFilter)}" />
-          </div>
-          <div class="panel-toggle-grid" id="usPanelToggles"></div>
-          <div class="panels-footer">
-            <span class="panels-counter" id="usPanelsCounter"></span>
-            <span class="panels-status" id="usPanelsStatus" aria-live="polite"></span>
-            <button class="panels-select-all">${t('common.selectAll')}</button>
-            <button class="panels-select-none">${t('common.selectNone')}</button>
-            <button class="panels-save-layout">${t('modals.story.save')}</button>
-            <button class="panels-reset-layout" title="${t('header.resetLayoutTooltip')}" aria-label="${t('header.resetLayoutTooltip')}">${t('header.resetLayout')}</button>
+            <div class="panels-search">
+              <input type="text" placeholder="${t('header.filterPanels')}" value="${escapeHtml(this.panelFilter)}" />
+            </div>
+            <div class="panel-toggle-grid" id="usPanelToggles"></div>
+            <div class="panels-footer">
+              <span class="panels-counter" id="usPanelsCounter"></span>
+              <span class="panels-status" id="usPanelsStatus" aria-live="polite"></span>
+              <button class="panels-select-all">${t('common.selectAll')}</button>
+              <button class="panels-select-none">${t('common.selectNone')}</button>
+              <button class="panels-save-layout">${t('modals.story.save')}</button>
+              <button class="panels-reset-layout" title="${t('header.resetLayoutTooltip')}" aria-label="${t('header.resetLayoutTooltip')}">${t('header.resetLayout')}</button>
+            </div>
           </div>
         </div>
         <div class="unified-settings-tab-panel${this.activeTab === 'sources' ? ' active' : ''}" data-panel-id="sources" id="us-tab-panel-sources" role="tabpanel" aria-labelledby="us-tab-sources">
-          <div class="unified-settings-region-wrapper">
+          <div class="sources-scroll">
             <div class="unified-settings-region-bar" id="usRegionBar"></div>
-          </div>
-          <div class="sources-search">
-            <input type="text" placeholder="${t('header.filterSources')}" value="${escapeHtml(this.sourceFilter)}" />
-          </div>
-          <div class="sources-toggle-grid" id="usSourceToggles"></div>
-          <div class="sources-footer">
-            <span class="sources-counter" id="usSourcesCounter"></span>
-            <button class="sources-select-all">${t('common.selectAll')}</button>
-            <button class="sources-select-none">${t('common.selectNone')}</button>
+            <div class="sources-search">
+              <input type="text" placeholder="${t('header.filterSources')}" value="${escapeHtml(this.sourceFilter)}" />
+            </div>
+            <div class="sources-toggle-grid" id="usSourceToggles"></div>
+            <div class="sources-footer">
+              <span class="sources-counter" id="usSourcesCounter"></span>
+              <button class="sources-select-all">${t('common.selectAll')}</button>
+              <button class="sources-select-none">${t('common.selectNone')}</button>
+            </div>
           </div>
         </div>
         ${notifs ? `
