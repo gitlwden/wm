@@ -990,10 +990,10 @@ export class UnifiedSettings {
     if (!counter) return;
 
     const disabled = this.config.getDisabledSources();
-    const allSources = this.config.getAllSourceNames();
-    const enabledTotal = allSources.length - disabled.size;
+    const visibleSources = this.getVisibleSourceNames();
+    const enabledTotal = visibleSources.filter(s => !disabled.has(s)).length;
 
-    counter.textContent = t('header.sourcesEnabled', { enabled: String(enabledTotal), total: String(allSources.length) });
+    counter.textContent = t('header.sourcesEnabled', { enabled: String(enabledTotal), total: String(visibleSources.length) });
   }
 
   // ---------------------------------------------------------------------------

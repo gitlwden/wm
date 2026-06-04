@@ -17257,10 +17257,14 @@ a.prediction-link:hover {
   overflow-y: auto;
 }
 
-/* Region pills: wrap to multiple lines */
+/* Region pills: wrap to multiple lines — overflow:hidden overrides base overflow-x:auto which suppresses wrapping */
 .unified-settings-modal .unified-settings-region-bar {
   flex-wrap: wrap;
-  overflow: visible;
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  max-height: none;
 }
 
 /* Remove fade gradient */
@@ -17276,6 +17280,8 @@ a.prediction-link:hover {
   z-index: 2;
   background: var(--surface);
   padding-bottom: 4px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Grid wrapper scrolls its content — padding-right keeps scrollbar off buttons */
