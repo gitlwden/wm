@@ -17222,11 +17222,19 @@ a.prediction-link:hover {
 }
 
 /* Responsive grids */
+@media (max-width: 900px) {
+
+  .unified-settings-modal .panel-toggle-grid,
+  .unified-settings-modal .sources-toggle-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
 @media (max-width: 500px) {
 
   .unified-settings-modal .panel-toggle-grid,
   .unified-settings-modal .sources-toggle-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
@@ -17242,7 +17250,9 @@ a.prediction-link:hover {
 /* Region pills: wrap to multiple lines */
 .unified-settings-modal .unified-settings-region-bar {
   flex-wrap: wrap;
-  overflow-x: hidden;
+  overflow-x: visible;
+  overflow-y: hidden;
+  max-height: none;
 }
 
 /* Remove fade gradient */
@@ -17260,27 +17270,41 @@ a.prediction-link:hover {
   padding-bottom: 4px;
 }
 
-/* Grid wrapper scrolls its content */
+/* Grid wrapper scrolls its content — padding-right keeps scrollbar off buttons */
 .panels-grid-wrap,
 .sources-grid-wrap {
   overflow-y: auto;
   max-height: calc(80vh - 220px);
+  padding-right: 4px;
 }
 
-/* Grid itself */
+/* Grid: 9 columns for compact layout */
 .unified-settings-modal .panel-toggle-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px;
 }
 
 .unified-settings-modal .sources-toggle-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px;
   max-height: none;
   overflow-y: visible;
   margin-bottom: 0;
+}
+
+/* Compact toggle items for 9-col layout */
+.unified-settings-modal .panel-toggle-item {
+  padding: 4px 6px;
+  gap: 4px;
+  font-size: 9px;
+}
+
+.unified-settings-modal .source-toggle-item {
+  padding: 4px 6px;
+  gap: 4px;
+  font-size: 9px;
 }
 
 /* Pinned footer */
