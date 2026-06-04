@@ -6960,6 +6960,16 @@ a.prediction-link:hover {
   flex-shrink: 0;
 }
 
+.panel-toggle-pro-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.7;
+}
+
 /* Sources Modal */
 .sources-modal {
   max-width: 600px;
@@ -17250,9 +17260,7 @@ a.prediction-link:hover {
 /* Region pills: wrap to multiple lines */
 .unified-settings-modal .unified-settings-region-bar {
   flex-wrap: wrap;
-  overflow-x: visible;
-  overflow-y: hidden;
-  max-height: none;
+  overflow: visible;
 }
 
 /* Remove fade gradient */
