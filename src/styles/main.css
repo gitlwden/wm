@@ -7066,6 +7066,30 @@ a.prediction-link:hover {
   opacity: 1;
 }
 
+.panels-counter {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-right: auto;
+  flex-shrink: 0;
+}
+
+.panels-select-all,
+.panels-select-none {
+  padding: 6px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.panels-select-all:hover,
+.panels-select-none:hover {
+  border-color: var(--text-dim);
+}
+
 .panels-save-layout,
 .panels-reset-layout {
   padding: 6px 12px;
@@ -17065,8 +17089,7 @@ a.prediction-link:hover {
 }
 
 .unified-settings-modal {
-  max-width: 600px;
-  width: 95%;
+  width: 66.67vw;
   max-height: 80vh;
 }
 

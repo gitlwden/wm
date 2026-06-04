@@ -162,6 +162,33 @@ export class UnifiedSettings {
         return;
       }
 
+      if (target.closest('.panels-select-all')) {
+        const visible = this.getVisiblePanelEntries();
+        for (const [key] of visible) {
+          const panel = this.draftPanelSettings[key];
+          if (panel && !panel.enabled) {
+            const resolvedPanel = ALL_PANELS[key] ? getEffectivePanelConfig(key, SITE_VARIANT) : panel;
+            if (isPanelEntitled(key, resolvedPanel, isProUser())) {
+              panel.enabled = true;
+            }
+          }
+        }
+        this.panelsJustSaved = false;
+        this.renderPanelsTab();
+        return;
+      }
+
+      if (target.closest('.panels-select-none')) {
+        const visible = this.getVisiblePanelEntries();
+        for (const [key] of visible) {
+          const panel = this.draftPanelSettings[key];
+          if (panel) panel.enabled = false;
+        }
+        this.panelsJustSaved = false;
+        this.renderPanelsTab();
+        return;
+      }
+
       const panelItem = target.closest<HTMLElement>('.panel-toggle-item');
       if (panelItem?.dataset.panel) {
         if (panelItem.dataset.proLocked) {
@@ -440,7 +467,10 @@ export class UnifiedSettings {
           </div>
           <div class="panel-toggle-grid" id="usPanelToggles"></div>
           <div class="panels-footer">
+            <span class="panels-counter" id="usPanelsCounter"></span>
             <span class="panels-status" id="usPanelsStatus" aria-live="polite"></span>
+            <button class="panels-select-all">${t('common.selectAll')}</button>
+            <button class="panels-select-none">${t('common.selectNone')}</button>
             <button class="panels-save-layout">${t('modals.story.save')}</button>
             <button class="panels-reset-layout" title="${t('header.resetLayoutTooltip')}" aria-label="${t('header.resetLayoutTooltip')}">${t('header.resetLayout')}</button>
           </div>
@@ -827,6 +857,23 @@ export class UnifiedSettings {
     if (status) {
       status.textContent = this.panelsJustSaved ? t('modals.settingsWindow.saved') : '';
       status.classList.toggle('visible', this.panelsJustSaved);
+    }
+
+    const counter = this.overlay.querySelector<HTMLElement>('#usPanelsCounter');
+    if (counter) {
+      const visible = this.getVisiblePanelEntries();
+      const pro = isProUser();
+      let enabled = 0;
+      let total = 0;
+      for (const [key, panel] of visible) {
+        const resolvedPanel = ALL_PANELS[key] ? getEffectivePanelConfig(key, SITE_VARIANT) : panel;
+        const locked = !isPanelEntitled(key, resolvedPanel, pro);
+        if (!locked) {
+          total++;
+          if (panel.enabled) enabled++;
+        }
+      }
+      counter.textContent = t('header.panelsEnabled', { enabled: String(enabled), total: String(total) });
     }
   }
 
