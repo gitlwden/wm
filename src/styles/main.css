@@ -17247,31 +17247,18 @@ a.prediction-link:hover {
 }
 
 /* Remove fade gradient when wrapping */
-.unified-settings-modal .unified-settings-region-wrapper::after,
-.unified-settings-modal .panels-scroll > .unified-settings-region-bar::after,
-.unified-settings-modal .sources-scroll > .unified-settings-region-bar::after {
+.unified-settings-modal .unified-settings-region-wrapper::after {
   display: none;
 }
 
-/* Sticky pin: pills stay at top */
-.unified-settings-modal .panels-scroll > .unified-settings-region-bar,
-.unified-settings-modal .sources-scroll > .unified-settings-region-bar {
+/* Sticky top wrapper: pills + search stay pinned together */
+.panels-sticky-top,
+.sources-sticky-top {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   background: var(--surface);
   padding-bottom: 4px;
-  border-bottom: 1px solid var(--border);
-}
-
-/* Sticky pin: search stays below pills */
-.unified-settings-modal .panels-search,
-.unified-settings-modal .sources-search {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--surface);
-  padding-bottom: 6px;
   flex-shrink: 0;
 }
 
@@ -17296,9 +17283,9 @@ a.prediction-link:hover {
   background: var(--surface);
   padding-top: 8px;
   border-top: 1px solid var(--border);
-  margin-top: 8px;
+  margin-top: auto;
   flex-shrink: 0;
-  z-index: 1;
+  z-index: 2;
 }
 
 /* ============ Preferences Collapsible Groups ============ */

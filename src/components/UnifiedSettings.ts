@@ -460,9 +460,11 @@ export class UnifiedSettings {
         </div>
         <div class="unified-settings-tab-panel${this.activeTab === 'panels' ? ' active' : ''}" data-panel-id="panels" id="us-tab-panel-panels" role="tabpanel" aria-labelledby="us-tab-panels">
           <div class="panels-scroll">
-            <div class="unified-settings-region-bar" id="usPanelCatBar"></div>
-            <div class="panels-search">
-              <input type="text" placeholder="${t('header.filterPanels')}" value="${escapeHtml(this.panelFilter)}" />
+            <div class="panels-sticky-top">
+              <div class="unified-settings-region-bar" id="usPanelCatBar"></div>
+              <div class="panels-search">
+                <input type="text" placeholder="${t('header.filterPanels')}" value="${escapeHtml(this.panelFilter)}" />
+              </div>
             </div>
             <div class="panel-toggle-grid" id="usPanelToggles"></div>
             <div class="panels-footer">
@@ -477,9 +479,11 @@ export class UnifiedSettings {
         </div>
         <div class="unified-settings-tab-panel${this.activeTab === 'sources' ? ' active' : ''}" data-panel-id="sources" id="us-tab-panel-sources" role="tabpanel" aria-labelledby="us-tab-sources">
           <div class="sources-scroll">
-            <div class="unified-settings-region-bar" id="usRegionBar"></div>
-            <div class="sources-search">
-              <input type="text" placeholder="${t('header.filterSources')}" value="${escapeHtml(this.sourceFilter)}" />
+            <div class="sources-sticky-top">
+              <div class="unified-settings-region-bar" id="usRegionBar"></div>
+              <div class="sources-search">
+                <input type="text" placeholder="${t('header.filterSources')}" value="${escapeHtml(this.sourceFilter)}" />
+              </div>
             </div>
             <div class="sources-toggle-grid" id="usSourceToggles"></div>
             <div class="sources-footer">
