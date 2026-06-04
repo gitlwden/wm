@@ -17090,13 +17090,23 @@ a.prediction-link:hover {
 
 .unified-settings-modal {
   width: 66.67vw;
+  max-width: none;
+  height: 80vh;
   max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.unified-settings-modal > .modal-header {
+  flex-shrink: 0;
 }
 
 .unified-settings-tabs {
   display: flex;
   border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .unified-settings-tab {
@@ -17127,10 +17137,14 @@ a.prediction-link:hover {
 .unified-settings-tab-panel {
   display: none;
   padding: 0 4px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .unified-settings-tab-panel.active {
-  display: block;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Source region pills */
@@ -17214,6 +17228,27 @@ a.prediction-link:hover {
   .unified-settings-modal .sources-toggle-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+.unified-settings-modal .panel-toggle-grid,
+.unified-settings-modal .sources-toggle-grid {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+.unified-settings-modal .panels-footer,
+.unified-settings-modal .sources-footer {
+  flex-shrink: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.unified-settings-modal .unified-settings-region-wrapper,
+.unified-settings-modal .panels-search,
+.unified-settings-modal .sources-search {
+  flex-shrink: 0;
 }
 
 /* ============ Preferences Collapsible Groups ============ */
