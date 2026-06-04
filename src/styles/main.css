@@ -17230,28 +17230,27 @@ a.prediction-link:hover {
   }
 }
 
-/* Scroll containers for panels/sources — pins pills, search, and footer */
+/* Scroll containers for panels/sources */
 .panels-scroll,
 .sources-scroll {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
 }
 
-/* Region pills: wrap instead of horizontal scroll */
+/* Region pills: wrap to multiple lines */
 .unified-settings-modal .unified-settings-region-bar {
   flex-wrap: wrap;
   overflow-x: hidden;
 }
 
-/* Remove fade gradient when wrapping */
+/* Remove fade gradient */
 .unified-settings-modal .unified-settings-region-wrapper::after {
   display: none;
 }
 
-/* Sticky top wrapper: pills + search stay pinned together */
+/* Pinned top block: pills + search */
 .panels-sticky-top,
 .sources-sticky-top {
   position: sticky;
@@ -17259,33 +17258,40 @@ a.prediction-link:hover {
   z-index: 2;
   background: var(--surface);
   padding-bottom: 4px;
-  flex-shrink: 0;
 }
 
-/* Grid fills remaining space in scroll container */
+/* Grid wrapper scrolls its content */
+.panels-grid-wrap,
+.sources-grid-wrap {
+  overflow-y: auto;
+  max-height: calc(80vh - 220px);
+}
+
+/* Grid itself */
 .unified-settings-modal .panel-toggle-grid {
-  flex: 1;
-  min-height: 0;
-  max-height: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .unified-settings-modal .sources-toggle-grid {
-  flex: 1;
-  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
   max-height: none;
+  overflow-y: visible;
+  margin-bottom: 0;
 }
 
-/* Sticky pin: footer stays at bottom */
-.unified-settings-modal .panels-footer,
-.unified-settings-modal .sources-footer {
+/* Pinned footer */
+.panels-footer,
+.sources-footer {
   position: sticky;
   bottom: 0;
+  z-index: 2;
   background: var(--surface);
   padding-top: 8px;
   border-top: 1px solid var(--border);
-  margin-top: auto;
-  flex-shrink: 0;
-  z-index: 2;
 }
 
 /* ============ Preferences Collapsible Groups ============ */

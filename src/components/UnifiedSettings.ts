@@ -466,7 +466,9 @@ export class UnifiedSettings {
                 <input type="text" placeholder="${t('header.filterPanels')}" value="${escapeHtml(this.panelFilter)}" />
               </div>
             </div>
-            <div class="panel-toggle-grid" id="usPanelToggles"></div>
+            <div class="panels-grid-wrap">
+              <div class="panel-toggle-grid" id="usPanelToggles"></div>
+            </div>
             <div class="panels-footer">
               <span class="panels-counter" id="usPanelsCounter"></span>
               <span class="panels-status" id="usPanelsStatus" aria-live="polite"></span>
@@ -485,7 +487,9 @@ export class UnifiedSettings {
                 <input type="text" placeholder="${t('header.filterSources')}" value="${escapeHtml(this.sourceFilter)}" />
               </div>
             </div>
-            <div class="sources-toggle-grid" id="usSourceToggles"></div>
+            <div class="sources-grid-wrap">
+              <div class="sources-toggle-grid" id="usSourceToggles"></div>
+            </div>
             <div class="sources-footer">
               <span class="sources-counter" id="usSourcesCounter"></span>
               <button class="sources-select-all">${t('common.selectAll')}</button>
