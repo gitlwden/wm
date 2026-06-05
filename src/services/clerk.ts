@@ -26,28 +26,6 @@ type ClerkInstance = Clerk;
 
 const PUBLISHABLE_KEY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLERK_PUBLISHABLE_KEY) as string | undefined;
 
-/** Load the Clerk UI component script (@clerk/ui) from CDN. Sets window.__internal_ClerkUICtor. */
-async function loadClerkUIScript(): Promise<void> {
-  const w = window as unknown as { __internal_ClerkUICtor?: unknown };
-  if (w.__internal_ClerkUICtor) return;
-  if (!PUBLISHABLE_KEY) return;
-  // Extract frontend API host from publishable key (base64-decoded prefix)
-  const host = atob(PUBLISHABLE_KEY.replace(/_/g, '/').replace(/-/g, '+').split('$')[0]);
-  const url = `https://${host}/npm/@clerk/ui@1/dist/ui.browser.js`;
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${url}"]`);
-    if (existing) { existing.addEventListener('load', () => resolve()); return; }
-    const s = document.createElement('script');
-    s.src = url;
-    s.crossOrigin = 'anonymous';
-    s.async = true;
-    s.dataset.clerkUiScript = '';
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Failed to load Clerk UI script'));
-    document.head.appendChild(s);
-  });
-}
-
 let clerkInstance: ClerkInstance | null = null;
 let loadPromise: Promise<void> | null = null;
 let loadScheduled = false;
@@ -138,15 +116,9 @@ export async function initClerk(): Promise<void> {
   }
   loadPromise = (async () => {
     try {
-      // Clerk v6 splits UI into @clerk/ui — load it before calling load().
-      await loadClerkUIScript();
-
       const { Clerk } = await import('@clerk/clerk-js');
       const clerk = new Clerk(PUBLISHABLE_KEY);
-
-      const uiCtor = (window as unknown as { __internal_ClerkUICtor?: unknown }).__internal_ClerkUICtor;
       await clerk.load({
-        ...(uiCtor ? { clerkUICtor: uiCtor } : {}),
         appearance: getAppearance(),
         afterSignOutUrl: getAfterSignOutUrl(),
       });
@@ -490,17 +462,12 @@ export function mountUserButton(el: HTMLDivElement): () => void {
       realUnmount?.();
     };
   }
-  const tryMount = (attempt: number): void => {
-    try {
-      clerkInstance?.mountUserButton(el, { appearance: getAppearance() });
-      console.log('[clerk] mountUserButton succeeded on attempt', attempt);
-    } catch (err) {
-      console.warn(`[clerk] mountUserButton attempt ${attempt} failed:`, err);
-      if (attempt < 10) {
-        setTimeout(() => tryMount(attempt + 1), 300 * (attempt + 1));
-      }
-    }
-  };
-  tryMount(0);
+  try {
+    clerkInstance.mountUserButton(el, {
+      appearance: getAppearance(),
+    });
+  } catch {
+    // Clerk UI components not loaded yet — non-fatal, settings button still renders
+  }
   return () => clerkInstance?.unmountUserButton(el);
 }
