@@ -17,5 +17,5 @@ gh auth logout
 gh auth login
 
 ---------------------------------------------
-
-git remote set-url origin https://github.com/gitlwden/mw.git
+git remote -v
+git remote set-url origin https://github.com/gtlwd/wm.git
