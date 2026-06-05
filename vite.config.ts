@@ -964,6 +964,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     cacheDir,
+    optimizeDeps: {
+      exclude: ['@clerk/clerk-js'],
+    },
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
       // Vercel sets VERCEL_GIT_COMMIT_SHA on production + preview builds.

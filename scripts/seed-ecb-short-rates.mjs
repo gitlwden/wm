@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, CHROME_UA, kvSet, withRetry, writeFreshnessMetadata, extendExistingTtl, acquireLockSafely, releaseLock, logSeedResult } from './_seed-utils.mjs';
-
+import { loadEnvFile, CHROME_UA, getRedisCredentials, withRetry, writeFreshnessMetadata, extendExistingTtl, acquireLockSafely, releaseLock, logSeedResult } from './_seed-utils.mjs';
+import { tokensToContentMeta, DAY_MIN } from './_content-age-helpers.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -116,7 +116,7 @@ async function fetchEcbSeries(def) {
 
 // ─── Write a single FRED-format key to Redis ───────────────────────────────────
 
-async function writeSeriesKey(def, observations) {
+async function writeSeriesKey(redisUrl, redisToken, def, observations) {
   const key = fredSeedKey(def.id);
   const payload = {
     series: {
@@ -127,7 +127,14 @@ async function writeSeriesKey(def, observations) {
       observations,
     },
   };
-  await kvSet(key, payload, TTL);
+  const body = JSON.stringify(['SET', key, JSON.stringify(payload), 'EX', TTL]);
+  const resp = await fetch(redisUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${redisToken}`, 'Content-Type': 'application/json' },
+    body,
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!resp.ok) throw new Error(`Redis write failed for ${key}: HTTP ${resp.status}`);
   console.log(`  Wrote ${key} (${observations.length} obs, TTL=${TTL}s)`);
 }
 
@@ -150,6 +157,7 @@ async function main() {
     process.exit(0);
   }
 
+  const { url: redisUrl, token: redisToken } = getRedisCredentials();
   let successCount = 0;
   let totalObs = 0;
   let estrObservations = null;
@@ -158,7 +166,8 @@ async function main() {
   for (const def of ECB_SERIES) {
     try {
       const observations = await withRetry(() => fetchEcbSeries(def), 2, 2000);
-      await writeSeriesKey(def, observations);
+      await writeSeriesKey(redisUrl, redisToken, def, observations);
+      if (def.id === 'ESTR') estrObservations = observations;
       successCount++;
       totalObs += observations.length;
     } catch (err) {

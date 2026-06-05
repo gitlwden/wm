@@ -78,7 +78,7 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
-  let isPro = true;
+  let isPro = false;
 
   const headerWorldMonitorKey =
     req.headers.get('X-WorldMonitor-Key') ??
@@ -111,63 +111,65 @@ export default async function handler(req: Request): Promise<Response> {
       if (!session.valid) {
         return json({ error: 'Invalid or expired session' }, 401, corsHeaders);
       }
-      let allowed = true;
-      let entitlementChecked = true;
+      let allowed = session.role === 'pro';
+      let entitlementChecked = false;
       let entitlementTier: number | null = null;
       if (!allowed && session.userId) {
         const ent = await getEntitlements(session.userId);
         entitlementChecked = true;
         entitlementTier = ent ? ent.features.tier : null;
-        allowed = true;
+        allowed = !!ent && ent.features.tier >= 1;
       }
-      // if (!allowed) {
-      //   // Structured log so on-call can distinguish two distinct 403 causes
-      //   // sharing one user-facing message:
-      //   //   reason=not_entitled      — Convex returned a row, tier < 1 (real free user)
-      //   //   reason=service_unavailable — entitlement lookup returned null
-      //   //                                (Convex unreachable / Redis trouble / cache miss + Convex down).
-      //   //                                The latter blocks paying users during outages —
-      //   //                                grep these in Vercel logs to trigger an incident
-      //   //                                instead of waiting for refund tickets.
-      //   const reason = entitlementChecked && entitlementTier === null
-      //     ? 'service_unavailable'
-      //     : 'not_entitled';
-      //   console.warn('[widget-agent] 403 pro-required', JSON.stringify({
-      //     reason,
-      //     userId: session.userId ?? null,
-      //     clerkRole: session.role ?? null,
-      //     entitlementChecked,
-      //     entitlementTier,
-      //   }));
-      //   return json({ error: 'Pro subscription required' }, 403, corsHeaders);
-      // }
+      if (!allowed) {
+        // Structured log so on-call can distinguish two distinct 403 causes
+        // sharing one user-facing message:
+        //   reason=not_entitled      — Convex returned a row, tier < 1 (real free user)
+        //   reason=service_unavailable — entitlement lookup returned null
+        //                                (Convex unreachable / Redis trouble / cache miss + Convex down).
+        //                                The latter blocks paying users during outages —
+        //                                grep these in Vercel logs to trigger an incident
+        //                                instead of waiting for refund tickets.
+        const reason = entitlementChecked && entitlementTier === null
+          ? 'service_unavailable'
+          : 'not_entitled';
+        console.warn('[widget-agent] 403 pro-required', JSON.stringify({
+          reason,
+          userId: session.userId ?? null,
+          clerkRole: session.role ?? null,
+          entitlementChecked,
+          entitlementTier,
+        }));
+        return json({ error: 'Pro subscription required' }, 403, corsHeaders);
+      }
       isPro = true;
     } else {
       // Legacy tester key path (wm-widget-key / wm-pro-key)
-      const widgetKey = req.headers.get('X-Widget-Key') ?? '';
-      const proKey = req.headers.get('X-Pro-Key') ?? '';
-      const hasWidgetKey = true;
-      const hasProKey = true;
-      // if (!hasWidgetKey && !hasProKey) {
-      //   return json({ error: 'Forbidden' }, 403, corsHeaders);
-      // }
-      isPro = true;
+      const widgetKey = req.headers.get('X-Widget-Key') || getCookie(req, 'wm-widget-key');
+      const proKey = req.headers.get('X-Pro-Key') || getCookie(req, 'wm-pro-key');
+      const hasWidgetKey = Boolean(WIDGET_AGENT_KEY && widgetKey === WIDGET_AGENT_KEY);
+      const hasProKey = Boolean(PRO_WIDGET_KEY && proKey === PRO_WIDGET_KEY);
+      if (!hasWidgetKey && !hasProKey) {
+        return json({ error: 'Forbidden' }, 403, corsHeaders);
+      }
+      isPro = hasProKey;
     }
   }
 
   // Mirror the relay P2 fix: allow PRO-only deployments (no basic key, but PRO key present)
-  // if (!WIDGET_AGENT_KEY && !PRO_WIDGET_KEY) {
-  //   return json({ error: 'Widget agent unavailable', ok: false, widgetKeyConfigured: false }, 503, corsHeaders);
-  // }
+  if (!WIDGET_AGENT_KEY && !PRO_WIDGET_KEY) {
+    return json({ error: 'Widget agent unavailable', ok: false, widgetKeyConfigured: false }, 503, corsHeaders);
+  }
 
   // ── Build relay headers (server-side keys, never exposed to browser) ──────
   const relayHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     'User-Agent': 'worldmonitor-widget-edge/1.0',
-    // Skip auth keys for local development
-    // ...(WIDGET_AGENT_KEY ? { 'X-Widget-Key': WIDGET_AGENT_KEY } : {}),
-    // ...(isPro && PRO_WIDGET_KEY ? { 'X-Pro-Key': PRO_WIDGET_KEY } : {}),
+    ...(WIDGET_AGENT_KEY ? { 'X-Widget-Key': WIDGET_AGENT_KEY } : {}),
   };
+  if (isPro && PRO_WIDGET_KEY) {
+    relayHeaders['X-Pro-Key'] = PRO_WIDGET_KEY;
+  }
+
   // ── Health check (GET) ────────────────────────────────────────────────────
   if (req.method === 'GET') {
     const healthRes = await fetch(`${RELAY_BASE}/widget-agent/health`, {
@@ -181,9 +183,9 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  // if (req.method !== 'POST') {
-  //   return json({ error: 'Method not allowed' }, 405, corsHeaders);
-  // }
+  if (req.method !== 'POST') {
+    return json({ error: 'Method not allowed' }, 405, corsHeaders);
+  }
 
   // ── Agent call (POST, SSE stream) ─────────────────────────────────────────
   let rawBody = await req.text();

@@ -32,8 +32,8 @@ loadEnvFile(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const VALIDATION_DIR = join(__dirname, '..', 'docs', 'methodology', 'country-resilience-index', 'validation');
 
-const RESILIENCE_SCORE_CACHE_PREFIX = 'resilience:score:v22:';
-const RESILIENCE_RANKING_CACHE_KEY = 'resilience:ranking:v22';
+const RESILIENCE_SCORE_CACHE_PREFIX = 'resilience:score:v24:';
+const RESILIENCE_RANKING_CACHE_KEY = 'resilience:ranking:v24';
 
 const BACKTEST_RESULT_KEY = 'resilience:backtest:outcomes:v1';
 const BACKTEST_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -207,27 +207,26 @@ async function redisGetJson(url, token, key) {
 }
 
 async function redisPipeline(url, token, commands) {
-  const headers = { Authorization: `Bearer ${token}` };
-  return Promise.all(commands.map(async ([verb, key]) => {
-    if (verb === 'GET') {
-      const resp = await fetch(`${url}/values/${encodeURIComponent(key)}`, {
-        headers,
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!resp.ok) return { result: null };
-      const text = await resp.text();
-      return { result: text || null };
-    }
-    return { result: null };
-  }));
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(commands),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Redis pipeline HTTP ${resp.status}: ${text.slice(0, 200)}`);
+  }
+  return resp.json();
 }
 
 async function redisSet(url, token, key, value, ttl) {
-  const params = ttl ? `?expiration_ttl=${ttl}` : '';
-  const resp = await fetch(`${url}/values/${encodeURIComponent(key)}${params}`, {
-    method: 'PUT',
+  const args = ['SET', key, JSON.stringify(value)];
+  if (ttl) args.push('EX', String(ttl));
+  const resp = await fetch(`${url}`, {
+    method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(value),
+    body: JSON.stringify(args),
     signal: AbortSignal.timeout(10_000),
   });
   if (!resp.ok) {

@@ -81,3 +81,83 @@ npm reported the graph was up to date and still had 13 moderate findings. It onl
 No override was added. Forcing `uuid@>=11.1.1` under `jayson` or `exceljs` would violate their declared `uuid@^8` ranges, and forcing `@solana/web3.js@2.x` or `3.x` would violate the current wallet adapter peer range and would be a broader wallet integration migration. Clerk snapshot/canary builds newer than `6.13.0` still pin the same Solana wallet packages.
 
 Recommended tracking action: keep R6-3 open as upstream dependency debt and retest when one of these stable releases exists: Clerk removes or updates the Solana wallet pins, Solana wallet adapters accept a patched `@solana/web3.js` line, `@solana/web3.js` 1.x stops depending on `jayson -> uuid@8`, or `jayson`/`exceljs` publish compatible `uuid@>=11.1.1` support.
+
+## Round 7 R7-2 dependency-envelope check - 2026-06-03
+
+Scope: Country Resilience audit round-7 R7-2 moderate advisory debt in the broader repo dependency envelope. This pass stayed limited to root dependency audit evidence and did not change frontend import or bundle architecture.
+
+Current audit results in the `origin/main` worktree at `14fd4a5f6d26b36c5ac8289af5073c092d5a2b4d`:
+
+- `npm audit --omit=dev --json`: 0 critical, 0 high, 12 moderate.
+- `npm audit --json`: 0 critical, 0 high, 13 moderate.
+
+The before and after counts are unchanged for this R7-2 pass because the compatible graph is already at the latest stable releases for the implicated packages:
+
+- `@clerk/clerk-js@6.13.0` is the latest stable release and still directly depends on `@solana/wallet-adapter-base@0.9.27`, `@solana/wallet-adapter-react@0.15.39`, and `@solana/wallet-standard@1.1.4`.
+- `@solana/web3.js@1.98.4` is the latest stable 1.x release and still depends on `jayson@^4.1.1`.
+- `jayson@4.3.0` is the latest release and still depends on `uuid@^8.3.2`.
+- `exceljs@4.4.0` is the latest release and still depends on `uuid@^8.3.0`.
+
+Commands run for this check:
+
+- `npm audit --omit=dev --json`
+- `npm audit --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm audit fix --package-lock-only --dry-run --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm update @clerk/clerk-js @solana/wallet-adapter-base @solana/wallet-adapter-react @solana/wallet-standard @solana/wallet-standard-wallet-adapter @solana/wallet-standard-wallet-adapter-base @solana/wallet-standard-wallet-adapter-react @solana/web3.js jayson uuid exceljs --package-lock-only --ignore-scripts`
+
+The targeted update reported the graph was up to date and still had 13 moderate findings. It produced only incidental optional-peer lockfile churn for `utf-8-validate`; that churn did not affect the audit result and was not kept.
+
+`npm audit fix --package-lock-only --dry-run --json` reported no safe package-lock-only reduction. Its force-style fix suggestions were semver-major downgrades, not compatible upgrades:
+
+- `@clerk/clerk-js` 6.13.0 -> 5.114.1, which would change the direct auth package major line.
+- `exceljs` 4.4.0 -> 3.4.0, which would downgrade the spreadsheet export dependency.
+
+No override was added. Forcing `uuid@>=11.1.1` under `jayson` or `exceljs` would violate their declared `uuid@^8` ranges, and forcing a newer Solana API line would exceed the current wallet-adapter peer envelope. Those changes need auth, wallet, and export compatibility validation beyond this narrow dependency-envelope audit.
+
+Owner/date: dependency hygiene owner, 2026-06-03. Close R7-2 when one of these lands and validates cleanly: Clerk removes or updates the Solana wallet pins, Solana wallet adapters accept a patched Solana web3 line, Solana web3 1.x removes the `jayson -> uuid@8` edge, `jayson` publishes compatible `uuid@>=11.1.1` support, or `exceljs` publishes compatible `uuid@>=11.1.1` support.
+
+## Round 8 / R4-10 dependency-envelope check - 2026-06-04
+
+Scope: Country Resilience P3/R4-10 dependency follow-up against current `origin/main`. This pass checked whether the remaining production `uuid <11.1.1` advisory has a minimal safe remediation and whether it belongs in the CRI defect queue. No package or runtime code was changed.
+
+Current audit results in the `origin/main` worktree at `8fff4671cf1172f6869cafedfb2eb2acc98de7d2` with Node `v24.15.0` and npm `11.12.1`:
+
+- `npm audit --omit=dev --json`: 0 critical, 0 high, 12 moderate.
+- `npm audit --json`: 0 critical, 0 high, 13 moderate.
+
+The production chain remains `@clerk/clerk-js -> @solana/wallet-adapter-* -> @solana/web3.js -> jayson -> uuid@8.3.2`. The all-dependency-only extra finding remains `exceljs -> uuid@8.3.2`.
+
+R4-10 classification: non-CRI residual dependency hygiene. The advisory is rooted in the repository auth/wallet and spreadsheet dependency graph, not in Country Resilience scoring, seed freshness, API contract, methodology, or UI presentation logic. Do not count this item as an open CRI defect after this tracking note; keep it in the dependency-audit backlog until the recovery trigger below is met.
+
+Current registry checks:
+
+- `@clerk/clerk-js@6.14.0` is now published, but it still depends on `@solana/wallet-adapter-base@0.9.27`, `@solana/wallet-adapter-react@0.15.39`, and `@solana/wallet-standard@1.1.4`.
+- `@solana/wallet-adapter-base@0.9.27` still peers on `@solana/web3.js@^1.98.0`.
+- `@solana/web3.js@1.98.4` remains the latest stable 1.x release and still depends on `jayson@^4.1.1`.
+- `jayson@4.3.0` remains the latest release and still depends on `uuid@^8.3.2`.
+- `exceljs@4.4.0` remains the latest release and still depends on `uuid@^8.3.0`.
+
+Commands run for this check:
+
+- `git fetch origin`
+- `git rev-parse HEAD origin/main`
+- `node --version`
+- `npm --version`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm audit --omit=dev --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm audit --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm audit fix --package-lock-only --dry-run --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm update @clerk/clerk-js @solana/wallet-adapter-base @solana/wallet-adapter-react @solana/wallet-standard @solana/wallet-standard-wallet-adapter @solana/wallet-standard-wallet-adapter-base @solana/wallet-standard-wallet-adapter-react @solana/web3.js jayson uuid exceljs --package-lock-only --ignore-scripts --dry-run --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm view @clerk/clerk-js version dependencies --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm view @solana/web3.js version dependencies --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm view @solana/wallet-adapter-base version peerDependencies dependencies --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm view jayson version dependencies --json`
+- `npm_config_cache=/tmp/worldmonitor-npm-cache npm view exceljs version dependencies --json`
+
+`npm audit fix --package-lock-only --dry-run --json` reported no lockfile changes: 0 added, 0 removed, 0 changed. Its force suggestions remain semver-major downgrades rather than compatible upgrades:
+
+- `@clerk/clerk-js` 6.x -> 5.114.1, which would change the direct auth package major line.
+- `exceljs` 4.4.0 -> 3.4.0, which would downgrade the spreadsheet export dependency.
+
+Conclusion: no minimal safe lockfile-only fix exists for this production advisory on 2026-06-04. Updating Clerk from 6.13.0 to 6.14.0 would not remove the Solana wallet chain or reduce the audit count, and forcing `uuid@>=11.1.1` under `jayson` or `exceljs` would violate their declared `uuid@^8` ranges. Treat R4-10 as closed for CRI by documentation/tracking, with the residual risk tracked as broader repository dependency debt.
+
+Recovery trigger: re-open dependency remediation when one of these lands and validates cleanly without broad auth/wallet/export churn: Clerk removes or updates the Solana wallet pins, Solana wallet adapters accept a patched Solana web3 line, Solana web3 1.x removes `jayson -> uuid@8`, or `jayson`/`exceljs` publish compatible `uuid@>=11.1.1` support.

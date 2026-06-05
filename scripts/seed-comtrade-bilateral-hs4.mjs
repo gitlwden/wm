@@ -6,9 +6,8 @@ import { createRequire } from 'node:module';
 import {
   acquireLockSafely,
   CHROME_UA,
-  cfPipeline,
   extendExistingTtl,
-  kvGet,
+  getRedisCredentials,
   loadEnvFile,
   logSeedResult,
   releaseLock,
@@ -103,17 +102,23 @@ const ISO2_TO_UN = Object.fromEntries(
   Object.entries(UN_TO_ISO2).map(([un, iso2]) => [iso2, un]),
 );
 
-// UN Comtrade uses non-standard reporter codes for some countries.
-// These override the standard UN M49 codes from un-to-iso2.json.
-const COMTRADE_REPORTER_OVERRIDES = {
-  FR: '251', // UN M49 standard is 250, but Comtrade registers France as reporter 251
-  IT: '381', // UN M49 standard is 380, but Comtrade registers Italy as reporter 381
-  US: '842', // UN M49 standard is 840, but Comtrade registers the US as reporter 842
-  IN: '699', // UN M49 standard is 356, Comtrade registers India as reporter 699
-  TW: '490', // M49 has no entry; Comtrade reports Taiwan as 490 "Other Asia, nes"
-};
-
-// cfPipeline is now cfPipeline from _seed-utils.mjs (routes to Upstash/CF)
+/**
+ * @param {Array<string[]>} commands
+ */
+async function redisPipeline(commands) {
+  const { url, token } = getRedisCredentials();
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(commands),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Redis pipeline failed: HTTP ${resp.status} — ${text.slice(0, 200)}`);
+  }
+  return resp.json();
+}
 
 /**
  * Returns { fresh, ageMs, reason } for the existing seed-meta record.
@@ -123,7 +128,7 @@ const COMTRADE_REPORTER_OVERRIDES = {
  */
 export async function checkSeedMetaFreshness(now = Date.now()) {
   try {
-    const result = await cfPipeline([['GET', META_KEY]]);
+    const result = await redisPipeline([['GET', META_KEY]]);
     const raw = Array.isArray(result) ? result[0]?.result : null;
     if (!raw || typeof raw !== 'string') return { fresh: false, ageMs: null, reason: 'no-meta' };
     const parsed = JSON.parse(raw);
@@ -323,7 +328,7 @@ export async function main() {
     const meta = JSON.stringify({ fetchedAt: Date.now(), recordCount: count, status });
     // TTL ≥ FRESHNESS_GATE_MS so the gate's "fresh" answer cannot be silently
     // invalidated by Redis eviction. See the SEED_META_TTL_SECONDS comment.
-    await cfPipeline([['SET', META_KEY, meta, 'EX', String(SEED_META_TTL_SECONDS)]])
+    await redisPipeline([['SET', META_KEY, meta, 'EX', String(SEED_META_TTL_SECONDS)]])
       .catch(e => console.warn('[bilateral-hs4] Failed to write seed-meta:', e.message));
   };
 
@@ -376,12 +381,12 @@ export async function main() {
       }
 
       if (commands.length >= 50) {
-        await cfPipeline(commands.splice(0));
+        await redisPipeline(commands.splice(0));
       }
     }
 
     if (commands.length > 0) {
-      await cfPipeline(commands);
+      await redisPipeline(commands);
     }
 
     await writeMeta(writtenCount);

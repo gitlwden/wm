@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, runSeed, cfPipeline } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, getRedisCredentials } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'intelligence:cross-source-signals:v1';
-const CACHE_TTL = 172_800; // 48h — daily cron, keep data alive between runs
+const CACHE_TTL = 1800; // 30min TTL, 15min cron cadence
 
 // ── Source Redis keys ─────────────────────────────────────────────────────────
 const SOURCE_KEYS = [
@@ -30,7 +30,8 @@ const SOURCE_KEYS = [
   'gdelt:intel:tone:nuclear',
   'gdelt:intel:tone:maritime',
   'weather:alerts:v1',
-  'risk:scores:sebuf:stale:v1',
+  'risk:scores:sebuf:stale:v3',
+  'regulatory:actions:v1',
 ];
 
 // ── Theater classification helpers ────────────────────────────────────────────
@@ -109,6 +110,7 @@ const TYPE_CATEGORY = {
   CROSS_SOURCE_SIGNAL_TYPE_WEATHER_EXTREME: 'natural',
   CROSS_SOURCE_SIGNAL_TYPE_MEDIA_TONE_DETERIORATION: 'information',
   CROSS_SOURCE_SIGNAL_TYPE_RISK_SCORE_SPIKE: 'intelligence',
+  CROSS_SOURCE_SIGNAL_TYPE_REGULATORY_ACTION: 'policy',
 };
 
 // Base severity weights for each signal type
@@ -139,6 +141,7 @@ const BASE_WEIGHT = {
   CROSS_SOURCE_SIGNAL_TYPE_FORECAST_DETERIORATION: 1.5, // predictive — lower confidence
   CROSS_SOURCE_SIGNAL_TYPE_WEATHER_EXTREME: 1.5,        // environmental — regional
   CROSS_SOURCE_SIGNAL_TYPE_MEDIA_TONE_DETERIORATION: 1.5, // sentiment — lagging
+  CROSS_SOURCE_SIGNAL_TYPE_REGULATORY_ACTION: 2.0,      // policy action — direct market impact
 };
 
 function scoreTier(score) {
@@ -153,10 +156,18 @@ function safeNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
-// ── Read all source keys in parallel via dual-backend pipeline ─────────────────
+// ── Read all source keys in parallel via Upstash pipeline ─────────────────────
 async function readAllSourceKeys() {
+  const { url, token } = getRedisCredentials();
   const pipeline = SOURCE_KEYS.map(k => ['GET', k]);
-  const results = await cfPipeline(pipeline);
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(pipeline),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!resp.ok) throw new Error(`Redis pipeline: HTTP ${resp.status}`);
+  const results = await resp.json();
   const data = {};
   for (let i = 0; i < SOURCE_KEYS.length; i++) {
     const raw = results[i]?.result;
@@ -456,13 +467,14 @@ function extractRadiationAnomaly(d) {
   const anomalies = observations.filter(o => o.alert || o.status === 'alert' || safeNum(o.value) > safeNum(o.threshold) * 1.5);
   if (anomalies.length === 0) return [];
   return anomalies.slice(0, 2).map(a => {
-    const theater = normalizeTheater(a.country || a.region || a.location || '');
+    const locationStr = a.locationName || a.stationName || a.country || a.region || 'unknown station';
+    const theater = normalizeTheater(a.country || a.region || locationStr);
     const score = BASE_WEIGHT['CROSS_SOURCE_SIGNAL_TYPE_RADIATION_ANOMALY'];
     return {
-      id: `radiation:${a.id || a.stationId || (a.location || a.stationName || 'unknown').replace(/\s+/g, '-').toLowerCase()}`,
+      id: `radiation:${a.id || a.stationId || locationStr.replace(/\s+/g, '-').toLowerCase()}`,
       type: 'CROSS_SOURCE_SIGNAL_TYPE_RADIATION_ANOMALY',
       theater,
-      summary: `Radiation anomaly: ${a.location || a.stationName || 'unknown station'} — ${a.value || 'elevated'} reading`,
+      summary: `Radiation anomaly: ${locationStr} — ${a.value || 'elevated'} reading`,
       severity: scoreTier(score),
       severityScore: score,
       detectedAt: safeNum(a.timestamp) || safeNum(a.measuredAt) || Date.now(),
@@ -704,6 +716,42 @@ function extractRiskScoreSpike(d) {
   });
 }
 
+function extractRegulatoryAction(d) {
+  const payload = d['regulatory:actions:v1'];
+  if (!payload) return [];
+  const cutoff = Date.now() - 48 * 3600 * 1000;
+  const tierPriority = { high: 0, medium: 1 };
+  const actions = Array.isArray(payload.actions) ? payload.actions : [];
+  const recent = actions
+    .map((action) => ({
+      action,
+      publishedAtTs: safeNum(Date.parse(action.publishedAt)),
+    }))
+    .filter(({ action, publishedAtTs }) => (action.tier === 'high' || action.tier === 'medium') && publishedAtTs > cutoff)
+    .sort((a, b) => {
+      const tierOrder = tierPriority[a.action.tier] - tierPriority[b.action.tier];
+      if (tierOrder !== 0) return tierOrder;
+      return b.publishedAtTs - a.publishedAtTs;
+    })
+    .slice(0, 3);
+  if (recent.length === 0) return [];
+  return recent.map(({ action, publishedAtTs }) => {
+    const tierMult = action.tier === 'high' ? 1.5 : 1.0;
+    const score = BASE_WEIGHT.CROSS_SOURCE_SIGNAL_TYPE_REGULATORY_ACTION * tierMult;
+    return {
+      id: `regulatory:${action.id ?? 'unknown'}`,
+      type: 'CROSS_SOURCE_SIGNAL_TYPE_REGULATORY_ACTION',
+      theater: 'Global Markets',
+      summary: `${action.agency ?? 'Unknown agency'}: ${action.title ?? 'No title'}`,
+      severity: scoreTier(score),
+      severityScore: score,
+      detectedAt: publishedAtTs,
+      contributingTypes: [],
+      signalCount: 0,
+    };
+  });
+}
+
 // ── Composite escalation detector ─────────────────────────────────────────────
 // Fires when >=3 signals from DIFFERENT categories share the same theater.
 function detectCompositeEscalation(signals) {
@@ -751,7 +799,11 @@ async function aggregateCrossSourceSignals() {
   console.log('  Reading source keys...');
   const sourceData = await readAllSourceKeys();
   const foundKeys = Object.keys(sourceData);
+  const missingKeys = SOURCE_KEYS.filter(k => !foundKeys.includes(k));
   console.log(`  Found ${foundKeys.length}/${SOURCE_KEYS.length} source keys populated`);
+  if (missingKeys.length > 0) {
+    console.log(`  Missing keys (${missingKeys.length}): ${missingKeys.join(', ')}`);
+  }
 
   const allSignals = [];
 
@@ -777,6 +829,7 @@ async function aggregateCrossSourceSignals() {
     extractWeatherExtreme,
     extractMediaToneDeterioration,
     extractRiskScoreSpike,
+    extractRegulatoryAction,
   ];
 
   for (const extractor of extractors) {
@@ -814,9 +867,28 @@ function validate(data) {
   return Array.isArray(data?.signals);
 }
 
+export function declareRecords(data) {
+  return Array.isArray(data?.signals) ? data.signals.length : 0;
+}
+
 runSeed('intelligence', 'cross-source-signals', CANONICAL_KEY, aggregateCrossSourceSignals, {
   ttlSeconds: CACHE_TTL,
   validateFn: validate,
   sourceVersion: 'cross-source-v1',
   recordCount: (data) => data.signals?.length ?? 0,
+  afterPublish: async (data) => {
+    const { url, token } = getRedisCredentials();
+    const metaKey = 'seed-meta:intelligence:cross-source-signals';
+    const meta = { fetchedAt: Date.now(), recordCount: data.signals?.length ?? 0 };
+    await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(['SET', metaKey, JSON.stringify(meta), 'EX', 86400 * 7]),
+      signal: AbortSignal.timeout(5_000),
+    }).catch(err => console.warn(`  seed-meta write failed: ${err.message}`));
+  },
+
+  declareRecords,
+  schemaVersion: 1,
+  maxStaleMin: 30,
 });

@@ -4,7 +4,7 @@ import {
   loadEnvFile,
   logSeedResult,
   writeFreshnessMetadata,
-  cfPipeline } from './_seed-utils.mjs';
+} from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 import { isInRankableUniverse } from './shared/rankable-universe.mjs';
 import {
@@ -60,8 +60,17 @@ function requireSeedRefreshKey() {
 // v21 → v22 for country-resilience audit round 2 P2-N2/P2-N3: currencyExternal
 // inflation stability and NaN-safe blend math change published score values, so
 // seeder-written scores and rankings must share the server reader namespace.
-export const RESILIENCE_SCORE_CACHE_PREFIX = 'resilience:score:v22:';
-export const RESILIENCE_RANKING_CACHE_KEY = 'resilience:ranking:v22';
+// v22 → v23 batches three same-tag `pc` scorer changes: import-HHI stale /
+// missing source years now derate certainty coverage (#4088), observed
+// zero-outage feeds score as observed-quiet in infrastructure (P3-8), and WTO
+// tradePolicy restriction/barrier rows score one-row-per-reporter severity
+// instead of stale count anchors (P2-1). Seeder-written scores and rankings must
+// share the server reader namespace for the full batch.
+// v23 → v24 for country-resilience audit round 5 R5-2 / PR #4101: governance
+// WGI indicator slot semantics changed under the same `pc` formula tag, so the
+// seeder-written score/ranking namespace must match the server reader bump.
+export const RESILIENCE_SCORE_CACHE_PREFIX = 'resilience:score:v24:';
+export const RESILIENCE_RANKING_CACHE_KEY = 'resilience:ranking:v24';
 // Must match the server-side RESILIENCE_RANKING_CACHE_TTL_SECONDS. Extended
 // to 12h (2x the cron interval) so a missed/slow cron can't create an
 // EMPTY_ON_DEMAND gap before the next successful rebuild.
@@ -101,7 +110,17 @@ async function redisGetJson(url, token, key) {
 }
 
 async function redisPipeline(url, token, commands) {
-  return cfPipeline(commands);
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(commands),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Redis pipeline HTTP ${resp.status} — ${text.slice(0, 200)}`);
+  }
+  return resp.json();
 }
 
 async function fetchRuntimeFormulaTag() {

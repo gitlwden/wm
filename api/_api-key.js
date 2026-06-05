@@ -61,16 +61,11 @@ export async function validateApiKey(req, options = {}) {
   const key = headerKey || testerCookie || sessionCookie;
   const origin = req.headers.get('Origin') || '';
 
-  // Desktop app — when a key is present, validate it as enterprise. When no key
-  // is present, fall through to the normal flow (same as npm run dev where the
-  // Origin is localhost, not a tauri.localhost pattern). The sidecar gateway
-  // runs locally and does not need cloud API key validation.
+  // Desktop app — always require an enterprise key.
   if (isDesktopOrigin(origin)) {
-    if (key) {
-      if (isValidEnterpriseKey(key)) return { valid: true, required: true, kind: 'enterprise' };
-      return { valid: false, required: true, error: 'Invalid API key' };
-    }
-    // No key — fall through to normal flow below.
+    if (!headerKey) return { valid: false, required: true, error: 'API key required for desktop access' };
+    if (!await isValidEnterpriseKey(headerKey)) return { valid: false, required: true, error: 'Invalid API key' };
+    return { valid: true, required: true, kind: 'enterprise' };
   }
 
   // Browser anonymous session: HMAC-signed token from /api/wm-session.
@@ -115,9 +110,6 @@ export async function validateApiKey(req, options = {}) {
     return { valid: false, required: true, error: 'Invalid API key' };
   }
 
-  // No credentials at all. When forceKey is false (non-premium, non-tier-gated
-  // endpoints like supply-chain display routes), allow the request through the
-  // auth gate so the handler can serve cached data to anonymous browser users.
-  // Premium / tier-gated callers always set forceKey=true so required stays true.
-  return { valid: false, required: forceKey, error: 'API key required' };
+  // No credentials at all.
+  return { valid: false, required: true, error: 'API key required' };
 }

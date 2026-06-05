@@ -25,9 +25,9 @@ export default async function handler(
   req: Request,
   ctx?: { waitUntil: (p: Promise<unknown>) => void },
 ): Promise<Response> {
-  // if (isDisallowedOrigin(req)) {
-  //   return jsonResponse({ error: 'Origin not allowed' }, 403);
-  // }
+  if (isDisallowedOrigin(req)) {
+    return jsonResponse({ error: 'Origin not allowed' }, 403);
+  }
 
   const cors = getCorsHeaders(req, 'GET, POST, OPTIONS');
 
@@ -35,20 +35,20 @@ export default async function handler(
     return new Response(null, { status: 204, headers: cors });
   }
 
-  // if (req.method !== 'GET' && req.method !== 'POST') {
-  //   return jsonResponse({ error: 'Method not allowed' }, 405, cors);
-  // }
-  //
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405, cors);
+  }
+
   const authHeader = req.headers.get('Authorization') ?? '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  // if (!token) {
-  //   return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
-  // }
+  if (!token) {
+    return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
+  }
 
   const session = await validateBearerToken(token);
-  // if (!session.valid || !session.userId) {
-  //   return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
-  // }
+  if (!session.valid || !session.userId) {
+    return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
+  }
 
   const convexUrl = process.env.CONVEX_URL;
   if (!convexUrl) {
@@ -88,29 +88,38 @@ export default async function handler(
       // caught earlier (the `validateBearerToken` 401 above) and never reach
       // this catch. Capture before returning 401 so the drift surfaces under
       // a stable Sentry bucket instead of silently 401'ing every request.
-      // if (kind === 'UNAUTHENTICATED') {
-      //   console.error('[user-prefs] GET convex auth drift:', err);
-      //   captureSilentError(err, buildSentryContext(err, msg, {
-      //     method: 'GET', convexFn: 'userPreferences:getPreferences',
-      //     userId: session.userId, variant, ctx,
-      //   }));
-      //   return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
-      // }
-      // if (kind === 'SERVICE_UNAVAILABLE') {
-      //   // Convex platform-level 503 — transient and self-recovering. Map to
-      //   // 503 with `Retry-After` so the client backs off rather than treating
-      //   // it as a permanent 500. Still capture so we can spot regressions /
-      //   // sustained outages, but use `level: 'warning'` so this expected
-      //   // transient external-system event doesn't drown the error
-      //   // dashboard or page on-call (WORLDMONITOR-QA).
-      //   console.warn('[user-prefs] GET convex service unavailable:', msg);
-      //   captureSilentError(err, buildSentryContext(err, msg, {
-      //     method: 'GET', convexFn: 'userPreferences:getPreferences',
-      //     userId: session.userId, variant, ctx,
-      //     level: 'warning',
-      //   }));
-      //   return jsonResponse({ error: 'SERVICE_UNAVAILABLE' }, 503, { ...cors, 'Retry-After': '5' });
-      // }
+      //
+      // `level: 'warning'` because the observed pattern is one transient
+      // event per user (5ev/5u over a week — WORLDMONITOR-QK), which a
+      // client retry recovers cleanly. Keeping the capture at error
+      // drowned real bugs in the dashboard while delivering no operational
+      // signal beyond "drift happened" (already evident from the warning
+      // bucket). A genuine systemic drift incident would still surface
+      // because volume would escalate and reopen the archived issue.
+      if (kind === 'UNAUTHENTICATED') {
+        console.warn('[user-prefs] GET convex auth drift:', err);
+        captureSilentError(err, buildSentryContext(err, msg, {
+          method: 'GET', convexFn: 'userPreferences:getPreferences',
+          userId: session.userId, variant, ctx,
+          level: 'warning',
+        }));
+        return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
+      }
+      if (kind === 'SERVICE_UNAVAILABLE') {
+        // Convex platform-level 503 — transient and self-recovering. Map to
+        // 503 with `Retry-After` so the client backs off rather than treating
+        // it as a permanent 500. Still capture so we can spot regressions /
+        // sustained outages, but use `level: 'warning'` so this expected
+        // transient external-system event doesn't drown the error
+        // dashboard or page on-call (WORLDMONITOR-QA).
+        console.warn('[user-prefs] GET convex service unavailable:', msg);
+        captureSilentError(err, buildSentryContext(err, msg, {
+          method: 'GET', convexFn: 'userPreferences:getPreferences',
+          userId: session.userId, variant, ctx,
+          level: 'warning',
+        }));
+        return jsonResponse({ error: 'SERVICE_UNAVAILABLE' }, 503, { ...cors, 'Retry-After': '5' });
+      }
       console.error('[user-prefs] GET error:', err);
       captureSilentError(err, buildSentryContext(err, msg, {
         method: 'GET', convexFn: 'userPreferences:getPreferences',
@@ -155,14 +164,14 @@ export default async function handler(
     // attribution served its purpose during the soak window (we used
     // it to verify the stuck-bundle storm decayed) and is no longer
     // needed now that CONFLICT is a normal return shape.
-    // if (result.ok === false) {
-    //   // Discriminated union narrows to the CONFLICT variant here.
-    //   return jsonResponse(
-    //     { error: 'CONFLICT', actualSyncVersion: result.actualSyncVersion },
-    //     409,
-    //     cors,
-    //   );
-    // }
+    if (result.ok === false) {
+      // Discriminated union narrows to the CONFLICT variant here.
+      return jsonResponse(
+        { error: 'CONFLICT', actualSyncVersion: result.actualSyncVersion },
+        409,
+        cors,
+      );
+    }
     return jsonResponse({ syncVersion: result.syncVersion }, 200, cors);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -173,48 +182,51 @@ export default async function handler(
     // at level=warning for the deploy-ordering window. Once both layers
     // have soaked on the new code, this branch is unreachable and can be
     // removed (along with handleConflictResponse).
-    // if (kind === 'CONFLICT') {
-    //   return handleConflictResponse(err, msg, {
-    //     userId: session.userId,
-    //     variant: body.variant,
-    //     ctx,
-    //     schemaVersion: typeof body.schemaVersion === 'number' ? body.schemaVersion : null,
-    //     expectedSyncVersion: body.expectedSyncVersion,
-    //     blobSize: body.data !== undefined ? JSON.stringify(body.data).length : 0,
-    //     cors,
-    //   });
-    // }
-    // if (kind === 'BLOB_TOO_LARGE') {
-    //   return jsonResponse({ error: 'BLOB_TOO_LARGE' }, 400, cors);
-    // }
-    // if (kind === 'UNAUTHENTICATED') {
-    //   // See GET branch above — UNAUTHENTICATED here means Clerk-vs-Convex
-    //   // auth drift (token already passed validateBearerToken). Capture
-    //   // before returning 401 so the drift is visible.
-    //   console.error('[user-prefs] POST convex auth drift:', err);
-    //   captureSilentError(err, buildSentryContext(err, msg, {
-    //     method: 'POST', convexFn: 'userPreferences:setPreferences',
-    //     userId: session.userId, variant: body.variant, ctx,
-    //     schemaVersion: typeof body.schemaVersion === 'number' ? body.schemaVersion : null,
-    //     expectedSyncVersion: body.expectedSyncVersion,
-    //     blobSize: body.data !== undefined ? JSON.stringify(body.data).length : 0,
-    //   }));
-    //   return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
-    // }
-    // if (kind === 'SERVICE_UNAVAILABLE') {
-    //   // See GET branch above — Convex 503, transient. 503 + Retry-After
-    //   // so the client backs off rather than burning a 500-failed-write.
-    //   // `level: 'warning'` so the expected transient external-system
-    //   // event stays queryable but doesn't page on-call (WORLDMONITOR-QA).
-    //   console.warn('[user-prefs] POST convex service unavailable:', msg);
-    //   captureSilentError(err, buildSentryContext(err, msg, {
-    //     method: 'POST', convexFn: 'userPreferences:setPreferences',
-    //     userId: session.userId, variant: body.variant, ctx,
-    //     schemaVersion: typeof body.schemaVersion === 'number' ? body.schemaVersion : null,
-    //     expectedSyncVersion: body.expectedSyncVersion,
-    //     blobSize: body.data !== undefined ? JSON.stringify(body.data).length : 0,
-    //     level: 'warning',
-    //   }));
+    if (kind === 'CONFLICT') {
+      return handleConflictResponse(err, msg, {
+        userId: session.userId,
+        variant: body.variant,
+        ctx,
+        schemaVersion: typeof body.schemaVersion === 'number' ? body.schemaVersion : null,
+        expectedSyncVersion: body.expectedSyncVersion,
+        blobSize: body.data !== undefined ? JSON.stringify(body.data).length : 0,
+        cors,
+      });
+    }
+    if (kind === 'BLOB_TOO_LARGE') {
+      return jsonResponse({ error: 'BLOB_TOO_LARGE' }, 400, cors);
+    }
+    if (kind === 'UNAUTHENTICATED') {
+      // See GET branch above — UNAUTHENTICATED here means Clerk-vs-Convex
+      // auth drift (token already passed validateBearerToken). Capture
+      // at `warning` for visibility without paging — the observed pattern
+      // is transient single-event-per-user that recovers on client retry
+      // (WORLDMONITOR-QK).
+      console.warn('[user-prefs] POST convex auth drift:', err);
+      captureSilentError(err, buildSentryContext(err, msg, {
+        method: 'POST', convexFn: 'userPreferences:setPreferences',
+        userId: session.userId, variant: body.variant, ctx,
+        schemaVersion: typeof body.schemaVersion === 'number' ? body.schemaVersion : null,
+        expectedSyncVersion: body.expectedSyncVersion,
+        blobSize: body.data !== undefined ? JSON.stringify(body.data).length : 0,
+        level: 'warning',
+      }));
+      return jsonResponse({ error: 'UNAUTHENTICATED' }, 401, cors);
+    }
+    if (kind === 'SERVICE_UNAVAILABLE') {
+      // See GET branch above — Convex 503, transient. 503 + Retry-After
+      // so the client backs off rather than burning a 500-failed-write.
+      // `level: 'warning'` so the expected transient external-system
+      // event stays queryable but doesn't page on-call (WORLDMONITOR-QA).
+      console.warn('[user-prefs] POST convex service unavailable:', msg);
+      captureSilentError(err, buildSentryContext(err, msg, {
+        method: 'POST', convexFn: 'userPreferences:setPreferences',
+        userId: session.userId, variant: body.variant, ctx,
+        schemaVersion: typeof body.schemaVersion === 'number' ? body.schemaVersion : null,
+        expectedSyncVersion: body.expectedSyncVersion,
+        blobSize: body.data !== undefined ? JSON.stringify(body.data).length : 0,
+        level: 'warning',
+      }));
       return jsonResponse({ error: 'SERVICE_UNAVAILABLE' }, 503, { ...cors, 'Retry-After': '5' });
     }
     console.error('[user-prefs] POST error:', err);

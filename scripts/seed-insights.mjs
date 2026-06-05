@@ -222,36 +222,36 @@ function categorizeStory(title) {
   return { category: 'general', threatLevel: 'moderate' };
 }
 
-function buildFallbackWorldBrief(topStories) {
-  const stories = Array.isArray(topStories) ? topStories : [];
-  const lead = stories.find(story => story?.primaryTitle)?.primaryTitle || '';
-  if (!lead) return '';
-  const secondary = stories
-    .slice(1, 4)
-    .map(story => story?.primaryTitle)
-    .filter(Boolean);
-  const leadSentence = `World Monitor is tracking ${lead}.`;
-  if (secondary.length === 0) return leadSentence;
-  return `${leadSentence} Other active stories include ${secondary.join('; ')}.`;
+function normalizedSignalText(text) {
+  return (text || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function hasUsableInsightsPayload(payload) {
-  return Boolean(
-    payload
-    && typeof payload === 'object'
-    && typeof payload.worldBrief === 'string'
-    && payload.worldBrief.trim().length > 0
-    && Array.isArray(payload.topStories)
-    && payload.topStories.length > 0
-  );
+function clusterHasDiplomacySignal(cluster) {
+  const titles = Array.isArray(cluster.memberTitles) && cluster.memberTitles.length > 0
+    ? cluster.memberTitles
+    : [cluster.primaryTitle];
+  return titles.some((title) => {
+    const text = normalizedSignalText(title);
+    return DIPLOMACY_KEYWORDS.some((kw) => text.includes(kw)) ||
+      ENTITY_BIGRAMS.some(([entity, action]) => text.includes(entity) && text.includes(action));
+  });
 }
 
-function refreshLkgInsightsPayload(payload, reason) {
+function percentile(sortedNumbers, pct) {
+  if (sortedNumbers.length === 0) return 0;
+  const idx = Math.min(sortedNumbers.length - 1, Math.floor((sortedNumbers.length - 1) * pct));
+  return sortedNumbers[idx];
+}
+
+function buildImportanceObservability(clusters, topStories) {
+  const clusterSizes = clusters.map(c => Number(c.sourceCount) || 1).sort((a, b) => a - b);
   return {
-    ...payload,
-    status: 'degraded',
-    generatedAt: new Date().toISOString(),
-    lkgReason: reason,
+    llmDrivenRanked: topStories.filter(s => s.threat?.source === 'llm').length,
+    keywordFallbackRanked: topStories.filter(s => s.threat?.source !== 'llm' && !s.upstreamImportanceScore).length,
+    diplomacyHits: clusters.filter(clusterHasDiplomacySignal).length,
+    corroborationHits: clusters.filter(c => c.entityCorroboration === true).length,
+    clusterSizeP50: percentile(clusterSizes, 0.5),
+    clusterSizeP90: percentile(clusterSizes, 0.9),
   };
 }
 
@@ -289,9 +289,9 @@ async function fetchInsights() {
   if (!digest) {
     // LKG fallback: reuse existing insights if digest is unavailable
     const existing = await readExistingInsights();
-    if (hasUsableInsightsPayload(existing)) {
-      console.log('  Digest unavailable — reusing existing insights (LKG, timestamp refreshed)');
-      return refreshLkgInsightsPayload(existing, 'digest_unavailable');
+    if (existing?.topStories?.length) {
+      console.log('  Digest unavailable — reusing existing insights (LKG)');
+      return existing;
     }
     throw new Error('No news digest found in Redis');
   }
@@ -362,7 +362,7 @@ async function fetchInsights() {
 
   if (!topHeadline) {
     status = 'degraded';
-    console.warn('  No multi-source cluster available — publishing degraded with deterministic fallback brief');
+    console.warn('  No multi-source cluster available — publishing degraded (stories without brief)');
   } else {
     const llmResult = await callLLM(topHeadline);
     if (llmResult) {
@@ -402,7 +402,7 @@ async function fetchInsights() {
       }
     } else {
       status = 'degraded';
-      console.warn('  No LLM available — publishing degraded with deterministic fallback brief');
+      console.warn('  No LLM available — publishing degraded (stories without brief)');
     }
   }
 
@@ -441,12 +441,6 @@ async function fetchInsights() {
     };
   });
 
-  if (!worldBrief) {
-    worldBrief = buildFallbackWorldBrief(enrichedStories);
-    briefProvider = briefProvider || 'deterministic';
-    briefModel = briefModel || 'fallback';
-  }
-
   const payload = {
     worldBrief,
     briefProvider,
@@ -460,14 +454,12 @@ async function fetchInsights() {
     importanceSignals: observability,
   };
 
-  // LKG preservation: don't overwrite a usable "ok" payload with degraded data.
-  // If the existing payload is structurally empty (for example, blank worldBrief),
-  // publish the deterministic fallback so the Daily Market Brief panel has data.
+  // LKG preservation: don't overwrite "ok" with "degraded"
   if (status === 'degraded') {
     const existing = await readExistingInsights();
-    if (existing?.status === 'ok' && hasUsableInsightsPayload(existing)) {
-      console.log('  LKG preservation: existing payload is usable "ok", reusing with refreshed timestamp');
-      return refreshLkgInsightsPayload(existing, 'degraded_run_preserved_lkg');
+    if (existing?.status === 'ok') {
+      console.log('  LKG preservation: existing payload is "ok", skipping degraded overwrite');
+      return existing;
     }
   }
 

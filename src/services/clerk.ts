@@ -26,6 +26,28 @@ type ClerkInstance = Clerk;
 
 const PUBLISHABLE_KEY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLERK_PUBLISHABLE_KEY) as string | undefined;
 
+/** Load the Clerk UI component script (@clerk/ui) from CDN. Sets window.__internal_ClerkUICtor. */
+async function loadClerkUIScript(): Promise<void> {
+  const w = window as unknown as { __internal_ClerkUICtor?: unknown };
+  if (w.__internal_ClerkUICtor) return;
+  if (!PUBLISHABLE_KEY) return;
+  // Extract frontend API host from publishable key (base64-decoded prefix)
+  const host = atob(PUBLISHABLE_KEY.replace(/_/g, '/').replace(/-/g, '+').split('$')[0]);
+  const url = `https://${host}/npm/@clerk/ui@1/dist/ui.browser.js`;
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${url}"]`);
+    if (existing) { existing.addEventListener('load', () => resolve()); return; }
+    const s = document.createElement('script');
+    s.src = url;
+    s.crossOrigin = 'anonymous';
+    s.async = true;
+    s.dataset.clerkUiScript = '';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed to load Clerk UI script'));
+    document.head.appendChild(s);
+  });
+}
+
 let clerkInstance: ClerkInstance | null = null;
 let loadPromise: Promise<void> | null = null;
 let loadScheduled = false;
@@ -116,9 +138,15 @@ export async function initClerk(): Promise<void> {
   }
   loadPromise = (async () => {
     try {
+      // Clerk v6 splits UI into @clerk/ui — load it before calling load().
+      await loadClerkUIScript();
+
       const { Clerk } = await import('@clerk/clerk-js');
       const clerk = new Clerk(PUBLISHABLE_KEY);
+
+      const uiCtor = (window as unknown as { __internal_ClerkUICtor?: unknown }).__internal_ClerkUICtor;
       await clerk.load({
+        ...(uiCtor ? { clerkUICtor: uiCtor } : {}),
         appearance: getAppearance(),
         afterSignOutUrl: getAfterSignOutUrl(),
       });
@@ -193,16 +221,90 @@ export function getClerk(): ClerkInstance | null {
   return clerkInstance;
 }
 
-/** Open the Clerk sign-in modal. */
-export function openSignIn(): void {
+// Report a Clerk UI-open failure as a single handled Sentry event. Lazy
+// import keeps @sentry/browser off this module's static graph (clerk.ts is
+// imported by Node test files where the browser SDK is unwanted) and makes
+// telemetry strictly best-effort — it must never throw into a click handler.
+function captureClerkSurfaceFailure(action: string, err: unknown, reason: string): void {
+  void import('@sentry/browser')
+    .then((Sentry) => {
+      Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+        tags: { surface: 'clerk', action, reason },
+      });
+    })
+    .catch(() => {});
+}
+
+function scheduleNextFrame(cb: () => void): void {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => cb());
+  else setTimeout(cb, 50);
+}
+
+/**
+ * Open a Clerk UI surface (sign-in / sign-up modal) with one retry.
+ *
+ * Clerk's `openSignIn` / `openSignUp` call an internal
+ * `assertComponentsReady` that throws SYNCHRONOUSLY ("Clerk was not loaded
+ * with Ui components") when the session layer loaded but the UI component
+ * controller never attached — a `load()`-resolved-before-components-mounted
+ * race, or the component bundle being blocked by an ad-blocker / CSP. Left
+ * unguarded that throw escaped as an uncaught error on every Sign In /
+ * Create Account click (WORLDMONITOR-SC / -SD: ~2.3k events / ~1k users).
+ *
+ * Retry once on the next frame to absorb the mount race; if it still fails,
+ * report a single handled event so a genuine regression still alarms without
+ * flooding Sentry. Deliberately does NOT reset `clerkInstance` — that would
+ * orphan the active auth-state listeners (`attachPendingSubscribers` drains
+ * its queue, so a fresh load can't re-attach them).
+ *
+ * Exported for testing — the retry/capture state machine, decoupled from
+ * Clerk and the frame scheduler.
+ */
+export function runClerkSurfaceOpen(
+  open: () => void,
+  onPersistentFailure: (err: unknown) => void,
+  scheduleRetry: (cb: () => void) => void = scheduleNextFrame,
+): void {
+  try {
+    open();
+  } catch {
+    scheduleRetry(() => {
+      try {
+        open();
+      } catch (err) {
+        onPersistentFailure(err);
+      }
+    });
+  }
+}
+
+function openClerkSurface(action: 'open-sign-in' | 'open-sign-up'): void {
+  const open = action === 'open-sign-in'
+    ? () => clerkInstance?.openSignIn({ appearance: getAppearance() })
+    : () => clerkInstance?.openSignUp({ appearance: getAppearance() });
+  // Distinct reasons so Sentry can tell the "components not attached" race
+  // (the surface open threw) apart from a "Clerk bundle never loaded" failure
+  // (initClerk rejected: dynamic-import 4xx/5xx, transient network) — querying
+  // by `reason` must not mix the two or it dilutes the race alert signal.
+  const onFail = (reason: string) => (err: unknown): void => {
+    console.error(`[clerk] ${action} failed (${reason}):`, err);
+    captureClerkSurfaceFailure(action, err, reason);
+  };
   if (clerkInstance) {
-    clerkInstance.openSignIn({ appearance: getAppearance() });
+    runClerkSurfaceOpen(open, onFail('ui-components-not-ready'));
     return;
   }
-  // Deferred-load fast path: user clicked Sign In before the idle
-  // callback fired. Trigger immediate load and open the modal once the
-  // SDK is live so the click never silently no-ops.
-  void initClerk().then(() => clerkInstance?.openSignIn({ appearance: getAppearance() }));
+  // Deferred-load fast path: user clicked before the idle callback fired.
+  // Force the load, then open once the SDK is live so the click never
+  // silently no-ops.
+  void initClerk()
+    .then(() => runClerkSurfaceOpen(open, onFail('ui-components-not-ready')))
+    .catch(onFail('clerk-load-failed'));
+}
+
+/** Open the Clerk sign-in modal. */
+export function openSignIn(): void {
+  openClerkSurface('open-sign-in');
 }
 
 /**
@@ -215,14 +317,7 @@ export function openSignIn(): void {
  * footer link.
  */
 export function openSignUp(): void {
-  if (clerkInstance) {
-    clerkInstance.openSignUp({ appearance: getAppearance() });
-    return;
-  }
-  // Same deferred-load fast path as openSignIn — Create Account clicks
-  // during the load window kick off the import and open the modal once
-  // the SDK is live.
-  void initClerk().then(() => clerkInstance?.openSignUp({ appearance: getAppearance() }));
+  openClerkSurface('open-sign-up');
 }
 
 /**
@@ -395,8 +490,17 @@ export function mountUserButton(el: HTMLDivElement): () => void {
       realUnmount?.();
     };
   }
-  clerkInstance.mountUserButton(el, {
-    appearance: getAppearance(),
-  });
+  const tryMount = (attempt: number): void => {
+    try {
+      clerkInstance?.mountUserButton(el, { appearance: getAppearance() });
+      console.log('[clerk] mountUserButton succeeded on attempt', attempt);
+    } catch (err) {
+      console.warn(`[clerk] mountUserButton attempt ${attempt} failed:`, err);
+      if (attempt < 10) {
+        setTimeout(() => tryMount(attempt + 1), 300 * (attempt + 1));
+      }
+    }
+  };
+  tryMount(0);
   return () => clerkInstance?.unmountUserButton(el);
 }

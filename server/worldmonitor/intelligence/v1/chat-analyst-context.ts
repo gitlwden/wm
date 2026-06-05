@@ -1,5 +1,13 @@
-import { getCachedJson, getCachedJsonBatch } from '../../../_shared/redis';
-import { sanitizeForPrompt, sanitizeHeadline } from '../../../_shared/llm-sanitize.js';
+import { getCachedJson } from '../../../_shared/redis';
+// Issue #3724: all LLM-bound headline content goes through sanitizeForPrompt
+// (semantic + structural). The lighter sanitizeHeadline only strips structural
+// delimiters and was designed to preserve security-news semantics for display
+// surfaces — but here every string feeds the analyst's SYSTEM PROMPT, so a
+// compromised or attacker-influenced feed could embed instruction-override
+// phrases verbatim. We accept that legitimate "Anthropic warns: ignore previous
+// instructions…" headlines will be partly mangled in the analyst context — the
+// asymmetric cost favours hard sanitization at the prompt boundary.
+import { sanitizeForPrompt } from '../../../_shared/llm-sanitize.js';
 import { CHROME_UA } from '../../../_shared/constants';
 import { tokenizeForMatch, findMatchingKeywords } from '../../../../src/utils/keyword-match';
 import {
@@ -61,13 +69,6 @@ function safeNum(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 }
 
-function unwrapDataEnvelope(data: unknown): unknown {
-  if (!data || typeof data !== 'object') return data;
-  const value = data as Record<string, unknown>;
-  if ('data' in value && value._seed && typeof value._seed === 'object') return value.data;
-  return data;
-}
-
 function formatPct(n: number): string {
   return `${Math.round(n)}%`;
 }
@@ -77,12 +78,19 @@ function formatChange(n: number): string {
 }
 
 export function buildWorldBrief(data: unknown): string {
-  const unwrapped = unwrapDataEnvelope(data);
-  if (!unwrapped || typeof unwrapped !== 'object') return '';
-  const d = unwrapped as Record<string, unknown>;
+  if (!data || typeof data !== 'object') return '';
+  const d = data as Record<string, unknown>;
   const lines: string[] = [];
 
-  const briefText = safeStr(d.worldBrief || d.brief || d.summary || d.content || d.text);
+  // Production payload (news:insights:v1, see scripts/seed-insights.mjs) uses
+  // `worldBrief` for the LLM-generated paragraph and `topStories[].primaryTitle`
+  // for headlines. Pre-issue-#3724 review this code only read brief/headline,
+  // so production callers silently rendered an empty string. Fallback shapes
+  // (brief/summary/headline/title) retained for test fixtures and future
+  // payload variations. sanitizeForPrompt protects against feed-side prompt
+  // injection — both the brief and the headlines are untrusted upstream text
+  // that flows into the analyst's system prompt.
+  const briefText = sanitizeForPrompt(safeStr(d.worldBrief || d.brief || d.summary || d.content || d.text));
   if (briefText) lines.push(briefText.slice(0, 600));
 
   const stories = Array.isArray(d.topStories) ? d.topStories : Array.isArray(d.stories) ? d.stories : [];
@@ -90,7 +98,7 @@ export function buildWorldBrief(data: unknown): string {
     lines.push('Top Events:');
     for (const s of stories.slice(0, 12)) {
       const story = s as Record<string, unknown>;
-      const title = sanitizeHeadline(safeStr(story.primaryTitle || story.headline || story.title || s));
+      const title = sanitizeForPrompt(safeStr(story.primaryTitle || story.headline || story.title || s));
       if (title) lines.push(`- ${title}`);
     }
   }
@@ -124,9 +132,8 @@ export function buildRiskScores(data: unknown): string {
 }
 
 function buildMarketImplications(data: unknown): string {
-  const unwrapped = unwrapDataEnvelope(data);
-  if (!unwrapped || typeof unwrapped !== 'object') return '';
-  const d = unwrapped as Record<string, unknown>;
+  if (!data || typeof data !== 'object') return '';
+  const d = data as Record<string, unknown>;
   const cards = Array.isArray(d.cards) ? d.cards : [];
   if (!cards.length) return '';
 
@@ -286,21 +293,22 @@ async function buildGasStorage(): Promise<string | undefined> {
   try {
     const countries = await getCachedJson(GAS_STORAGE_COUNTRIES_KEY, true);
     if (!Array.isArray(countries) || countries.length === 0) return undefined;
-
-    // Batch all country reads in a single Redis pipeline instead of N parallel GETs
-    const keys = (countries as string[]).map((iso2) => `${GAS_STORAGE_KEY_PREFIX}${iso2}`);
-    const batch = await getCachedJsonBatch(keys, true);
-
     const entries: Array<{ iso2: string; fillPct: number; trend?: string }> = [];
-    for (const [key, data] of batch) {
-      if (data && typeof data === 'object') {
-        const d = data as Record<string, unknown>;
-        if (typeof d.fillPct === 'number') {
-          const iso2 = key.replace(GAS_STORAGE_KEY_PREFIX, '');
-          entries.push({ iso2: safeStr(d.iso2) || iso2, fillPct: d.fillPct, trend: safeStr(d.trend) || undefined });
+    await Promise.allSettled(
+      (countries as string[]).map(async (iso2) => {
+        try {
+          const data = await getCachedJson(`${GAS_STORAGE_KEY_PREFIX}${iso2}`, true);
+          if (data && typeof data === 'object') {
+            const d = data as Record<string, unknown>;
+            if (typeof d.fillPct === 'number') {
+              entries.push({ iso2: safeStr(d.iso2) || iso2, fillPct: d.fillPct, trend: safeStr(d.trend) || undefined });
+            }
+          }
+        } catch {
+          // skip missing country
         }
-      }
-    }
+      }),
+    );
     if (entries.length === 0) return undefined;
     const sorted = entries.sort((a, b) => a.fillPct - b.fillPct).slice(0, 5);
     const parts = sorted.map((e) => `${e.iso2}: ${e.fillPct.toFixed(1)}%${e.trend ? ` (${e.trend})` : ''}`);

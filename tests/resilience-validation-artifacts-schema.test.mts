@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
@@ -10,10 +11,16 @@ import {
   methodologyFormulaForCacheFormula,
 } from '../scripts/lib/resilience-formula.mjs';
 import {
+  resolveRankingSnapshotOutputPath,
+} from '../scripts/freeze-resilience-ranking.mjs';
+import {
+  DEFAULT_SAMPLE_COUNTRIES,
   REQUIRED_GATE_IDS,
   buildAcceptanceArtifact,
   buildGateResults,
   buildSampledCountryEvidenceEntry,
+  formatMissingPostFlipRankingSnapshotMessage,
+  resolvePostFlipSnapshotPath,
 } from '../scripts/capture-resilience-energy-v2-acceptance.mjs';
 import { RESILIENCE_COHORTS } from './helpers/resilience-cohorts.mts';
 import { MATCHED_PAIRS } from './helpers/resilience-matched-pairs.mts';
@@ -336,6 +343,11 @@ describe('resilience validation artifacts', () => {
       'freeze script must explain why unauthenticated post-flip snapshot capture is insufficient.',
     );
     assert.match(
+      freezeScript,
+      /RESILIENCE_RANKING_OUTPUT_BASENAME/,
+      'freeze script must let operators write the required post-flip artifact filename directly.',
+    );
+    assert.match(
       compareScript,
       /currentDomainAggregate_vs_proposedPillarCombined/,
       'compare script must remain identifiable as the pillar-combine harness, not the energy-v2 post-flip acceptance artifact.',
@@ -361,6 +373,11 @@ describe('resilience validation artifacts', () => {
         runbook.includes('resilience-ranking-live-post-pr1-*.json') ||
           runbook.includes('resilience-ranking-live-post-pr1-{date}.json'),
         'runbook must name the required post-flip ranking artifact pattern.',
+      );
+      assert.match(
+        runbook,
+        /RESILIENCE_RANKING_OUTPUT_BASENAME=resilience-ranking-live-post-pr1-\$\{CAPTURE_DATE\}\.json/,
+        'runbook must direct freeze-resilience-ranking to write the post-flip ranking artifact directly.',
       );
     }
 
@@ -458,6 +475,70 @@ describe('resilience validation artifacts', () => {
     assertEnergyV2AcceptanceArtifact(asRecord(artifact, 'fixture acceptance artifact'), 'resilience-energy-v2-acceptance-2026-06-03.json');
   });
 
+  it('accepts current whole-index matched-pair directions for the audited live scores', () => {
+    const countryCodes = new Set<string>();
+    for (const cohort of RESILIENCE_COHORTS) {
+      for (const countryCode of cohort.countryCodes) countryCodes.add(countryCode);
+    }
+    for (const pair of MATCHED_PAIRS) {
+      countryCodes.add(pair.higherExpected);
+      countryCodes.add(pair.lowerExpected);
+    }
+
+    const baselineScores: Record<string, number> = Object.fromEntries(
+      [...countryCodes].map((countryCode) => [countryCode, 60]),
+    );
+    const postFlipScores: Record<string, number> = { ...baselineScores };
+    for (const pair of MATCHED_PAIRS) {
+      postFlipScores[pair.higherExpected] = Math.max(postFlipScores[pair.higherExpected] ?? 0, 70);
+      postFlipScores[pair.lowerExpected] = Math.min(postFlipScores[pair.lowerExpected] ?? 50, 60);
+    }
+
+    // Credentialed R7-ACCEPT audit values from 2026-06-04. These used to
+    // fail when the whole-index pair anchors still expected FR > DE and
+    // SG > CH after later pillar-combined methodology changes.
+    postFlipScores.FR = 59.93;
+    postFlipScores.DE = 62.35;
+    postFlipScores.SG = 56.74;
+    postFlipScores.CH = 75.88;
+
+    const gates = buildGateResults({
+      baselineScores,
+      postFlipScores,
+      extractionCoverage: {
+        totalIndicators: 50,
+        implemented: 45,
+        notImplemented: 5,
+        unregisteredInHarness: 0,
+        coreImplemented: 40,
+        coreTotal: 45,
+        extractionRuleCount: 50,
+      },
+    });
+    const matchedPairGate = gates.find((gate) => gate.id === 'gate-7-matched-pair');
+    assert.equal(matchedPairGate?.status, 'pass');
+    assert.match(
+      String(matchedPairGate?.detail),
+      new RegExp(`${MATCHED_PAIRS.length}/${MATCHED_PAIRS.length} pairs pass`),
+    );
+
+    const evidence = asRecord(matchedPairGate?.evidence, 'matched-pair gate evidence');
+    const matchedPairSummary = evidence.matchedPairSummary;
+    assert.ok(Array.isArray(matchedPairSummary), 'matchedPairSummary must be an array');
+    const deVsFr = asRecord(
+      matchedPairSummary.find((entry) => asRecord(entry, 'matched pair summary entry').pairId === 'de-vs-fr'),
+      'de-vs-fr summary',
+    );
+    const chVsSg = asRecord(
+      matchedPairSummary.find((entry) => asRecord(entry, 'matched pair summary entry').pairId === 'ch-vs-sg'),
+      'ch-vs-sg summary',
+    );
+    assert.equal(deVsFr.status, 'pass');
+    assert.equal(deVsFr.gap, 2.42);
+    assert.equal(chVsSg.status, 'pass');
+    assert.equal(chVsSg.gap, 19.14);
+  });
+
   it('captures sampled energy evidence from realistic score response domains', () => {
     const sampledCountry = buildSampledCountryEvidenceEntry({
       countryCode: 'FR',
@@ -519,6 +600,87 @@ describe('resilience validation artifacts', () => {
       }),
       /did not include energy dimension under domains\[\]\.dimensions/,
     );
+  });
+
+  it('samples the audited FR/DE and SG/CH countries by default', () => {
+    const sampleCountries = new Set(DEFAULT_SAMPLE_COUNTRIES);
+    for (const countryCode of ['FR', 'DE', 'SG', 'CH']) {
+      assert.ok(
+        sampleCountries.has(countryCode),
+        `default energy-v2 acceptance samples must include ${countryCode}`,
+      );
+    }
+  });
+
+  it('keeps the missing post-flip ranking snapshot error operator-actionable', () => {
+    const message = formatMissingPostFlipRankingSnapshotMessage();
+
+    assert.match(message, /resilience-ranking-live-post-pr1-YYYY-MM-DD\.json/);
+    assert.match(message, /WORLDMONITOR_API_KEY=<pro-api-key>/);
+    assert.match(message, /node scripts\/freeze-resilience-ranking\.mjs/);
+    assert.match(message, /RESILIENCE_RANKING_OUTPUT_BASENAME=resilience-ranking-live-post-pr1-YYYY-MM-DD\.json/);
+    assert.match(message, /\[freeze-resilience-ranking\] wrote .*resilience-ranking-live-post-pr1-YYYY-MM-DD\.json/);
+    assert.doesNotMatch(message, /\$\(date /);
+    assert.match(message, /node --import tsx\/esm scripts\/capture-resilience-energy-v2-acceptance\.mjs/);
+    assert.match(message, /HTTP 401[\s\S]*get-resilience-score[\s\S]*Pro authentication required/);
+    assert.match(message, /gate-7-matched-pair[\s\S]*do not commit a synthetic artifact/);
+  });
+
+  it('validates direct post-flip ranking snapshot output filenames', () => {
+    assert.equal(
+      resolveRankingSnapshotOutputPath(
+        '2026-06-04',
+        'resilience-ranking-live-post-pr1-2026-06-04.json',
+      ),
+      resolve(snapshotDir, 'resilience-ranking-live-post-pr1-2026-06-04.json'),
+    );
+    assert.equal(
+      resolveRankingSnapshotOutputPath('2026-06-04', ''),
+      resolve(snapshotDir, 'resilience-ranking-2026-06-04.json'),
+    );
+    assert.throws(
+      () => resolveRankingSnapshotOutputPath('2026-06-04', '../resilience-ranking-live-post-pr1-2026-06-04.json'),
+      /filename only/,
+    );
+    assert.throws(
+      () => resolveRankingSnapshotOutputPath('2026-06-04', 'resilience-energy-v2-acceptance-2026-06-04.json'),
+      /resilience-ranking-YYYY-MM-DD\.json or resilience-ranking-live-post-pr1-YYYY-MM-DD\.json/,
+    );
+    assert.throws(
+      () => resolveRankingSnapshotOutputPath('2026-06-04', 'resilience-ranking-live-pr1-2026-06-04.json'),
+      /resilience-ranking-YYYY-MM-DD\.json or resilience-ranking-live-post-pr1-YYYY-MM-DD\.json/,
+    );
+    assert.throws(
+      () => resolveRankingSnapshotOutputPath('2026-06-04', 'resilience-ranking-live-post-pr1-2026-06-03.json'),
+      /must match capturedAt 2026-06-04/,
+    );
+  });
+
+  it('routes missing post-flip snapshot resolution through the operator-actionable error', async () => {
+    const emptySnapshotDir = mkdtempSync(join(tmpdir(), 'resilience-post-flip-empty-'));
+    const previousPostFlipRankingSnapshot = process.env.POST_FLIP_RANKING_SNAPSHOT;
+    delete process.env.POST_FLIP_RANKING_SNAPSHOT;
+
+    try {
+      await assert.rejects(
+        () => resolvePostFlipSnapshotPath({ snapshotDir: emptySnapshotDir }),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.match(err.message, /resilience-ranking-live-post-pr1-YYYY-MM-DD\.json/);
+          assert.match(err.message, /WORLDMONITOR_API_KEY=<pro-api-key>/);
+          assert.match(err.message, /HTTP 401[\s\S]*get-resilience-score[\s\S]*Pro authentication required/);
+          assert.match(err.message, /gate-7-matched-pair[\s\S]*do not commit a synthetic artifact/);
+          return true;
+        },
+      );
+    } finally {
+      if (previousPostFlipRankingSnapshot === undefined) {
+        delete process.env.POST_FLIP_RANKING_SNAPSHOT;
+      } else {
+        process.env.POST_FLIP_RANKING_SNAPSHOT = previousPostFlipRankingSnapshot;
+      }
+      rmSync(emptySnapshotDir, { recursive: true, force: true });
+    }
   });
 
   it('validates any committed post-flip PR1 ranking artifacts', () => {

@@ -334,7 +334,15 @@ export class PanelLayoutManager implements AppModule {
     await this.renderLayout();
 
     // Subscribe to auth state for reactive panel gating on web
+    let entitlementInitialized = false;
     this.unsubscribeAuth = subscribeAuthState((state) => {
+      // Initialize entitlement + billing subscriptions once the user appears
+      // (Clerk loads asynchronously, so the constructor-time check misses them)
+      if (state.user && !entitlementInitialized) {
+        entitlementInitialized = true;
+        initEntitlementSubscription(state.user.id).catch(() => {});
+        initSubscriptionWatch(state.user.id).catch(() => {});
+      }
       this.updatePanelGating(state);
     });
 

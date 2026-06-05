@@ -60,9 +60,17 @@ export async function getConvexClient(): Promise<ConvexClient | null> {
       if (forceRefreshToken) {
         clearClerkTokenCache();
       }
-      return getClerkToken();
+      const token = await getClerkToken();
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          console.log('[convex-client] JWT payload:', { iss: payload.iss, aud: payload.aud, azp: payload.azp, sub: payload.sub?.slice(0, 20), plan: payload.plan });
+        } catch {}
+      }
+      return token;
     },
     (isAuthenticated: boolean) => {
+      console.log('[convex-client] isAuthenticated:', isAuthenticated);
       if (isAuthenticated) {
         if (authReadyResolve) {
           authReadyResolve();

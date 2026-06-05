@@ -1,10 +1,6 @@
-import { DEFAULT_UPGRADE_PRODUCT } from '@/config/products';
 import { type AuthSession, getAuthState, subscribeAuthState } from '@/services/auth-state';
-import { openSignIn } from '@/services/clerk';
 import { PanelGateReason, getPanelGateReason } from '@/services/panel-gating';
 import { getResilienceScore, type ResilienceDomain, type ResilienceScoreResponse } from '@/services/resilience';
-import { isDesktopRuntime } from '@/services/runtime';
-import { invokeTauri } from '@/services/tauri-bridge';
 import { h, replaceChildren } from '@/utils/dom-utils';
 import {
   type DimensionConfidence,
@@ -62,7 +58,9 @@ export class ResilienceWidget {
     this.unsubscribeAuth = subscribeAuthState((state) => {
       this.authState = state;
       const gateReason = this.getGateReason();
-      if (gateReason === PanelGateReason.NONE && this.currentCountryCode && !this.loading && this.currentData?.countryCode !== this.currentCountryCode) {
+      const loadedCountryCode = normalizeCountryCode(this.currentData?.countryCode);
+      const needsRefresh = !this.currentData || (loadedCountryCode !== null && loadedCountryCode !== this.currentCountryCode);
+      if (gateReason === PanelGateReason.NONE && this.currentCountryCode && !this.loading && needsRefresh) {
         void this.refresh();
         return;
       }
@@ -208,10 +206,14 @@ export class ResilienceWidget {
       className: 'panel-locked-cta resilience-widget__cta',
       onclick: () => {
         if (gateReason === PanelGateReason.ANONYMOUS) {
-          openSignIn();
+          void import('@/services/clerk')
+            .then((module) => module.openSignIn())
+            .catch(() => this.showAuthUnavailable());
           return;
         }
-        this.openUpgradeFlow();
+        void this.openUpgradeFlow().catch(() => {
+          window.open('https://worldmonitor.app/pro', '_blank');
+        });
       },
     }, cta) as HTMLButtonElement;
 
@@ -222,6 +224,17 @@ export class ResilienceWidget {
       h('div', { className: 'panel-locked-desc resilience-widget__gate-desc' }, description),
       button,
     );
+  }
+
+  private async showAuthUnavailable(): Promise<void> {
+    const message = 'Sign-in is temporarily unavailable. Please try again.';
+    try {
+      const { showCheckoutErrorToast } = await import('@/services/checkout-error-toast');
+      showCheckoutErrorToast(message);
+      return;
+    } catch {
+      window.alert(message);
+    }
   }
 
   private renderError(message: string): HTMLElement {
@@ -460,14 +473,20 @@ export class ResilienceWidget {
     return h('div', { className: 'cdp-empty' }, text);
   }
 
-  private openUpgradeFlow(): void {
+  private async openUpgradeFlow(): Promise<void> {
+    const [{ DEFAULT_UPGRADE_PRODUCT }, { isDesktopRuntime }] = await Promise.all([
+      import('@/config/products'),
+      import('@/services/runtime'),
+    ]);
+
     if (isDesktopRuntime()) {
-      void invokeTauri<void>('open_url', { url: 'https://worldmonitor.app/pro' })
-        .catch(() => window.open('https://worldmonitor.app/pro', '_blank'));
+      const { invokeTauri } = await import('@/services/tauri-bridge');
+      await invokeTauri<void>('open_url', { url: 'https://worldmonitor.app/pro' })
+        .catch(() => { window.open('https://worldmonitor.app/pro', '_blank'); });
       return;
     }
 
-    import('@/services/checkout')
+    await import('@/services/checkout')
       .then((module) => module.startCheckout(DEFAULT_UPGRADE_PRODUCT))
       .catch(() => {
         window.open('https://worldmonitor.app/pro', '_blank');

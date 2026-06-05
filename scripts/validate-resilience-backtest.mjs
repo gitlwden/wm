@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { getRedisCredentials, loadEnvFile , cfPipeline } from './_seed-utils.mjs';
 
 /**
  * Backtesting framework: tests whether baseline resilience predicts recovery
@@ -22,12 +21,13 @@ import { getRedisCredentials, loadEnvFile , cfPipeline } from './_seed-utils.mjs
  *       cached scores are missing from Redis.
  */
 
+import { getRedisCredentials, loadEnvFile } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
 
 // Source of truth: server/worldmonitor/resilience/v1/_shared.ts
-const RESILIENCE_SCORE_CACHE_PREFIX = 'resilience:score:v22:';
+const RESILIENCE_SCORE_CACHE_PREFIX = 'resilience:score:v24:';
 
 // Mirror of _shared.ts#currentCacheFormula — must stay in lockstep so
 // the backtest only ingests same-formula cache entries. A mixed-formula
@@ -129,7 +129,17 @@ async function redisGetJson(url, token, key) {
 }
 
 async function redisPipeline(url, token, commands) {
-  return cfPipeline(commands);
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(commands),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`Redis pipeline HTTP ${resp.status}: ${text.slice(0, 200)}`);
+  }
+  return resp.json();
 }
 
 function computeBaselineScore(scoreResponse) {

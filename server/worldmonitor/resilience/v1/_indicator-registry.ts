@@ -18,12 +18,27 @@ export type IndicatorLicense =
   | 'proprietary' // Bloomberg, S&P Global Platts (not used in Core)
   | 'unknown'; // placeholder for any indicator still awaiting license audit
 
+export type IndicatorNormalization =
+  | { kind: 'linear' }
+  | {
+      kind: 'targetBand';
+      targetBand: { min: number; max: number };
+      zeroScoreAt: { min: number; max: number };
+      disclaimer: string;
+    }
+  | { kind: 'uShape'; disclaimer: string }
+  | { kind: 'discrete'; disclaimer: string }
+  | { kind: 'saturating'; disclaimer: string };
+
 export type IndicatorSpec = {
   id: string;
   dimension: ResilienceDimensionId;
   description: string;
-  direction: 'higherBetter' | 'lowerBetter';
+  direction: 'higherBetter' | 'lowerBetter' | 'indicatorSemantics';
   goalposts: { worst: number; best: number };
+  // Defaults to { kind: 'linear' }. Non-linear indicators keep goalposts as
+  // documentation anchors only and must describe the real scorer shape here.
+  normalization?: IndicatorNormalization;
   weight: number;
   // Primary source key for legacy callers and simple one-source indicators.
   sourceKey: string;
@@ -152,9 +167,15 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'inflationStability',
     dimension: 'currencyExternal',
-    description: 'IMF CPI inflation (lower is better). Global-coverage primary signal for currency stability. Core input to scoreCurrencyExternal under PR 3 §3.5. A future PR may upgrade this to a 5-year inflation-volatility computation once the seeder tracks the series; headline inflation is a reasonable first-cut for stability ranking.',
+    description: 'IMF CPI inflation target-band score. 1-3% YoY scores best; deflation at <=-5% and high inflation at >=50% score 0. Global-coverage primary signal for currency stability. Core input to scoreCurrencyExternal under PR 3 §3.5.',
     direction: 'lowerBetter',
-    goalposts: { worst: 50, best: 0 },
+    goalposts: { worst: 50, best: 3 },
+    normalization: {
+      kind: 'targetBand',
+      targetBand: { min: 1, max: 3 },
+      zeroScoreAt: { min: -5, max: 50 },
+      disclaimer: 'scoreInflationStability is non-linear: 1-3% maps to 100, <=-5% and >=50% map to 0. goalposts are documentation anchors, not generic lowerBetter inputs.',
+    },
     weight: 0.6,
     sourceKey: 'economic:imf:macro:v2',
     scope: 'global',
@@ -221,9 +242,9 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'tradeRestrictions',
     dimension: 'tradePolicy',
-    description: 'WTO trade restrictions count (IN_FORCE weighted 3x); curated reporter set',
+    description: 'WTO trade restriction severity (low=0, moderate=1, high=2); curated reporter set',
     direction: 'lowerBetter',
-    goalposts: { worst: 30, best: 0 },
+    goalposts: { worst: 2, best: 0 },
     weight: 0.30,
     sourceKey: 'trade:restrictions:v1:tariff-overview:50',
     scope: 'curated',
@@ -240,9 +261,9 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'tradeBarriers',
     dimension: 'tradePolicy',
-    description: 'WTO trade barrier notifications count; curated reporter set',
+    description: 'WTO trade barrier severity (low=0, moderate=1, high=2); curated reporter set',
     direction: 'lowerBetter',
-    goalposts: { worst: 40, best: 0 },
+    goalposts: { worst: 2, best: 0 },
     weight: 0.30,
     sourceKey: 'trade:barriers:v1:tariff-gap:50',
     scope: 'curated',
@@ -322,6 +343,10 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     // scores must consult `normalizeBandLowerBetter` directly, not assume
     // these are the inputs to a generic linear normalizer.
     goalposts: { worst: 60, best: 25 },
+    normalization: {
+      kind: 'uShape',
+      disclaimer: 'normalizeBandLowerBetter peaks around diversified middle exposure and penalizes both isolation and over-exposure. goalposts summarize the over-exposed documentation branch only.',
+    },
     weight: 0.30,
     sourceKey: 'economic:bis-lbs:v1',
     scope: 'global',
@@ -337,6 +362,10 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'FATF AML/CFT listing status — black list (call for action) → 0, gray list (increased monitoring) → 30, compliant → 100',
     direction: 'higherBetter',
     goalposts: { worst: 0, best: 100 },
+    normalization: {
+      kind: 'discrete',
+      disclaimer: 'fatfStatusToScore maps black=0, gray=30, compliant=100; goalposts are categorical documentation anchors.',
+    },
     weight: 0.20,
     sourceKey: 'economic:fatf-listing:v1',
     scope: 'global',
@@ -456,14 +485,14 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     comprehensive: false,
   },
 
-  // ── infrastructure (3 sub-metrics) ────────────────────────────────────────
+  // ── infrastructure (4 sub-metrics) ────────────────────────────────────────
   {
     id: 'electricityAccess',
     dimension: 'infrastructure',
     description: 'Access to electricity as % of population (World Bank EG.ELC.ACCS.ZS)',
     direction: 'higherBetter',
     goalposts: { worst: 40, best: 100 },
-    weight: 0.4,
+    weight: 0.3,
     sourceKey: 'resilience:static:{ISO2}',
     scope: 'global',
     cadence: 'annual',
@@ -478,7 +507,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'Paved roads as % of total road network (World Bank IS.ROD.PAVE.ZS)',
     direction: 'higherBetter',
     goalposts: { worst: 0, best: 100 },
-    weight: 0.35,
+    weight: 0.3,
     sourceKey: 'resilience:static:{ISO2}',
     scope: 'global',
     cadence: 'annual',
@@ -501,6 +530,21 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     coverage: 195,
     license: 'open-attribution',
     comprehensive: false,
+  },
+  {
+    id: 'broadband',
+    dimension: 'infrastructure',
+    description: 'Fixed broadband subscriptions per 100 people (World Bank IT.NET.BBND.P2)',
+    direction: 'higherBetter',
+    goalposts: { worst: 0, best: 40 },
+    weight: 0.15,
+    sourceKey: 'resilience:static:{ISO2}',
+    scope: 'global',
+    cadence: 'annual',
+    tier: 'core',
+    coverage: 188,
+    license: 'open-data',
+    comprehensive: true,
   },
 
   // ── energy (active production construct = v2) ─────────────────────────────
@@ -814,7 +858,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     dimension: 'socialCohesion',
     description: 'Unrest event count (severity-weighted) + sqrt(fatalities)',
     direction: 'lowerBetter',
-    goalposts: { worst: 20, best: 0 },
+    goalposts: { worst: 10, best: 0 },
     weight: 0.2,
     sourceKey: 'unrest:events:v1',
     scope: 'global',
@@ -835,7 +879,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     dimension: 'borderSecurity',
     description: 'UCDP armed conflict metric: eventCount*2 + typeWeight + sqrt(deaths)',
     direction: 'lowerBetter',
-    goalposts: { worst: 30, best: 0 },
+    goalposts: { worst: 15, best: 0 },
     weight: 0.65,
     sourceKey: 'conflict:ucdp-events:v1',
     scope: 'global',
@@ -876,8 +920,8 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     id: 'rsfPressFreedom',
     dimension: 'informationCognitive',
     description: 'Reporters Sans Frontieres press freedom score (0-100)',
-    direction: 'higherBetter',
-    goalposts: { worst: 0, best: 100 },
+    direction: 'lowerBetter',
+    goalposts: { worst: 100, best: 0 },
     weight: 0.55,
     sourceKey: 'resilience:static:{ISO2}',
     scope: 'global',
@@ -918,14 +962,14 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     comprehensive: false,
   },
 
-  // ── healthPublicService (3 sub-metrics) ───────────────────────────────────
+  // ── healthPublicService (5 sub-metrics) ───────────────────────────────────
   {
     id: 'uhcIndex',
     dimension: 'healthPublicService',
     description: 'WHO Universal Health Coverage service coverage index (0-100)',
     direction: 'higherBetter',
     goalposts: { worst: 40, best: 90 },
-    weight: 0.45,
+    weight: 0.35,
     sourceKey: 'resilience:static:{ISO2}',
     scope: 'global',
     cadence: 'annual',
@@ -940,7 +984,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'WHO measles immunization coverage among 1-year-olds (%)',
     direction: 'higherBetter',
     goalposts: { worst: 50, best: 99 },
-    weight: 0.35,
+    weight: 0.25,
     sourceKey: 'resilience:static:{ISO2}',
     scope: 'global',
     cadence: 'annual',
@@ -955,7 +999,37 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'WHO hospital beds per 1,000 people',
     direction: 'higherBetter',
     goalposts: { worst: 0, best: 8 },
-    weight: 0.2,
+    weight: 0.1,
+    sourceKey: 'resilience:static:{ISO2}',
+    scope: 'global',
+    cadence: 'annual',
+    tier: 'core',
+    coverage: 194,
+    license: 'public-domain',
+    comprehensive: true,
+  },
+  {
+    id: 'physiciansPer1k',
+    dimension: 'healthPublicService',
+    description: 'WHO physicians per 1,000 people (HWF_0001 converted from per 10,000)',
+    direction: 'higherBetter',
+    goalposts: { worst: 0, best: 5 },
+    weight: 0.15,
+    sourceKey: 'resilience:static:{ISO2}',
+    scope: 'global',
+    cadence: 'annual',
+    tier: 'core',
+    coverage: 194,
+    license: 'public-domain',
+    comprehensive: true,
+  },
+  {
+    id: 'healthExpPerCapitaUsd',
+    dimension: 'healthPublicService',
+    description: 'WHO current health expenditure per capita, USD (GHED_CHE_pc_US_SHA2011)',
+    direction: 'higherBetter',
+    goalposts: { worst: 20, best: 3000 },
+    weight: 0.15,
     sourceKey: 'resilience:static:{ISO2}',
     scope: 'global',
     cadence: 'annual',
@@ -1002,27 +1076,12 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     comprehensive: true,
   },
   {
-    id: 'aquastatWaterStress',
+    id: 'aquastatScore',
     dimension: 'foodWater',
-    description: 'FAO AQUASTAT stress/withdrawal/dependency indicators (% scale 0-100)',
-    direction: 'lowerBetter',
+    description: 'FAO AQUASTAT value scored by indicator semantics: stress/withdrawal/dependency readings are lower-better on 0-100; availability/renewable/access readings are higher-better on 0-100 or 0-5000 m3/capita.',
+    direction: 'indicatorSemantics',
     goalposts: { worst: 100, best: 0 },
-    weight: 0.25,
-    sourceKey: 'resilience:static:{ISO2}',
-    scope: 'global',
-    cadence: 'annual',
-    tier: 'core',
-    coverage: 188,
-    license: 'open-data',
-    comprehensive: true,
-  },
-  {
-    id: 'aquastatWaterAvailability',
-    dimension: 'foodWater',
-    description: 'FAO AQUASTAT availability/renewable/access indicators (0-100 % or 0-5000 m3/capita)',
-    direction: 'higherBetter',
-    goalposts: { worst: 0, best: 5000 },
-    weight: 0.15,
+    weight: 0.4,
     sourceKey: 'resilience:static:{ISO2}',
     scope: 'global',
     cadence: 'annual',
@@ -1168,6 +1227,10 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
     description: 'Sovereign-wealth fiscal-buffer signal per plan §3.4. Seeded from Wikipedia SWF list + per-fund article infoboxes (CC-BY-SA), haircut by the classification manifest (scripts/shared/swf-classification-manifest.yaml): effectiveMonths = rawSwfMonths × access × liquidity × transparency, summed across a country\'s manifest funds. Scorer applies a saturating transform score = 100 × (1 − exp(−effectiveMonths / 12)).',
     direction: 'higherBetter',
     goalposts: { worst: 0, best: 60 },
+    normalization: {
+      kind: 'saturating',
+      disclaimer: 'scoreSovereignFiscalBuffer uses 100 * (1 - exp(-effectiveMonths / 12)); goalposts document the display range, not a linear scorer anchor.',
+    },
     weight: 1.0,
     sourceKey: 'resilience:recovery:sovereign-wealth:v1',
     scope: 'global',
@@ -1215,7 +1278,7 @@ export const INDICATOR_REGISTRY: IndicatorSpec[] = [
   {
     id: 'recoveryImportHhi',
     dimension: 'importConcentration',
-    description: 'Herfindahl-Hirschman Index of import partner concentration (UN Comtrade HS2 bilateral); higher HHI = more dependent on fewer partners = slower recovery if a key partner is disrupted',
+    description: 'Herfindahl-Hirschman Index of import partner concentration (UN Comtrade HS2 bilateral); higher HHI = more dependent on fewer partners = slower recovery if a key partner is disrupted. Missing source years and years outside the normal 4-year Comtrade window derate certainty coverage.',
     direction: 'lowerBetter',
     goalposts: { worst: 5000, best: 0 },
     weight: 1.0,

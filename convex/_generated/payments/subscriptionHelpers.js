@@ -304,6 +304,28 @@ function toEpochMs(value, fieldName, fallback) {
 // Subscription event handlers
 // ---------------------------------------------------------------------------
 /**
+ * Coalesce the Dodo customer id across a webhook event and the existing
+ * subscriptions row.
+ *
+ * `DodoSubscriptionData.customer` is optional and lifecycle events
+ * (`subscription.renewed`, `.on_hold`, `.cancelled`, `.plan_changed`,
+ * `.expired`, `.updated`) sometimes arrive without it. A blind
+ * `rawPayload: data` patch would silently wipe the previously-known
+ * `customer.customer_id` and leave callers (esp. the Manage Billing
+ * portal lookup) unable to resolve which Dodo customer to bill against.
+ *
+ * Rule: prefer the incoming event's customer_id if present and a
+ * non-empty string; otherwise preserve whatever the existing row had
+ * (which may itself be undefined if every prior event was customer-less
+ * — that's the genuine "no customer" state).
+ */
+function mergeDodoCustomerId(data, existing) {
+    const incoming = data.customer?.customer_id;
+    if (typeof incoming === "string" && incoming.length > 0)
+        return incoming;
+    return existing.dodoCustomerId;
+}
+/**
  * Handles `subscription.active` -- a new subscription has been activated.
  *
  * Creates or updates the subscription record and upserts entitlements.
@@ -317,6 +339,15 @@ export async function handleSubscriptionActive(ctx, data, eventTimestamp) {
         .query("subscriptions")
         .withIndex("by_dodoSubscriptionId", (q) => q.eq("dodoSubscriptionId", data.subscription_id))
         .unique();
+    // Stable first-class projection of the Dodo customer id, used by the
+    // Manage Billing portal lookup. `data.customer?.customer_id` is
+    // sometimes absent on lifecycle events (renewed / on_hold / cancelled
+    // / plan_changed / expired), so we always coalesce with the existing
+    // column to preserve a known value across patches that overwrite
+    // `rawPayload` blindly.
+    const incomingDodoCustomerId = typeof data.customer?.customer_id === "string" && data.customer.customer_id.length > 0
+        ? data.customer.customer_id
+        : undefined;
     if (existing) {
         if (!isNewerEvent(existing.updatedAt, eventTimestamp))
             return;
@@ -327,6 +358,7 @@ export async function handleSubscriptionActive(ctx, data, eventTimestamp) {
             planKey,
             currentPeriodStart,
             currentPeriodEnd,
+            dodoCustomerId: incomingDodoCustomerId ?? existing.dodoCustomerId,
             rawPayload: data,
             updatedAt: eventTimestamp,
         });
@@ -340,6 +372,7 @@ export async function handleSubscriptionActive(ctx, data, eventTimestamp) {
             status: "active",
             currentPeriodStart,
             currentPeriodEnd,
+            dodoCustomerId: incomingDodoCustomerId,
             rawPayload: data,
             updatedAt: eventTimestamp,
         });
@@ -451,6 +484,7 @@ export async function handleSubscriptionRenewed(ctx, data, eventTimestamp) {
         status: "active",
         currentPeriodStart,
         currentPeriodEnd,
+        dodoCustomerId: mergeDodoCustomerId(data, existing),
         rawPayload: data,
         updatedAt: eventTimestamp,
     });
@@ -476,6 +510,7 @@ export async function handleSubscriptionOnHold(ctx, data, eventTimestamp) {
         return;
     await ctx.db.patch(existing._id, {
         status: "on_hold",
+        dodoCustomerId: mergeDodoCustomerId(data, existing),
         rawPayload: data,
         updatedAt: eventTimestamp,
     });
@@ -504,6 +539,7 @@ export async function handleSubscriptionCancelled(ctx, data, eventTimestamp) {
     await ctx.db.patch(existing._id, {
         status: "cancelled",
         cancelledAt,
+        dodoCustomerId: mergeDodoCustomerId(data, existing),
         rawPayload: data,
         updatedAt: eventTimestamp,
     });
@@ -529,6 +565,7 @@ export async function handleSubscriptionPlanChanged(ctx, data, eventTimestamp) {
     await ctx.db.patch(existing._id, {
         dodoProductId: data.product_id,
         planKey: newPlanKey,
+        dodoCustomerId: mergeDodoCustomerId(data, existing),
         rawPayload: data,
         updatedAt: eventTimestamp,
     });
@@ -556,6 +593,7 @@ export async function handleSubscriptionExpired(ctx, data, eventTimestamp) {
         return;
     await ctx.db.patch(existing._id, {
         status: "expired",
+        dodoCustomerId: mergeDodoCustomerId(data, existing),
         rawPayload: data,
         updatedAt: eventTimestamp,
     });
@@ -606,6 +644,7 @@ export async function handleSubscriptionUpdated(ctx, data, eventTimestamp) {
                 .unique();
             if (existing && isNewerEvent(existing.updatedAt, eventTimestamp)) {
                 await ctx.db.patch(existing._id, {
+                    dodoCustomerId: mergeDodoCustomerId(data, existing),
                     rawPayload: data,
                     updatedAt: eventTimestamp,
                 });

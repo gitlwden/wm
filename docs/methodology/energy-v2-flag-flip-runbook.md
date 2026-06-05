@@ -31,6 +31,27 @@ post-flip PR1 ranking snapshot before it will write
 artifact: that script compares the legacy six-domain aggregate against the
 pillar-combined formula and is not an energy-v2 post-flip acceptance harness.
 
+2026-06-04 R7-ACCEPT adjudication update:
+
+- Public runtime evidence remains post-flip: `/api/resilience/v1/get-runtime-manifest`
+  returned HTTP 200 with `formulaTag: "pc"`, `constructVersions.energy: "v2"`,
+  `rankingCache.count == rankingCache.scored == rankingCache.total == 196`, and
+  `intervals.available: true`.
+- `/api/health` returned HTTP 200 with overall status `DEGRADED` due to
+  unrelated checks, while the energy-v2 seed checks remained `OK` for
+  `lowCarbonGeneration`, `fossilElectricityShare`, and `powerLosses`.
+- Credentialed live ranking evidence later on 2026-06-04 showed the stale
+  whole-index anchors explicitly: `DE 62.35 > FR 59.93` and
+  `CH 75.88 > SG 56.74`. Those directions are consistent with the active
+  pillar-combined CRI, where France's energy-dimension advantage and
+  Singapore's SWF buffer are real but do not dominate the six-domain
+  whole-index score.
+- The matched-pair configuration now encodes the current whole-index anchors as
+  `de-vs-fr` and `ch-vs-sg`. If a future audit needs to test the PR 1 energy
+  mechanism directly, use credentialed sampled score-endpoint
+  `domains[].dimensions[]` evidence for the `energy` dimension rather than
+  reversing the overall-score pair direction.
+
 ### What can be verified without secrets
 
 The public runtime state can be rechecked without credentials, but that is not
@@ -67,13 +88,15 @@ Run from the repo root with production credentials:
 ```bash
 export API_BASE=https://www.worldmonitor.app
 export WORLDMONITOR_API_KEY=<pro-api-key>
+export CAPTURE_DATE=$(date -u +%Y-%m-%d)
+export RESILIENCE_RANKING_OUTPUT_BASENAME=resilience-ranking-live-post-pr1-${CAPTURE_DATE}.json
+# Defaults to FR,DE,SG,CH,NO,CA,AE,BH; set explicitly only to override.
+export RESILIENCE_ENERGY_V2_SAMPLE_COUNTRIES=FR,DE,SG,CH,NO,CA,AE,BH
 
 node scripts/freeze-resilience-ranking.mjs
-mv "docs/snapshots/resilience-ranking-$(date +%Y-%m-%d).json" \
-  "docs/snapshots/resilience-ranking-live-post-pr1-$(date +%Y-%m-%d).json"
 
 jq '.formulaVerification.declaredFormula' \
-  "docs/snapshots/resilience-ranking-live-post-pr1-$(date +%Y-%m-%d).json"
+  "docs/snapshots/resilience-ranking-live-post-pr1-${CAPTURE_DATE}.json"
 
 node --import tsx/esm scripts/capture-resilience-energy-v2-acceptance.mjs
 
@@ -236,11 +259,13 @@ All must be green before flipping `RESILIENCE_ENERGY_V2_ENABLED=true`:
    post-deploy ranking refresh completes (check via
    `GET resilience:ranking:v11` in Redis):
    ```bash
+   CAPTURE_DATE=$(date -u +%Y-%m-%d)
    API_BASE=https://www.worldmonitor.app \
      WORLDMONITOR_API_KEY=<pro-api-key> \
+     RESILIENCE_RANKING_OUTPUT_BASENAME=resilience-ranking-live-post-pr1-${CAPTURE_DATE}.json \
      node scripts/freeze-resilience-ranking.mjs
-   mv "docs/snapshots/resilience-ranking-$(date +%Y-%m-%d).json" \
-     "docs/snapshots/resilience-ranking-live-post-pr1-$(date +%Y-%m-%d).json"
+   jq '.formulaVerification.declaredFormula' \
+     "docs/snapshots/resilience-ranking-live-post-pr1-${CAPTURE_DATE}.json"
    git add docs/snapshots/resilience-ranking-live-post-pr1-*.json
    git commit -m "chore(resilience): post-PR-1 snapshot"
    ```

@@ -32,6 +32,7 @@ const SNAPSHOT_DIR = path.join(REPO_ROOT, 'docs', 'snapshots');
 
 const POST_FLIP_RANKING_RE = /^resilience-ranking-live-post-pr1-(\d{4}-\d{2}-\d{2})\.json$/;
 const BASELINE_RANKING_RE = /^resilience-ranking-live-(?:pre-pr1-flip|pre-repair)-(\d{4}-\d{2}-\d{2})\.json$/;
+const POST_FLIP_RANKING_SNAPSHOT_LABEL = 'post-flip PR1 resilience ranking snapshot';
 const REQUIRED_HEALTH_CHECKS = ['lowCarbonGeneration', 'fossilElectricityShare', 'powerLosses'];
 const REQUIRED_GATE_IDS = [
   'gate-1-spearman',
@@ -51,10 +52,19 @@ const API_BASE = (process.env.API_BASE || 'https://www.worldmonitor.app').replac
 const API_ORIGIN = new URL(API_BASE).origin;
 const USER_AGENT = process.env.USER_AGENT
   || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
-const SAMPLE_COUNTRIES = (process.env.RESILIENCE_ENERGY_V2_SAMPLE_COUNTRIES || 'FR,DE,NO,CA,AE,BH')
+const DEFAULT_SAMPLE_COUNTRIES = ['FR', 'DE', 'SG', 'CH', 'NO', 'CA', 'AE', 'BH'];
+const SAMPLE_COUNTRIES = (process.env.RESILIENCE_ENERGY_V2_SAMPLE_COUNTRIES || DEFAULT_SAMPLE_COUNTRIES.join(','))
   .split(',')
   .map((countryCode) => countryCode.trim().toUpperCase())
   .filter((countryCode) => /^[A-Z]{2}$/.test(countryCode));
+
+class SnapshotNotFoundError extends Error {
+  constructor(label) {
+    super(`No ${label} found in docs/snapshots/.`);
+    this.name = 'SnapshotNotFoundError';
+    this.label = label;
+  }
+}
 
 function commitSha() {
   try {
@@ -203,15 +213,42 @@ function resolveSnapshotPath(value, label) {
   return resolved;
 }
 
-async function latestSnapshotPath(re, label) {
-  const entries = await fs.readdir(SNAPSHOT_DIR).catch(() => []);
+async function latestSnapshotPath(re, label, snapshotDir = SNAPSHOT_DIR) {
+  const entries = await fs.readdir(snapshotDir).catch(() => []);
   const matches = entries
     .filter((filename) => re.test(filename))
     .sort();
   if (matches.length === 0) {
-    throw new Error(`No ${label} found in docs/snapshots/.`);
+    throw new SnapshotNotFoundError(label);
   }
-  return path.join(SNAPSHOT_DIR, matches.at(-1));
+  return path.join(snapshotDir, matches.at(-1));
+}
+
+function formatMissingPostFlipRankingSnapshotMessage() {
+  return [
+    'No post-flip PR1 resilience ranking snapshot found in docs/snapshots/.',
+    '',
+    'Required prerequisite:',
+    '  docs/snapshots/resilience-ranking-live-post-pr1-YYYY-MM-DD.json',
+    '',
+    'Capture it with production credentials; the freeze script verifies score anchors through get-resilience-score:',
+    '  API_BASE=https://www.worldmonitor.app \\',
+    '    WORLDMONITOR_API_KEY=<pro-api-key> \\',
+    '    RESILIENCE_RANKING_OUTPUT_BASENAME=resilience-ranking-live-post-pr1-YYYY-MM-DD.json \\',
+    '    node scripts/freeze-resilience-ranking.mjs',
+    '  # The script must print:',
+    '  #   [freeze-resilience-ranking] wrote .../docs/snapshots/resilience-ranking-live-post-pr1-YYYY-MM-DD.json',
+    '',
+    'Then rerun this harness:',
+    '  API_BASE=https://www.worldmonitor.app \\',
+    '    WORLDMONITOR_API_KEY=<pro-api-key> \\',
+    '    node --import tsx/esm scripts/capture-resilience-energy-v2-acceptance.mjs',
+    '',
+    'Expected unauthenticated failure mode:',
+    '  HTTP 401 from /api/resilience/v1/get-resilience-score: Pro authentication required',
+    '',
+    'If the harness prints acceptanceGates with gate-7-matched-pair failures, do not commit a synthetic artifact; attach the gate JSON to the closeout issue and wait for the P1 matched-pair workstream.',
+  ].join('\n');
 }
 
 async function resolveBaselineSnapshotPath() {
@@ -220,10 +257,17 @@ async function resolveBaselineSnapshotPath() {
   return latestSnapshotPath(BASELINE_RANKING_RE, 'pre-flip/pre-repair resilience ranking snapshot');
 }
 
-async function resolvePostFlipSnapshotPath() {
+async function resolvePostFlipSnapshotPath({ snapshotDir = SNAPSHOT_DIR } = {}) {
   const explicit = resolveSnapshotPath(process.env.POST_FLIP_RANKING_SNAPSHOT, 'POST_FLIP_RANKING_SNAPSHOT');
   if (explicit) return explicit;
-  return latestSnapshotPath(POST_FLIP_RANKING_RE, 'post-flip PR1 resilience ranking snapshot');
+  try {
+    return await latestSnapshotPath(POST_FLIP_RANKING_RE, POST_FLIP_RANKING_SNAPSHOT_LABEL, snapshotDir);
+  } catch (err) {
+    if (err instanceof SnapshotNotFoundError && err.label === POST_FLIP_RANKING_SNAPSHOT_LABEL) {
+      throw new Error(formatMissingPostFlipRankingSnapshotMessage());
+    }
+    throw err;
+  }
 }
 
 function relativeRepoPath(filePath) {
@@ -539,12 +583,15 @@ async function main() {
 }
 
 export {
+  DEFAULT_SAMPLE_COUNTRIES,
   GATE_THRESHOLDS,
   REQUIRED_GATE_IDS,
   buildAcceptanceArtifact,
   buildExtractionCoverage,
   buildGateResults,
   buildSampledCountryEvidenceEntry,
+  formatMissingPostFlipRankingSnapshotMessage,
+  resolvePostFlipSnapshotPath,
   snapshotScores,
   snapshotTotals,
 };

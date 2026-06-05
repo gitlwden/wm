@@ -42,12 +42,13 @@ let unsubscribeFn: (() => void) | null = null;
  * Failures are logged but never thrown (dashboard must not break).
  */
 export async function initEntitlementSubscription(_userId?: string): Promise<void> {
+  console.log('[entitlements] initEntitlementSubscription called, initialized=', initialized);
   if (initialized) return;
 
   try {
     const client = await getConvexClient();
     if (!client) {
-      console.log('[entitlements] No VITE_CONVEX_URL — skipping Convex subscription');
+      console.warn('[entitlements] No VITE_CONVEX_URL — skipping Convex subscription');
       return;
     }
 
@@ -64,8 +65,9 @@ export async function initEntitlementSubscription(_userId?: string): Promise<voi
     // arrives). Unauthenticated visitors time out after 10s and we skip the
     // subscription entirely — they don't need entitlement updates.
     const authed = await waitForConvexAuth(10_000);
+    console.log('[entitlements] Convex auth result:', authed);
     if (!authed) {
-      console.log('[entitlements] Convex auth not established — skipping subscription');
+      console.warn('[entitlements] Convex auth not established — skipping subscription');
       return;
     }
 
@@ -73,6 +75,7 @@ export async function initEntitlementSubscription(_userId?: string): Promise<voi
       api.entitlements.getEntitlementsForUser,
       {},
       (result: EntitlementState | null) => {
+        console.log('[entitlements] Convex snapshot:', JSON.stringify(result));
         currentState = result;
         for (const cb of listeners) cb(result);
       },

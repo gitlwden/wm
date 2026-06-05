@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { loadEnvFile, getRedisCredentials , cfPipeline } from './_seed-utils.mjs';
+
+import { loadEnvFile, getRedisCredentials } from './_seed-utils.mjs';
 
 // Source of truth: server/worldmonitor/resilience/v1/_shared.ts → RESILIENCE_SCORE_CACHE_PREFIX
-const RESILIENCE_SCORE_CACHE_PREFIX = 'resilience:score:v22:';
+const RESILIENCE_SCORE_CACHE_PREFIX = 'resilience:score:v24:';
 
 // Mirror of server/worldmonitor/resilience/v1/_shared.ts#currentCacheFormula.
 // Must stay in lockstep with the server-side definition so this script
@@ -39,7 +40,14 @@ const REFERENCE_INDICES = {
 const SAMPLE_COUNTRIES = Object.keys(REFERENCE_INDICES.ndgain);
 
 async function redisPipeline(url, token, commands) {
-  return cfPipeline(commands);
+  const resp = await fetch(`${url}/pipeline`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(commands),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!resp.ok) throw new Error(`Redis pipeline HTTP ${resp.status}`);
+  return resp.json();
 }
 
 function toRanks(values) {
