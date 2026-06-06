@@ -214,7 +214,7 @@ export default async function handler(req) {
 
     // Scrape all channels concurrently (max 6 at a time)
     const tasks = channels.map(ch => () => scrapeChannel(ch, limit));
-    const results = await parallelLimit(tasks, 6);
+    const results = await parallelLimit(tasks, 3);
 
     // Merge, tag topics, sort by timestamp (newest first)
     const items = [];

@@ -997,13 +997,20 @@ function telegramFeedDevPlugin(): Plugin {
             for (const ch of chans) { if (!channelTopicMap.has(ch)) channelTopicMap.set(ch, topic); }
           }
 
-          const results = await Promise.allSettled(
-            channels.map(async ch => {
-              const r = await fetch(`https://t.me/s/${ch}`, { headers: { 'User-Agent': UA }, redirect: 'follow' });
-              if (!r.ok) return [];
-              return parseMessages(ch, await r.text());
-            }),
-          );
+          // Rate-limited fetch: 3 concurrent, 300ms delay between batches
+          const results: { status: 'fulfilled'; value: any[] }[] = [];
+          for (let i = 0; i < channels.length; i += 3) {
+            const batch = channels.slice(i, i + 3);
+            const batchResults = await Promise.allSettled(
+              batch.map(async ch => {
+                const r = await fetch(`https://t.me/s/${ch}`, { headers: { 'User-Agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(8000) });
+                if (!r.ok) return [];
+                return parseMessages(ch, await r.text());
+              }),
+            );
+            results.push(...batchResults.filter(r => r.status === 'fulfilled') as any);
+            if (i + 3 < channels.length) await new Promise(r => setTimeout(r, 300));
+          }
 
           const items: any[] = [];
           for (const r of results) {
