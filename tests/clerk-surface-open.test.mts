@@ -76,6 +76,22 @@ describe('runClerkSurfaceOpen', () => {
     assert.match((captured[0] as Error).message, /not loaded with Ui components/);
   });
 
+  it('can retry more than once for slower Clerk UI component hydration', () => {
+    let opens = 0;
+    let failures = 0;
+    runClerkSurfaceOpen(
+      () => {
+        opens += 1;
+        if (opens < 4) throw new Error('Clerk was not loaded with Ui components');
+      },
+      () => { failures += 1; },
+      (cb) => { cb(); },
+      5,
+    );
+    assert.equal(opens, 4);
+    assert.equal(failures, 0);
+  });
+
   it('schedules the retry rather than calling open synchronously twice', () => {
     let opens = 0;
     let scheduled: (() => void) | null = null;

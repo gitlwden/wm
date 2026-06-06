@@ -63,8 +63,11 @@ export async function getConvexClient(): Promise<ConvexClient | null> {
       const token = await getClerkToken();
       if (token) {
         try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          console.log('[convex-client] JWT payload:', { iss: payload.iss, aud: payload.aud, azp: payload.azp, sub: payload.sub?.slice(0, 20), plan: payload.plan });
+          const payloadSegment = token.split('.')[1];
+          if (payloadSegment) {
+            const payload = JSON.parse(atob(payloadSegment));
+            console.log('[convex-client] JWT payload:', { iss: payload.iss, aud: payload.aud, azp: payload.azp, sub: payload.sub?.slice(0, 20), plan: payload.plan });
+          }
         } catch {}
       }
       return token;
