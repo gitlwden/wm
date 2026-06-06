@@ -35,7 +35,8 @@ export const TELEGRAM_TOPICS = [
 ] as const;
 
 const cache = new Map<string, { response: TelegramFeedResponse; at: number }>();
-const CACHE_TTL = 60_000;
+const CACHE_TTL = 30_000;
+const EMPTY_CACHE_TTL = 10_000;
 const MISSING_TIMESTAMP_ISO = new Date(0).toISOString();
 
 function telegramFeedUrl(limit: number, topic?: string): string {
@@ -48,7 +49,10 @@ function telegramFeedUrl(limit: number, topic?: string): string {
 export async function fetchTelegramFeed(limit = 50, topic?: string): Promise<TelegramFeedResponse> {
   const key = `${limit}:${topic || 'all'}`;
   const cached = cache.get(key);
-  if (cached && Date.now() - cached.at < CACHE_TTL) return cached.response;
+  if (cached) {
+    const ttl = cached.response.count === 0 ? EMPTY_CACHE_TTL : CACHE_TTL;
+    if (Date.now() - cached.at < ttl) return cached.response;
+  }
 
   const res = await fetch(telegramFeedUrl(limit, topic));
   if (!res.ok) throw new Error(`Telegram feed ${res.status}`);

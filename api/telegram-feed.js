@@ -243,7 +243,7 @@ export default async function handler(req) {
 
     const cacheControl = trimmed.length === 0
       ? 'public, max-age=0, s-maxage=15, stale-while-revalidate=10'
-      : 'public, max-age=60, s-maxage=180, stale-while-revalidate=60';
+      : 'public, max-age=30, s-maxage=60, stale-while-revalidate=30';
 
     return jsonResponse({
       source: 'telegram',
