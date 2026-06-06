@@ -26,6 +26,29 @@ type ClerkInstance = Clerk;
 
 const PUBLISHABLE_KEY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_CLERK_PUBLISHABLE_KEY) as string | undefined;
 
+/** Load the Clerk UI component script (@clerk/ui) from CDN. Sets window.__internal_ClerkUICtor. */
+async function loadClerkUIScript(): Promise<void> {
+  const w = window as unknown as { __internal_ClerkUICtor?: unknown };
+  if (w.__internal_ClerkUICtor) return;
+  if (!PUBLISHABLE_KEY) return;
+  const b64 = PUBLISHABLE_KEY.replace(/^pk_(test|live)_/, '');
+  const decoded = atob(b64.replace(/_/g, '/').replace(/-/g, '+'));
+  const host = decoded.replace(/\$$/, '');
+  const url = `https://${host}/npm/@clerk/ui@1/dist/ui.browser.js`;
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${url}"]`);
+    if (existing) { existing.addEventListener('load', () => resolve()); return; }
+    const s = document.createElement('script');
+    s.src = url;
+    s.crossOrigin = 'anonymous';
+    s.async = true;
+    s.dataset.clerkUiScript = '';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed to load Clerk UI script'));
+    document.head.appendChild(s);
+  });
+}
+
 let clerkInstance: ClerkInstance | null = null;
 let loadPromise: Promise<void> | null = null;
 let loadScheduled = false;
@@ -116,9 +139,15 @@ export async function initClerk(): Promise<void> {
   }
   loadPromise = (async () => {
     try {
+      // Clerk v6 splits UI into @clerk/ui — load it before calling load().
+      await loadClerkUIScript();
+
       const { Clerk } = await import('@clerk/clerk-js');
       const clerk = new Clerk(PUBLISHABLE_KEY);
+
+      const uiCtor = (window as unknown as { __internal_ClerkUICtor?: unknown }).__internal_ClerkUICtor;
       await clerk.load({
+        ...(uiCtor ? { clerkUICtor: uiCtor } : {}),
         appearance: getAppearance(),
         afterSignOutUrl: getAfterSignOutUrl(),
       });
@@ -223,9 +252,9 @@ function scheduleNextFrame(cb: () => void): void {
  * unguarded that throw escaped as an uncaught error on every Sign In /
  * Create Account click (WORLDMONITOR-SC / -SD: ~2.3k events / ~1k users).
  *
- * Retry once on the next frame to absorb the mount race; if it still fails,
- * report a single handled event so a genuine regression still alarms without
- * flooding Sentry. Deliberately does NOT reset `clerkInstance` — that would
+ * Retry on later frames to absorb the mount race; if it still fails, report
+ * a single handled event so a genuine regression still alarms without
+ * flooding Sentry. Deliberately does NOT reset `clerkInstance` -- that would
  * orphan the active auth-state listeners (`attachPendingSubscribers` drains
  * its queue, so a fresh load can't re-attach them).
  *
@@ -236,18 +265,50 @@ export function runClerkSurfaceOpen(
   open: () => void,
   onPersistentFailure: (err: unknown) => void,
   scheduleRetry: (cb: () => void) => void = scheduleNextFrame,
+  maxRetries = 1,
 ): void {
-  try {
-    open();
-  } catch {
-    scheduleRetry(() => {
-      try {
-        open();
-      } catch (err) {
+  let retries = 0;
+  const tryOpen = (): void => {
+    try {
+      open();
+    } catch (err) {
+      if (retries >= maxRetries) {
         onPersistentFailure(err);
+        return;
       }
+      retries += 1;
+      scheduleRetry(tryOpen);
+    }
+  };
+
+  tryOpen();
+}
+
+function runClerkUiActionWithRetries(
+  action: () => void,
+  onPersistentFailure: (err: unknown) => void,
+): void {
+  runClerkSurfaceOpen(action, onPersistentFailure, scheduleNextFrame, 5);
+}
+
+function mountUserButtonWithRetry(
+  el: HTMLDivElement,
+  onPersistentFailure: (err: unknown) => void,
+  shouldContinue: () => boolean,
+): void {
+  runClerkUiActionWithRetries(() => {
+    if (!shouldContinue()) return;
+    clerkInstance?.mountUserButton(el, {
+      appearance: getAppearance(),
     });
-  }
+  }, onPersistentFailure);
+}
+
+function onClerkUiFailure(action: string, reason: string): (err: unknown) => void {
+  return (err: unknown): void => {
+    console.error(`[clerk] ${action} failed (${reason}):`, err);
+    captureClerkSurfaceFailure(action, err, reason);
+  };
 }
 
 function openClerkSurface(action: 'open-sign-in' | 'open-sign-up'): void {
@@ -258,20 +319,16 @@ function openClerkSurface(action: 'open-sign-in' | 'open-sign-up'): void {
   // (the surface open threw) apart from a "Clerk bundle never loaded" failure
   // (initClerk rejected: dynamic-import 4xx/5xx, transient network) — querying
   // by `reason` must not mix the two or it dilutes the race alert signal.
-  const onFail = (reason: string) => (err: unknown): void => {
-    console.error(`[clerk] ${action} failed (${reason}):`, err);
-    captureClerkSurfaceFailure(action, err, reason);
-  };
   if (clerkInstance) {
-    runClerkSurfaceOpen(open, onFail('ui-components-not-ready'));
+    runClerkUiActionWithRetries(open, onClerkUiFailure(action, 'ui-components-not-ready'));
     return;
   }
   // Deferred-load fast path: user clicked before the idle callback fired.
   // Force the load, then open once the SDK is live so the click never
   // silently no-ops.
   void initClerk()
-    .then(() => runClerkSurfaceOpen(open, onFail('ui-components-not-ready')))
-    .catch(onFail('clerk-load-failed'));
+    .then(() => runClerkUiActionWithRetries(open, onClerkUiFailure(action, 'ui-components-not-ready')))
+    .catch(onClerkUiFailure(action, 'clerk-load-failed'));
 }
 
 /** Open the Clerk sign-in modal. */
@@ -443,31 +500,24 @@ export function subscribeClerk(callback: () => void): () => void {
  * Returns an unmount function.
  */
 export function mountUserButton(el: HTMLDivElement): () => void {
+  let cancelled = false;
   if (!clerkInstance) {
     // Deferred-load path: the avatar widget asked to mount before Clerk
     // finished its idle-callback load. Trigger an immediate load and
     // mount once ready. Track unmount in a sentinel so an early
     // teardown still cancels.
-    let cancelled = false;
-    let realUnmount: (() => void) | null = null;
     void initClerk().then(() => {
       if (cancelled || !clerkInstance) return;
-      clerkInstance.mountUserButton(el, {
-        appearance: getAppearance(),
-      });
-      realUnmount = () => clerkInstance?.unmountUserButton(el);
-    });
+      mountUserButtonWithRetry(el, onClerkUiFailure('mount-user-button', 'ui-components-not-ready'), () => !cancelled);
+    }).catch(onClerkUiFailure('mount-user-button', 'clerk-load-failed'));
     return () => {
       cancelled = true;
-      realUnmount?.();
+      clerkInstance?.unmountUserButton(el);
     };
   }
-  try {
-    clerkInstance.mountUserButton(el, {
-      appearance: getAppearance(),
-    });
-  } catch {
-    // Clerk UI components not loaded yet — non-fatal, settings button still renders
-  }
-  return () => clerkInstance?.unmountUserButton(el);
+  mountUserButtonWithRetry(el, onClerkUiFailure('mount-user-button', 'ui-components-not-ready'), () => !cancelled);
+  return () => {
+    cancelled = true;
+    clerkInstance?.unmountUserButton(el);
+  };
 }
