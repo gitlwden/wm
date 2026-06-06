@@ -68,8 +68,8 @@ const FREE_FEATURES: PlanFeatures = {
 const PRO_FEATURES: PlanFeatures = {
   tier: 1,
   maxDashboards: 10,
-  apiAccess: false,
-  apiRateLimit: 0,
+  apiAccess: true,
+  apiRateLimit: 30,
   prioritySupport: false,
   exportFormats: ["csv", "pdf"],
   mcpAccess: true,
