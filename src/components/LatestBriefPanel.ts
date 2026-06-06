@@ -21,6 +21,7 @@
 
 import { Panel } from './Panel';
 import { clearClerkTokenCache } from '@/services/clerk';
+import { premiumFetch } from '@/services/premium-fetch';
 import { PanelGateReason, hasPremiumAccess } from '@/services/panel-gating';
 import { getAuthState, subscribeAuthState } from '@/services/auth-state';
 import { hasTier, getEntitlementState } from '@/services/entitlements';
@@ -281,7 +282,7 @@ export class LatestBriefPanel extends Panel {
     // Pass userId as query param so the server can resolve the brief
     // when authenticating via API key (which carries no user identity).
     const params = requestUserId ? `?userId=${encodeURIComponent(requestUserId)}` : '';
-    const res = await fetch(`${LATEST_BRIEF_ENDPOINT}${params}`, { signal });
+    const res = await premiumFetch(`${LATEST_BRIEF_ENDPOINT}${params}`, { signal });
     if (res.status === 401) {
       throw new BriefAccessError('sign_in_required');
     }

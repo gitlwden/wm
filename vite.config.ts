@@ -1547,6 +1547,15 @@ export default defineConfig(({ mode }) => {
         ],
       },
       proxy: {
+        // Pro-gated API routes — forward to production so dev can test auth flows
+        '/api/latest-brief': {
+          target: 'https://api.worldmonitor.app',
+          changeOrigin: true,
+        },
+        '/api/notification-channels': {
+          target: 'https://api.worldmonitor.app',
+          changeOrigin: true,
+        },
         // Legacy API routes not handled by sebuf plugin — forward to production
         '/api/supply-chain/hormuz-tracker': {
           target: 'https://api.worldmonitor.app',
