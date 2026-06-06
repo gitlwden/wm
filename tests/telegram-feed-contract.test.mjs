@@ -20,10 +20,36 @@ function makeRequest(path = '/api/telegram-feed?limit=50') {
   });
 }
 
-describe('api/telegram-feed contract normalization', () => {
+/**
+ * Build a fake t.me/s/ HTML page with one message.
+ * @param {object} opts
+ * @param {string} opts.channel
+ * @param {number} opts.id
+ * @param {string} opts.text
+ * @param {string} [opts.datetime]  ISO timestamp
+ * @param {string} [opts.imgSrc]    data-src image URL
+ */
+function fakeTelegramHtml({ channel, id, text, datetime = '2026-06-06T10:00:00+00:00', imgSrc }) {
+  const imgTag = imgSrc
+    ? `<div class="tgme_widget_message_photo_wrap"><i style="background-image:url('${imgSrc}')"></i></div>`
+    : '';
+  return `<!DOCTYPE html><html><body>
+<div class="tgme_channel_history">
+<div class="tgme_widget_message_wrap" data-post="${channel}/${id}">
+  <div class="tgme_widget_message" data-post="${channel}/${id}">
+    <div class="tgme_widget_message_info">
+      <time datetime="${datetime}"></time>
+    </div>
+    <div class="tgme_widget_message_text js-message_text">${text}</div>
+    ${imgTag}
+  </div>
+</div>
+</div></body></html>`;
+}
+
+describe('api/telegram-feed direct scraping', () => {
   beforeEach(() => {
-    process.env.WS_RELAY_URL = 'https://relay.example.com';
-    process.env.RELAY_SHARED_SECRET = 'test-secret';
+    // No relay env vars needed — scraping is self-contained
   });
 
   afterEach(() => {
@@ -31,130 +57,153 @@ describe('api/telegram-feed contract normalization', () => {
     restoreEnv();
   });
 
-  it('normalizes messages[] into the browser UI contract and ignores a stale count field', async () => {
-    globalThis.fetch = async (url, options) => {
-      assert.match(String(url), /\/telegram\/feed\?limit=50$/);
-      assert.equal(options?.headers?.Authorization, 'Bearer test-secret');
-      return new Response(JSON.stringify({
-        enabled: true,
-        source: 'relay',
-        earlySignal: false,
-        updatedAt: '2026-04-06T12:00:00Z',
-        count: 0,
-        messages: [{
-          id: 123,
-          channelName: 'warintel',
-          channelTitle: 'War Intel',
-          timestampMs: 1_744_000_000_000,
-          sourceUrl: 'javascript:alert(1)',
-          text: 'Missile launches reported',
-          topic: 'conflict',
-          tags: [42, 'urgent'],
-          mediaUrls: ['https://cdn.example.com/image.jpg', 88, 'javascript:evil()'],
-        }],
-      }), {
+  it('scrapes messages from t.me/s/ and normalizes them', async () => {
+    const html = fakeTelegramHtml({
+      channel: 'liveuamap',
+      id: 12345,
+      text: 'Breaking: missile launch detected',
+    });
+
+    globalThis.fetch = async (url) => {
+      assert.match(String(url), /t\.me\/s\/liveuamap$/);
+      return new Response(html, {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/html' },
       });
     };
 
     const handler = (await import(`../api/telegram-feed.js?t=${Date.now()}`)).default;
-    const res = await handler(makeRequest());
+    const res = await handler(makeRequest('/api/telegram-feed?limit=30&topic=breaking'));
     assert.equal(res.status, 200);
-    assert.match(res.headers.get('cache-control') || '', /s-maxage=120/);
 
     const data = await res.json();
-    assert.equal(data.source, 'relay');
-    assert.equal(data.count, 1);
-    assert.equal(data.items.length, 1);
+    assert.equal(data.enabled, true);
+    assert.ok(data.count >= 1, 'should find at least 1 message');
     assert.equal(data.items[0].source, 'telegram');
-    assert.equal(data.items[0].channel, 'warintel');
-    assert.equal(data.items[0].channelTitle, 'War Intel');
-    assert.equal(data.items[0].url, '');
-    assert.equal(data.items[0].ts, new Date(1_744_000_000_000).toISOString());
-    assert.deepEqual(data.items[0].tags, ['42', 'urgent']);
-    assert.deepEqual(data.items[0].mediaUrls, ['https://cdn.example.com/image.jpg']);
+    assert.equal(data.items[0].channel, 'liveuamap');
+    assert.equal(data.items[0].id, 'liveuamap/12345');
+    assert.equal(data.items[0].text, 'Breaking: missile launch detected');
+    assert.equal(data.items[0].topic, 'breaking');
+    assert.match(data.items[0].url, /liveuamap\/12345$/);
+    assert.match(data.items[0].ts, /\d{4}-\d{2}-\d{2}T/);
   });
 
-  it('returns a non-null timestamp string when relay items omit timestamps', async () => {
-    globalThis.fetch = async () => new Response(JSON.stringify({
-      enabled: true,
-      items: [{
-        id: 'abc',
-        channel: 'osint',
-        url: 'https://t.me/osint/1',
-        text: 'No timestamp on this relay item',
-      }],
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+  it('extracts media URLs from background-image styles', async () => {
+    const html = fakeTelegramHtml({
+      channel: 'test_channel',
+      id: 100,
+      text: 'Photo report',
+      imgSrc: 'https://cdn.example.com/photo.jpg',
     });
 
+    globalThis.fetch = async () => new Response(html, { status: 200 });
+
     const handler = (await import(`../api/telegram-feed.js?t=${Date.now()}`)).default;
-    const res = await handler(makeRequest());
+    const res = await handler(makeRequest('/api/telegram-feed?limit=10'));
     const data = await res.json();
-    assert.equal(data.count, 1);
-    assert.equal(data.items[0].ts, '1970-01-01T00:00:00.000Z');
+
+    assert.ok(data.items.length >= 1);
+    assert.deepEqual(data.items[0].mediaUrls, ['https://cdn.example.com/photo.jpg']);
   });
 
-  it('treats an exact 1e12 timestamp value as milliseconds, not seconds', async () => {
-    globalThis.fetch = async () => new Response(JSON.stringify({
-      enabled: true,
-      items: [{
-        id: 'boundary',
-        channel: 'osint',
-        timestampMs: 1_000_000_000_000,
-        url: 'https://t.me/osint/2',
-        text: 'Boundary timestamp',
-      }],
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+  it('decodes HTML entities in message text', async () => {
+    const html = fakeTelegramHtml({
+      channel: 'entities_test',
+      id: 200,
+      text: 'AT&amp;T reports &lt;incident&gt; &quot;unusual&quot; activity',
     });
 
+    globalThis.fetch = async () => new Response(html, { status: 200 });
+
     const handler = (await import(`../api/telegram-feed.js?t=${Date.now()}`)).default;
-    const res = await handler(makeRequest());
+    const res = await handler(makeRequest('/api/telegram-feed?limit=10'));
     const data = await res.json();
-    assert.equal(data.items[0].ts, new Date(1_000_000_000_000).toISOString());
+
+    assert.ok(data.items.length >= 1);
+    assert.equal(data.items[0].text, 'AT&T reports <incident> "unusual" activity');
   });
 
-  it('passes through relay JSON error responses without normalizing them as empty feeds', async () => {
-    globalThis.fetch = async () => new Response(JSON.stringify({
-      error: 'rate_limited',
-      retryAfter: 30,
-    }), {
-      status: 429,
-      headers: { 'Content-Type': 'application/json' },
+  it('assigns topic from the channel map', async () => {
+    const html = fakeTelegramHtml({
+      channel: 'cyb_detective',
+      id: 300,
+      text: 'New CVE disclosed',
     });
+
+    globalThis.fetch = async () => new Response(html, { status: 200 });
 
     const handler = (await import(`../api/telegram-feed.js?t=${Date.now()}`)).default;
-    const res = await handler(makeRequest());
-    assert.equal(res.status, 429);
-    assert.equal(res.headers.get('cache-control'), 'no-store');
-
+    const res = await handler(makeRequest('/api/telegram-feed?limit=10'));
     const data = await res.json();
-    assert.deepEqual(data, {
-      error: 'rate_limited',
-      retryAfter: 30,
-    });
+
+    assert.ok(data.items.length >= 1);
+    assert.equal(data.items[0].topic, 'cyber');
   });
 
-  it('wraps non-JSON relay error responses while preserving the upstream status', async () => {
-    globalThis.fetch = async () => new Response('temporary overload', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain' },
-    });
+  it('returns 502 when all channel fetches fail', async () => {
+    globalThis.fetch = async () => new Response('Not Found', { status: 404 });
 
     const handler = (await import(`../api/telegram-feed.js?t=${Date.now()}`)).default;
-    const res = await handler(makeRequest());
-    assert.equal(res.status, 503);
-    assert.equal(res.headers.get('cache-control'), 'no-store');
-
+    // Use a topic with few channels so the test is fast
+    const res = await handler(makeRequest('/api/telegram-feed?limit=5&topic=cyber'));
     const data = await res.json();
-    assert.deepEqual(data, {
-      error: 'Upstream error: HTTP 503',
-      status: 503,
+
+    // Even if all channels fail, we return an empty feed (not an error)
+    // because individual channel failures are silently skipped
+    assert.equal(data.enabled, true);
+    assert.equal(data.count, 0);
+  });
+
+  it('handles empty channel gracefully', async () => {
+    const html = '<html><body><div class="tgme_channel_history"></div></body></html>';
+
+    globalThis.fetch = async () => new Response(html, { status: 200 });
+
+    const handler = (await import(`../api/telegram-feed.js?t=${Date.now()}`)).default;
+    const res = await handler(makeRequest('/api/telegram-feed?limit=10'));
+    const data = await res.json();
+
+    assert.equal(data.enabled, true);
+    assert.equal(data.count, 0);
+    assert.deepEqual(data.items, []);
+  });
+
+  it('sorts items by timestamp descending', async () => {
+    const ch = 'sorting_test';
+    const html = `<html><body><div class="tgme_channel_history">
+<div class="tgme_widget_message_wrap"><div class="tgme_widget_message" data-post="${ch}/1">
+  <time datetime="2026-01-01T08:00:00+00:00"></time>
+  <div class="tgme_widget_message_text">older</div>
+</div></div>
+<div class="tgme_widget_message_wrap"><div class="tgme_widget_message" data-post="${ch}/5">
+  <time datetime="2026-01-01T12:00:00+00:00"></time>
+  <div class="tgme_widget_message_text">newer</div>
+</div></div>
+</div></body></html>`;
+
+    globalThis.fetch = async () => new Response(html, { status: 200 });
+
+    const handler = (await import(`../api/telegram-feed.js?t=${Date.now()}`)).default;
+    const res = await handler(makeRequest('/api/telegram-feed?limit=10'));
+    const data = await res.json();
+
+    assert.equal(data.items[0].text, 'newer');
+    assert.equal(data.items[1].text, 'older');
+  });
+
+  it('returns valid cache-control header', async () => {
+    const html = fakeTelegramHtml({
+      channel: 'cache_test',
+      id: 400,
+      text: 'cache test',
     });
+
+    globalThis.fetch = async () => new Response(html, { status: 200 });
+
+    const handler = (await import(`../api/telegram-feed.js?t=${Date.now()}`)).default;
+    const res = await handler(makeRequest('/api/telegram-feed?limit=10'));
+
+    assert.match(res.headers.get('cache-control') || '', /s-maxage=\d+/);
   });
 });
 

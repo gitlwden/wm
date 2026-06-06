@@ -924,6 +924,118 @@ function youtubeLivePlugin(): Plugin {
   };
 }
 
+function telegramFeedDevPlugin(): Plugin {
+  // Channel map: topic → channel usernames
+  const CHANNELS: Record<string, string[]> = {
+    breaking: ['liveuamap', 'Flash_news_ua', 'sentdefender', 'nexta_live'],
+    conflict: ['rybar', 'wargonzo', 'ukraine_war_report', 'tass_agency', 'sentdefender'],
+    geopolitics: ['DDGeopolitics', 'IntelRepublic', 'TheEurasianist', 'novorossia_today', 'ghost_of_novorossiya'],
+    middleeast: ['Middle_East_Spectator', 'IranIntl', 'MiddleEastEye', 'syriahm'],
+    osint: ['osint_updates', 'IntelCrab', 'GeoConfirmed', 'UAWeapons', 'sentdefender'],
+    cyber: ['cyb_detective', 'haborhnews', 'darknet_Odessa', 'malwrhunterteam'],
+  };
+  const ALL_CHANNELS = [...new Set(Object.values(CHANNELS).flat())];
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
+  function parseMessages(channel: string, html: string) {
+    const blocks = html.split('data-post="');
+    const messages: { id: string; channel: string; ts: string; text: string; mediaUrls: string[] }[] = [];
+    for (let i = 1; i < blocks.length; i++) {
+      const block = blocks[i];
+      const dpMatch = block.match(/^([^"]+\/(\d+))/);
+      if (!dpMatch) continue;
+      const numericId = parseInt(dpMatch[2], 10);
+      if (!Number.isFinite(numericId)) continue;
+      const timeMatch = block.match(/datetime="([^"]+)"/);
+      const ts = timeMatch ? new Date(timeMatch[1]).toISOString() : new Date(0).toISOString();
+      let text = '';
+      const textStart = block.indexOf('tgme_widget_message_text');
+      if (textStart !== -1) {
+        const divStart = block.indexOf('>', textStart);
+        if (divStart !== -1) {
+          let depth = 1, pos = divStart + 1;
+          while (pos < block.length && depth > 0) {
+            if (block.startsWith('<div', pos)) { depth++; pos += 4; }
+            else if (block.startsWith('</div>', pos)) { depth--; pos += 6; }
+            else pos++;
+          }
+          if (depth === 0) text = block.slice(divStart + 1, pos - 6);
+        }
+      }
+      text = text.replace(/<br\s*\/?>/gi, '\n').replace(/<\/?[^>]+>/g, '')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'").trim();
+      const mediaUrls: string[] = [];
+      const imgRe = /data-src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^"]*)?)"/gi;
+      let m;
+      while ((m = imgRe.exec(block)) !== null) { if (!mediaUrls.includes(m[1])) mediaUrls.push(m[1]); }
+      const bgRe = /background-image:\s*url\(['"]?(https?:\/\/[^'")\s]+)['"]?\)/gi;
+      while ((m = bgRe.exec(block)) !== null) { if (!mediaUrls.includes(m[1])) mediaUrls.push(m[1]); }
+      messages.push({ id: `${channel}/${numericId}`, channel, ts, text, mediaUrls });
+    }
+    return messages;
+  }
+
+  return {
+    name: 'telegram-feed-dev',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (req.url !== '/api/telegram-feed' && !req.url?.startsWith('/api/telegram-feed?')) {
+          return next();
+        }
+
+        try {
+          const url = new URL(req.url, 'http://localhost');
+          const limit = Math.max(1, Math.min(100, parseInt(url.searchParams.get('limit') || '30', 10) || 30));
+          const topicParam = (url.searchParams.get('topic') || '').trim();
+          const topicsToFetch = !topicParam || topicParam === 'all'
+            ? Object.keys(CHANNELS)
+            : CHANNELS[topicParam] ? [topicParam] : Object.keys(CHANNELS);
+          const channels = [...new Set(topicsToFetch.flatMap(t => CHANNELS[t] || []))];
+
+          const channelTopicMap = new Map<string, string>();
+          for (const [topic, chans] of Object.entries(CHANNELS)) {
+            for (const ch of chans) { if (!channelTopicMap.has(ch)) channelTopicMap.set(ch, topic); }
+          }
+
+          const results = await Promise.allSettled(
+            channels.map(async ch => {
+              const r = await fetch(`https://t.me/s/${ch}`, { headers: { 'User-Agent': UA }, redirect: 'follow' });
+              if (!r.ok) return [];
+              return parseMessages(ch, await r.text());
+            }),
+          );
+
+          const items: any[] = [];
+          for (const r of results) {
+            if (r.status !== 'fulfilled') continue;
+            for (const msg of r.value) {
+              items.push({
+                id: msg.id, source: 'telegram', channel: msg.channel, channelTitle: msg.channel,
+                url: `https://t.me/${msg.channel}/${msg.id.split('/').pop()}`,
+                ts: msg.ts, text: msg.text, topic: channelTopicMap.get(msg.channel) || 'osint',
+                tags: [], earlySignal: false, mediaUrls: msg.mediaUrls,
+              });
+            }
+          }
+          items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+          const trimmed = items.slice(0, limit);
+
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.end(JSON.stringify({
+            source: 'telegram', earlySignal: false, enabled: true,
+            count: trimmed.length, updatedAt: new Date().toISOString(), items: trimmed,
+          }));
+        } catch (err) {
+          res.statusCode = 502;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Telegram scrape failed', details: String(err) }));
+        }
+      });
+    },
+  };
+}
+
 function gpsjamDevPlugin(): Plugin {
   return {
     name: 'gpsjam-dev',
@@ -1284,6 +1396,7 @@ export default defineConfig(({ mode }) => {
       polymarketPlugin(),
       rssProxyPlugin(),
       youtubeLivePlugin(),
+      telegramFeedDevPlugin(),
       gpsjamDevPlugin(),
       sebufApiPlugin(),
       brotliPrecompressPlugin(),

@@ -34,25 +34,27 @@ export const TELEGRAM_TOPICS = [
   { id: 'cyber', labelKey: 'components.telegramIntel.filterCyber' },
 ] as const;
 
-let cachedResponse: TelegramFeedResponse | null = null;
-let cachedAt = 0;
-const CACHE_TTL = 30_000;
+const cache = new Map<string, { response: TelegramFeedResponse; at: number }>();
+const CACHE_TTL = 60_000;
 const MISSING_TIMESTAMP_ISO = new Date(0).toISOString();
 
-function telegramFeedUrl(limit: number): string {
-  const path = `/api/telegram-feed?limit=${limit}`;
+function telegramFeedUrl(limit: number, topic?: string): string {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (topic) params.set('topic', topic);
+  const path = `/api/telegram-feed?${params}`;
   return isDesktopRuntime() ? proxyUrl(path) : toApiUrl(path);
 }
 
-export async function fetchTelegramFeed(limit = 50): Promise<TelegramFeedResponse> {
-  if (cachedResponse && Date.now() - cachedAt < CACHE_TTL) return cachedResponse;
+export async function fetchTelegramFeed(limit = 50, topic?: string): Promise<TelegramFeedResponse> {
+  const key = `${limit}:${topic || 'all'}`;
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.at < CACHE_TTL) return cached.response;
 
-  const res = await fetch(telegramFeedUrl(limit));
+  const res = await fetch(telegramFeedUrl(limit, topic));
   if (!res.ok) throw new Error(`Telegram feed ${res.status}`);
 
   const json: TelegramFeedResponse = await res.json();
-  cachedResponse = json;
-  cachedAt = Date.now();
+  cache.set(key, { response: json, at: Date.now() });
   return json;
 }
 

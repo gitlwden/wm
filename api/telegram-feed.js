@@ -1,222 +1,263 @@
 // @ts-check
-import { getRelayBaseUrl, getRelayHeaders, fetchWithTimeout, buildRelayResponse } from './_relay.js';
-import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
+import { getCorsHeaders } from './_cors.js';
 import { jsonResponse } from './_json-response.js';
 
 export const config = { runtime: 'edge' };
 
-const EPOCH_ISO = new Date(0).toISOString();
+// ── Channel map: topic → channel usernames ──────────────────────────
+const CHANNELS = {
+  breaking: [
+    'liveuamap',          // Live Universal Awareness Map
+    'Flash_news_ua',      // Flash News UA
+    'sentdefender',       // OSINTdefender
+    'nexta_live',         // NEXTA Live
+  ],
+  conflict: [
+    'rybar',              // Rybar (Russian milblogger)
+    'wargonzo',           // WarGonzo
+    'ukraine_war_report',
+    'tass_agency',        // TASS (Russian state)
+    'sentdefender',
+  ],
+  geopolitics: [
+    'DDGeopolitics',
+    'IntelRepublic',
+    'TheEurasianist',
+    'novorossia_today',
+    'ghost_of_novorossiya',
+  ],
+  middleeast: [
+    'Middle_East_Spectator',
+    'IranIntl',
+    'MiddleEastEye',
+    'syriahm',
+  ],
+  osint: [
+    'osint_updates',
+    'IntelCrab',
+    'GeoConfirmed',
+    'UAWeapons',
+    'sentdefender',
+  ],
+  cyber: [
+    'cyb_detective',
+    'haborhnews',
+    'darknet_Odessa',
+    'malwrhunterteam',
+  ],
+};
+
+// Flatten unique channels across all topics
+const ALL_CHANNELS = [...new Set(Object.values(CHANNELS).flat())];
+
+// ── Telegram HTML parser ────────────────────────────────────────────
 
 /**
- * @typedef {{
- *   id?: string | number;
- *   channel?: string;
- *   channelId?: string | number;
- *   channelName?: string;
- *   channelTitle?: string;
- *   sourceUrl?: string;
- *   url?: string;
- *   timestamp?: string | number;
- *   timestampMs?: string | number;
- *   ts?: string | number;
- *   text?: string;
- *   topic?: string;
- *   tags?: unknown[];
- *   earlySignal?: boolean;
- *   mediaUrls?: unknown[];
- * }} RawTelegramMessage
+ * Parse Telegram web-preview HTML into message objects.
+ * @param {string} channel
+ * @param {string} html
+ * @returns {{ messages: Array<{id:string,channel:string,ts:string,text:string,mediaUrls:string[]}>, minId:number|null }}
  */
+function parseMessages(channel, html) {
+  const blocks = html.split('data-post="');
+  const messages = [];
+  let minId = null;
 
-/**
- * @typedef {{
- *   enabled?: boolean;
- *   source?: string;
- *   earlySignal?: boolean;
- *   updatedAt?: string | null;
- *   count?: number;
- *   messages?: RawTelegramMessage[];
- *   items?: RawTelegramMessage[];
- * }} RawTelegramFeedResponse
- */
+  for (let i = 1; i < blocks.length; i++) {
+    const block = blocks[i];
+    // data-post="channel/12345"  — extract channel/ID
+    const dpMatch = block.match(/^([^"]+\/(\d+))/);
+    if (!dpMatch) continue;
+    const numericId = parseInt(dpMatch[2], 10);
+    if (!Number.isFinite(numericId)) continue;
+    if (minId === null || numericId < minId) minId = numericId;
 
-/**
- * @typedef {{
- *   id: string;
- *   source: 'telegram';
- *   channel: string;
- *   channelTitle: string;
- *   url: string;
- *   ts: string;
- *   text: string;
- *   topic: string;
- *   tags: string[];
- *   earlySignal: boolean;
- *   mediaUrls: string[];
- * }} TelegramFeedItem
- */
+    // datetime from <time datetime="...">
+    const timeMatch = block.match(/datetime="([^"]+)"/);
+    const ts = timeMatch ? new Date(timeMatch[1]).toISOString() : new Date(0).toISOString();
 
-/**
- * @param {unknown} value
- * @returns {string}
- */
-function toText(value) {
-  return value == null ? '' : String(value);
-}
+    // message text from tgme_widget_message_text
+    let text = '';
+    const textStart = block.indexOf('tgme_widget_message_text');
+    if (textStart !== -1) {
+      const divStart = block.indexOf('>', textStart);
+      if (divStart !== -1) {
+        // Find the matching closing </div> — skip nested divs
+        let depth = 1;
+        let pos = divStart + 1;
+        while (pos < block.length && depth > 0) {
+          if (block.startsWith('<div', pos)) { depth++; pos += 4; }
+          else if (block.startsWith('</div>', pos)) { depth--; pos += 6; }
+          else pos++;
+        }
+        if (depth === 0) {
+          text = block.slice(divStart + 1, pos - 6);
+        }
+      }
+    }
 
-/**
- * @param {unknown} value
- * @returns {string}
- */
-function toHttpUrl(value) {
-  const raw = toText(value).trim();
-  if (!raw) return '';
-  try {
-    const parsed = new URL(raw);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '';
-  } catch {
-    return '';
+    // Clean HTML → plain text
+    text = text
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/?[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .trim();
+
+    // Extract media URLs (images)
+    const mediaUrls = [];
+    const imgRegex = /data-src="(https?:\/\/[^"]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^"]*)?)"/gi;
+    let imgMatch;
+    while ((imgMatch = imgRegex.exec(block)) !== null) {
+      if (!mediaUrls.includes(imgMatch[1])) mediaUrls.push(imgMatch[1]);
+    }
+    // Also check background-image: url(...)
+    const bgRegex = /background-image:\s*url\(['"]?(https?:\/\/[^'")\s]+)['"]?\)/gi;
+    let bgMatch;
+    while ((bgMatch = bgRegex.exec(block)) !== null) {
+      if (!mediaUrls.includes(bgMatch[1])) mediaUrls.push(bgMatch[1]);
+    }
+
+    messages.push({
+      id: `${channel}/${numericId}`,
+      channel,
+      ts,
+      text,
+      mediaUrls,
+    });
   }
+
+  return { messages, minId };
 }
 
+// ── Rate limiter ────────────────────────────────────────────────────
+
 /**
- * @param {unknown} value
- * @returns {string}
+ * Run promises with bounded concurrency.
+ * @template T
+ * @param {(() => Promise<T>)[]} tasks
+ * @param {number} limit
+ * @returns {Promise<(T | null)[]>}
  */
-function toIsoTimestamp(value) {
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value) || value <= 0) return EPOCH_ISO;
-    return new Date(value >= 1e12 ? value : value * 1000).toISOString();
+async function parallelLimit(tasks, limit) {
+  const results = new Array(tasks.length).fill(null);
+  let idx = 0;
+  async function worker() {
+    while (idx < tasks.length) {
+      const i = idx++;
+      try { results[i] = await tasks[i](); } catch { /* skip */ }
+    }
   }
-  const raw = toText(value).trim();
-  if (!raw) return EPOCH_ISO;
-  const numeric = Number(raw);
-  if (Number.isFinite(numeric) && numeric > 0) {
-    return new Date(numeric >= 1e12 ? numeric : numeric * 1000).toISOString();
-  }
-  const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) && parsed > 0 ? new Date(parsed).toISOString() : EPOCH_ISO;
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()));
+  return results;
 }
+
+// ── Per-channel scraper ─────────────────────────────────────────────
+
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
 /**
- * @param {unknown[] | undefined} values
- * @param {(value: unknown) => string} mapper
- * @returns {string[]}
+ * Fetch latest messages from a single Telegram channel via web preview.
+ * @param {string} channel
+ * @param {number} limit
+ * @returns {Promise<{channel:string, messages:Array<{id:string,channel:string,ts:string,text:string,mediaUrls:string[]}>} | null>}
  */
-function toTextArray(values, mapper = toText) {
-  if (!Array.isArray(values)) return [];
-  return values.map(mapper).filter(Boolean);
+async function scrapeChannel(channel, limit) {
+  const url = `https://t.me/s/${channel}`;
+  const res = await fetch(url, {
+    headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'en-US,en;q=0.9' },
+    redirect: 'follow',
+  });
+  if (!res.ok) return null;
+  const html = await res.text();
+  const { messages } = parseMessages(channel, html);
+  return { channel, messages: messages.slice(0, limit) };
 }
 
-/**
- * @param {RawTelegramMessage} message
- * @returns {TelegramFeedItem}
- */
-function normalizeTelegramMessage(message) {
-  const channel = toText(message.channel ?? message.channelName ?? message.channelTitle).trim();
-  const channelTitle = toText(message.channelTitle ?? message.channelName ?? message.channel).trim();
-  const ts = toIsoTimestamp(message.timestampMs ?? message.timestamp ?? message.ts);
-  const text = toText(message.text).trim();
-  const id = toText(message.id).trim() || `${channel || 'telegram'}:${ts}:${text.slice(0, 32)}`;
-
-  return {
-    id,
-    source: 'telegram',
-    channel,
-    channelTitle: channelTitle || channel,
-    url: toHttpUrl(message.sourceUrl ?? message.url),
-    ts,
-    text,
-    topic: toText(message.topic).trim(),
-    tags: toTextArray(message.tags),
-    earlySignal: Boolean(message.earlySignal),
-    mediaUrls: toTextArray(message.mediaUrls, toHttpUrl),
-  };
-}
-
-/**
- * @param {RawTelegramFeedResponse} parsed
- */
-function normalizeTelegramFeed(parsed) {
-  const rawMessages = Array.isArray(parsed.messages)
-    ? parsed.messages
-    : Array.isArray(parsed.items)
-      ? parsed.items
-      : [];
-  const items = rawMessages.map(normalizeTelegramMessage);
-  return {
-    source: toText(parsed.source).trim() || 'telegram',
-    earlySignal: Boolean(parsed.earlySignal),
-    enabled: parsed.enabled !== false,
-    count: items.length,
-    updatedAt: parsed.updatedAt ?? null,
-    items,
-  };
-}
+// ── Edge handler ────────────────────────────────────────────────────
 
 export default async function handler(req) {
   const corsHeaders = getCorsHeaders(req, 'GET, OPTIONS');
 
-  // if (isDisallowedOrigin(req)) {
-  //   return jsonResponse({ error: 'Origin not allowed' }, 403, corsHeaders);
-  // }
-  // if (req.method === 'OPTIONS') {
-  //   return new Response(null, { status: 204, headers: corsHeaders });
-  // }
-  // if (req.method !== 'GET') {
-  //   return jsonResponse({ error: 'Method not allowed' }, 405, corsHeaders);
-  // }
-  //
-  // const relayBaseUrl = getRelayBaseUrl();
-  // if (!relayBaseUrl) {
-  //   return jsonResponse({ error: 'WS_RELAY_URL is not configured' }, 503, corsHeaders);
-  // }
-
   try {
     const url = new URL(req.url);
-    const limit = Math.max(1, Math.min(200, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
-    const topic = (url.searchParams.get('topic') || '').trim();
-    const channel = (url.searchParams.get('channel') || '').trim();
-    const params = new URLSearchParams();
-    params.set('limit', String(limit));
-    if (topic) params.set('topic', topic);
-    if (channel) params.set('channel', channel);
+    const limit = Math.max(1, Math.min(100, parseInt(url.searchParams.get('limit') || '30', 10) || 30));
+    const topicParam = (url.searchParams.get('topic') || '').trim();
 
-    const relayUrl = `${relayBaseUrl}/telegram/feed?${params}`;
-    const response = await fetchWithTimeout(relayUrl, {
-      headers: getRelayHeaders({ Accept: 'application/json' }),
-    }, 15000);
+    // Determine which channels to scrape
+    const topicsToFetch = !topicParam || topicParam === 'all'
+      ? Object.keys(CHANNELS)
+      : CHANNELS[topicParam]
+        ? [topicParam]
+        : Object.keys(CHANNELS);
 
-    const body = await response.text();
+    const channels = [...new Set(topicsToFetch.flatMap(t => CHANNELS[t] || []))];
 
-    let cacheControl = 'public, max-age=30, s-maxage=120, stale-while-revalidate=60, stale-if-error=120';
-    if (!response.ok) {
-      return buildRelayResponse(response, body, {
-        'Cache-Control': 'no-store',
+    if (channels.length === 0) {
+      return jsonResponse({ enabled: true, count: 0, items: [], updatedAt: new Date().toISOString() }, 200, {
+        'Cache-Control': 'public, max-age=30, s-maxage=120, stale-while-revalidate=60',
         ...corsHeaders,
       });
     }
 
-    try {
-      const parsed = /** @type {RawTelegramFeedResponse} */ (JSON.parse(body));
-      const normalized = normalizeTelegramFeed(parsed);
-      if (normalized.count === 0) {
-        cacheControl = 'public, max-age=0, s-maxage=15, stale-while-revalidate=10';
+    // Build topic lookup: channel → topic
+    const channelTopicMap = new Map();
+    for (const [topic, chans] of Object.entries(CHANNELS)) {
+      for (const ch of chans) {
+        // First assignment wins (priority order)
+        if (!channelTopicMap.has(ch)) channelTopicMap.set(ch, topic);
       }
-      return buildRelayResponse(response, JSON.stringify(normalized), {
-        'Cache-Control': cacheControl,
-        ...corsHeaders,
-      });
-    } catch {}
+    }
 
-    return buildRelayResponse(response, body, {
-      'Cache-Control': cacheControl,
-      ...corsHeaders,
-    });
-  } catch (error) {
-    const isTimeout = error?.name === 'AbortError';
+    // Scrape all channels concurrently (max 6 at a time)
+    const tasks = channels.map(ch => () => scrapeChannel(ch, limit));
+    const results = await parallelLimit(tasks, 6);
+
+    // Merge, tag topics, sort by timestamp (newest first)
+    const items = [];
+    for (const r of results) {
+      if (!r) continue;
+      const topic = channelTopicMap.get(r.channel) || 'osint';
+      for (const msg of r.messages) {
+        items.push({
+          id: msg.id,
+          source: 'telegram',
+          channel: msg.channel,
+          channelTitle: msg.channel,
+          url: `https://t.me/${msg.channel}/${msg.id.split('/').pop()}`,
+          ts: msg.ts,
+          text: msg.text,
+          topic,
+          tags: [],
+          earlySignal: false,
+          mediaUrls: msg.mediaUrls,
+        });
+      }
+    }
+
+    items.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+    const trimmed = items.slice(0, limit);
+
+    const cacheControl = trimmed.length === 0
+      ? 'public, max-age=0, s-maxage=15, stale-while-revalidate=10'
+      : 'public, max-age=60, s-maxage=180, stale-while-revalidate=60';
+
     return jsonResponse({
-      error: isTimeout ? 'Relay timeout' : 'Relay request failed',
-      details: error?.message || String(error),
-    }, isTimeout ? 504 : 502, { 'Cache-Control': 'no-store', ...corsHeaders });
+      source: 'telegram',
+      earlySignal: false,
+      enabled: true,
+      count: trimmed.length,
+      updatedAt: new Date().toISOString(),
+      items: trimmed,
+    }, 200, { 'Cache-Control': cacheControl, ...corsHeaders });
+
+  } catch (error) {
+    return jsonResponse({
+      error: 'Telegram scrape failed',
+      details: String(error?.message || error),
+    }, 502, { 'Cache-Control': 'no-store', ...corsHeaders });
   }
 }
