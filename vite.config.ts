@@ -930,7 +930,7 @@ function telegramFeedDevPlugin(): Plugin {
     breaking: ['liveuamap', 'stranaua', 'tass_agency', 'DDGeopolitics'],
     conflict: ['boris_rozhin', 'WarMonitors', 'rybar', 'wargonzo'],
     geopolitics: ['nexta_live', 'wartranslated', 'United24media', 'operativnoZSU'],
-    middleeast: ['AlHadath', 'AlArabiya', 'QudsNen', 'Middle_East_Spectator', 'IsraelWarRoom'],
+    middleeast: ['AlArabiya', 'QudsNen', 'Middle_East_Spectator', 'IsraelWarRoom', 'LebUpdate'],
     osint: ['OSINTdefender', 'voynareal', 'novosti_efir', 'stranaua'],
     cyber: ['TheHackerNews', 'bleepingcomputer', 'vxunderground', 'CrowdStrike'],
   };

@@ -25,11 +25,11 @@ const CHANNELS = {
     'operativnoZSU',      // Operative ZSU — Ukrainian military
   ],
   middleeast: [
-    'AlHadath',           // Al Hadath — Arabic breaking news
-    'AlArabiya',          // Al Arabiya — Arabic news
+    'AlArabiya',          // Al Arabiya — Arabic breaking news
     'QudsNen',            // Quds — Palestinian/Israeli conflict
     'Middle_East_Spectator', // Middle East Spectator
     'IsraelWarRoom',      // Israel War Room
+    'LebUpdate',          // Lebanon Update — Lebanese conflict
   ],
   osint: [
     'OSINTdefender',      // OSINTdefender — conflict & geopolitical alerts
