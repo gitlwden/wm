@@ -9,7 +9,7 @@ const CHANNELS = {
   breaking: [
     'liveuamap',          // Live Universal Awareness Map
     'Flash_news_ua',      // Flash News UA
-    'sentdefender',       // OSINTdefender
+    'OSINTdefender',      // OSINTdefender
     'nexta_live',         // NEXTA Live
   ],
   conflict: [
@@ -17,7 +17,7 @@ const CHANNELS = {
     'wargonzo',           // WarGonzo
     'ukraine_war_report',
     'tass_agency',        // TASS (Russian state)
-    'sentdefender',
+    'OSINTdefender',
   ],
   geopolitics: [
     'DDGeopolitics',
@@ -33,17 +33,17 @@ const CHANNELS = {
     'syriahm',
   ],
   osint: [
-    'osint_updates',
-    'IntelCrab',
-    'GeoConfirmed',
-    'UAWeapons',
-    'sentdefender',
+    'wartranslated',      // War Translated (OSINT)
+    'IntelSky',           // Intel Sky
+    'UAWeapons',          // Ukraine Weapons Tracker
+    'OSINTdefender',      // OSINTdefender
+    'osinttv',            // OSINT TV
   ],
   cyber: [
-    'cyb_detective',
-    'haborhnews',
-    'darknet_Odessa',
-    'malwrhunterteam',
+    'vxunderground',      // vx-underground
+    'cyberknow',          // CyberKnow
+    'malwrhunterteam',    // Malware Hunter
+    'cyberwarzone',       // Cyber War Zone
   ],
 };
 

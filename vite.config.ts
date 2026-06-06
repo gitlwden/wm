@@ -927,12 +927,12 @@ function youtubeLivePlugin(): Plugin {
 function telegramFeedDevPlugin(): Plugin {
   // Channel map: topic → channel usernames
   const CHANNELS: Record<string, string[]> = {
-    breaking: ['liveuamap', 'Flash_news_ua', 'sentdefender', 'nexta_live'],
-    conflict: ['rybar', 'wargonzo', 'ukraine_war_report', 'tass_agency', 'sentdefender'],
+    breaking: ['liveuamap', 'Flash_news_ua', 'OSINTdefender', 'nexta_live'],
+    conflict: ['rybar', 'wargonzo', 'ukraine_war_report', 'tass_agency', 'OSINTdefender'],
     geopolitics: ['DDGeopolitics', 'IntelRepublic', 'TheEurasianist', 'novorossia_today', 'ghost_of_novorossiya'],
     middleeast: ['Middle_East_Spectator', 'IranIntl', 'MiddleEastEye', 'syriahm'],
-    osint: ['osint_updates', 'IntelCrab', 'GeoConfirmed', 'UAWeapons', 'sentdefender'],
-    cyber: ['cyb_detective', 'haborhnews', 'darknet_Odessa', 'malwrhunterteam'],
+    osint: ['wartranslated', 'IntelSky', 'UAWeapons', 'OSINTdefender', 'osinttv'],
+    cyber: ['vxunderground', 'cyberknow', 'malwrhunterteam', 'cyberwarzone'],
   };
   const ALL_CHANNELS = [...new Set(Object.values(CHANNELS).flat())];
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
