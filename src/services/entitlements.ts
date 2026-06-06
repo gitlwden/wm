@@ -167,17 +167,8 @@ function useFakeProUser(): boolean {
 }
 
 /**
- * Returns true when Convex returned FREE_TIER_DEFAULTS (no real entitlement
- * record or unauthenticated). The sentinel `validUntil === 0` distinguishes
- * this from a genuine "free plan, valid forever" row.
- */
-function isDefaultEntitlement(): boolean {
-  return currentState !== null && currentState.validUntil === 0;
-}
-
-/**
  * Returns true when the Clerk user has role 'pro' (set via publicMetadata.plan).
- * Used as a fallback when Convex has no entitlement record for the user.
+ * Authoritative signal — takes priority over Convex entitlement state.
  */
 function isClerkPro(): boolean {
   return getAuthState().user?.role === 'pro';
@@ -186,31 +177,34 @@ function isClerkPro(): boolean {
 /**
  * Check whether a specific feature flag is truthy in the current entitlement state.
  * In fake pro user mode, always returns true for all features.
+ *
+ * Clerk Pro role takes priority over Convex entitlement — Clerk is the
+ * authoritative identity source. A Clerk Pro user whose Convex entitlement
+ * hasn't synced yet (webhook delay, missing record) should not see upgrade
+ * prompts for features their plan includes.
  */
 export function hasFeature(flag: keyof EntitlementState['features']): boolean {
   // In fake pro user mode, fake pro user has all features
   if (currentState === null && useFakeProUser()) return true;
-  if (currentState === null) return false;
-  // Real entitlement from Convex — trust it
-  if (!isDefaultEntitlement()) return Boolean(currentState.features[flag]);
-  // Convex returned defaults (no entitlement record) — fall back to Clerk role
+  // Clerk Pro role is authoritative — use Pro feature set
   if (isClerkPro()) return Boolean(PRO_CLERK_FALLBACK_FEATURES[flag]);
-  return false;
+  if (currentState === null) return false;
+  return Boolean(currentState.features[flag]);
 }
 
 /**
  * Check whether the user's tier meets or exceeds the given minimum.
  * In fake pro user mode, always returns true.
+ *
+ * Clerk Pro role takes priority over Convex entitlement — see hasFeature.
  */
 export function hasTier(minTier: number): boolean {
   // In fake pro user mode, fake pro user has tier 1
   if (currentState === null && useFakeProUser()) return minTier <= 1;
-  if (currentState === null) return false;
-  // Real entitlement from Convex — trust it
-  if (!isDefaultEntitlement()) return currentState.features.tier >= minTier;
-  // Convex returned defaults (no entitlement record) — fall back to Clerk role
+  // Clerk Pro role is authoritative — Pro has tier 1
   if (isClerkPro()) return PRO_CLERK_FALLBACK_FEATURES.tier >= minTier;
-  return false;
+  if (currentState === null) return false;
+  return currentState.features.tier >= minTier;
 }
 
 /**
@@ -221,13 +215,13 @@ export function hasTier(minTier: number): boolean {
 export function isEntitled(): boolean {
   // In fake pro user mode, fake pro user is always entitled
   if (currentState === null && useFakeProUser()) return true;
-  // Real entitlement from Convex — trust it
-  if (currentState !== null && !isDefaultEntitlement()) {
-    return currentState.planKey !== 'free' && currentState.validUntil >= Date.now();
-  }
-  // Convex returned defaults (no entitlement record) — fall back to Clerk role
+  // Clerk Pro role is authoritative
   if (isClerkPro()) return true;
-  return false;
+  return (
+    currentState !== null &&
+    currentState.planKey !== 'free' &&
+    currentState.validUntil >= Date.now()
+  );
 }
 
 /**

@@ -192,7 +192,8 @@ export default async function handler(
   }
 
   const ent = await getEntitlements(session.userId);
-  if (!ent || ent.features.tier < 1) {
+  const isPro = ent?.features?.tier >= 1 || session.role === 'pro';
+  if (!isPro) {
     return jsonResponse(
       {
         error: 'pro_required',
