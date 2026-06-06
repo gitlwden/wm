@@ -7,36 +7,35 @@ export const config = { runtime: 'edge' };
 // ── Channel map: topic → channel usernames ──────────────────────────
 const CHANNELS = {
   breaking: [
-    'liveuamap',          // Live Universal Awareness Map (4h)
-    'stranaua',           // Strana.ua — Ukrainian breaking news (< 1h)
-    'nexta_live',         // NEXTA — Eastern Europe breaking (< 1h)
-    'tass_agency',        // TASS — Russian state breaking news (< 1h)
+    'liveuamap',          // Live Universal Awareness Map — global events
+    'stranaua',           // Strana.ua — Ukrainian breaking news
+    'tass_agency',        // TASS — Russian state breaking news
+    'DDGeopolitics',      // DD Geopolitics — global breaking events
   ],
   conflict: [
-    'wartranslated',      // War Translated — English conflict analysis (< 1h)
-    'United24media',      // United24 — Ukraine official English (1h)
-    'boris_rozhin',       // Boris Rozhin — Russian milblogger analysis (< 1h)
-    'WarMonitors',        // War Monitor — conflict tracking (2h)
+    'boris_rozhin',       // Boris Rozhin — Russian milblogger analysis
+    'WarMonitors',        // War Monitor — conflict tracking
+    'rybar',              // Rybar — Russian strategic analysis
+    'wargonzo',           // WarGonzo — frontline reporting
   ],
   geopolitics: [
-    'DDGeopolitics',      // DD Geopolitics — global power dynamics (< 1h)
-    'wartranslated',      // War Translated — geopolitical context (< 1h)
-    'rybar',              // Rybar — Russian strategic analysis (< 1h)
-    'nexta_live',         // NEXTA — Eastern Europe geopolitics (< 1h)
+    'nexta_live',         // NEXTA — Eastern Europe geopolitics
+    'wartranslated',      // War Translated — English conflict translations
+    'United24media',      // United24 — Ukraine official English
+    'operativnoZSU',      // Operative ZSU — Ukrainian military
   ],
   middleeast: [
-    'AlHadath',           // Al Hadath — Arabic breaking news (< 1h)
-    'AlArabiya',          // Al Arabiya — Arabic news (< 1h)
-    'QudsNen',            // Quds — Palestinian/Israeli conflict (< 1h)
-    'Middle_East_Spectator', // Middle East Spectator (4h)
-    'IsraelWarRoom',      // Israel War Room (3h)
+    'AlHadath',           // Al Hadath — Arabic breaking news
+    'AlArabiya',          // Al Arabiya — Arabic news
+    'QudsNen',            // Quds — Palestinian/Israeli conflict
+    'Middle_East_Spectator', // Middle East Spectator
+    'IsraelWarRoom',      // Israel War Room
   ],
   osint: [
-    'OSINTdefender',      // OSINTdefender — conflict alerts (6h)
-    'wartranslated',      // War Translated — verified intelligence (< 1h)
-    'United24media',      // United24 — official Ukraine data (1h)
-    'boris_rozhin',       // Boris Rozhin — battlefield analysis (< 1h)
-    'WarMonitors',        // War Monitor — verified reports (2h)
+    'OSINTdefender',      // OSINTdefender — conflict & geopolitical alerts
+    'voynareal',          // Voyna Real — conflict verification
+    'novosti_efir',       // Novosti Efir — intelligence digest
+    'stranaua',           // Strana.ua — verified open source
   ],
   cyber: [
     'TheHackerNews',      // The Hacker News — CVE, malware, breaches
