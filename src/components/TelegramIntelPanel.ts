@@ -69,10 +69,10 @@ export class TelegramIntelPanel extends Panel {
   private async fetchTopicData(topicId: string): Promise<void> {
     try {
       const result = await fetchTelegramFeed(30, topicId === 'all' ? undefined : topicId);
-      // Only apply if user hasn't switched away
       if (this.activeTopic === topicId) {
         this.items = result.items || [];
-        this.topicCache.set(topicId, this.items);
+        // Only cache non-empty results to avoid stale empty state
+        if (this.items.length > 0) this.topicCache.set(topicId, this.items);
         this.renderItems();
       }
     } catch {
