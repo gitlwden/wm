@@ -40,10 +40,10 @@ const CHANNELS = {
     'osinttv',            // OSINT TV
   ],
   cyber: [
-    'vxunderground',      // vx-underground
-    'cyberknow',          // CyberKnow
-    'malwrhunterteam',    // Malware Hunter
-    'cyberwarzone',       // Cyber War Zone
+    'TheHackerNews',      // The Hacker News — CVE, malware, breaches
+    'bleepingcomputer',   // BleepingComputer — CISA alerts, ransomware
+    'vxunderground',      // vx-underground — security research
+    'CrowdStrike',        // CrowdStrike — threat intelligence
   ],
 };
 

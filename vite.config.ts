@@ -932,7 +932,7 @@ function telegramFeedDevPlugin(): Plugin {
     geopolitics: ['DDGeopolitics', 'IntelRepublic', 'TheEurasianist', 'novorossia_today', 'ghost_of_novorossiya'],
     middleeast: ['Middle_East_Spectator', 'IranIntl', 'MiddleEastEye', 'syriahm'],
     osint: ['wartranslated', 'IntelSky', 'UAWeapons', 'OSINTdefender', 'osinttv'],
-    cyber: ['vxunderground', 'cyberknow', 'malwrhunterteam', 'cyberwarzone'],
+    cyber: ['TheHackerNews', 'bleepingcomputer', 'vxunderground', 'CrowdStrike'],
   };
   const ALL_CHANNELS = [...new Set(Object.values(CHANNELS).flat())];
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
