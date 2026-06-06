@@ -140,7 +140,7 @@ const positiveGdeltBreaker = createCircuitBreaker<SearchGdeltDocumentsResponse>(
 const emptyGdeltFallback: SearchGdeltDocumentsResponse = { articles: [], query: '', error: '' };
 
 const CACHE_TTL = 5 * 60 * 1000;
-const STALE_MAX = 60 * 60 * 1000; // 1h ceiling — never serve cache older than this
+const STALE_MAX = 24 * 60 * 60 * 1000; // 24h ceiling — serve stale cache when seed is unavailable (GDELT 429s)
 const articleCache = new Map<string, { articles: GdeltArticle[]; timestamp: number }>();
 const timelineCache = new Map<string, { data: TopicTimeline; timestamp: number }>();
 

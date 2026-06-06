@@ -2,11 +2,12 @@ import type { AppContext, AppModule } from '@/app/app-context';
 import { orderNewsCategoriesForLoad } from '@/app/news-category-order';
 import { getRpcBaseUrl } from '@/services/rpc-client';
 import { enqueuePanelCall } from '@/app/pending-panel-data';
-import type { NewsItem, MapLayers, SocialUnrestEvent, UcdpGeoEvent } from '@/types';
+import type { NewsItem, MapLayers, SocialUnrestEvent, UcdpGeoEvent, Feed } from '@/types';
 import type { MarketData } from '@/types';
 import type { TimeRange } from '@/components';
 import {
   FEEDS,
+  CANONICAL_FEEDS,
   INTEL_SOURCES,
   SECTORS,
   COMMODITIES,
@@ -1257,6 +1258,27 @@ export class DataLoaderManager implements AppModule {
             console.error('[App] Intel feed failed:', intelResult[0]?.reason);
           }
         }
+      }
+    }
+
+    // Load cross-variant news panels (e.g. finance/commodity panels when on 'full' variant).
+    // These panels were created from CANONICAL_FEEDS in panel-layout but their categories
+    // aren't in the active variant's FEEDS, so the main loop above never loaded them.
+    const loadedCategories = new Set(
+      categories.map(c => c.key).concat(SITE_VARIANT === 'full' ? ['intel'] : []),
+    );
+    const crossVariantKeys = Object.keys(this.ctx.newsPanels).filter(
+      k => !loadedCategories.has(k) && Array.isArray((CANONICAL_FEEDS as Record<string, unknown>)[k]),
+    );
+    if (crossVariantKeys.length > 0) {
+      console.log(`[News] Loading ${crossVariantKeys.length} cross-variant panel(s): ${crossVariantKeys.join(', ')}`);
+      const crossResults = await Promise.allSettled(
+        crossVariantKeys.map(key =>
+          this.loadNewsCategory(key, (CANONICAL_FEEDS as Record<string, Feed[]>)[key]!, null, true),
+        ),
+      );
+      for (const result of crossResults) {
+        if (result.status === 'fulfilled') collectedNews.push(...result.value);
       }
     }
 
