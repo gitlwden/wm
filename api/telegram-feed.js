@@ -7,35 +7,36 @@ export const config = { runtime: 'edge' };
 // ── Channel map: topic → channel usernames ──────────────────────────
 const CHANNELS = {
   breaking: [
-    'liveuamap',          // Live Universal Awareness Map
-    'spectatorindex',     // The Spectator Index — global breaking events
-    'OSINTdefender',      // OSINTdefender — conflict & geopolitical alerts
-    'AlJazeera',          // Al Jazeera English — international breaking news
+    'liveuamap',          // Live Universal Awareness Map (4h)
+    'stranaua',           // Strana.ua — Ukrainian breaking news (< 1h)
+    'nexta_live',         // NEXTA — Eastern Europe breaking (< 1h)
+    'tass_agency',        // TASS — Russian state breaking news (< 1h)
   ],
   conflict: [
-    'wartranslated',      // War Translated — English conflict translations
-    'United24media',      // United24 — Ukraine official English
-    'WarMonitors',        // War Monitor — conflict tracking
-    'OSINTdefender',      // OSINTdefender
+    'wartranslated',      // War Translated — English conflict analysis (< 1h)
+    'United24media',      // United24 — Ukraine official English (1h)
+    'boris_rozhin',       // Boris Rozhin — Russian milblogger analysis (< 1h)
+    'WarMonitors',        // War Monitor — conflict tracking (2h)
   ],
   geopolitics: [
-    'DDGeopolitics',      // DD Geopolitics — global power dynamics
-    'PeterZeihan',        // Peter Zeihan — geopolitical analysis
-    'spectatorindex',     // The Spectator Index
-    'IranIntl_En',        // Iran International English
+    'DDGeopolitics',      // DD Geopolitics — global power dynamics (< 1h)
+    'wartranslated',      // War Translated — geopolitical context (< 1h)
+    'rybar',              // Rybar — Russian strategic analysis (< 1h)
+    'nexta_live',         // NEXTA — Eastern Europe geopolitics (< 1h)
   ],
   middleeast: [
-    'Middle_East_Spectator', // Middle East Spectator
-    'IsraelWarRoom',      // Israel War Room — Middle East conflict
-    'AlJazeera',          // Al Jazeera English
-    'IranIntl_En',        // Iran International English
+    'AlHadath',           // Al Hadath — Arabic breaking news (< 1h)
+    'AlArabiya',          // Al Arabiya — Arabic news (< 1h)
+    'QudsNen',            // Quds — Palestinian/Israeli conflict (< 1h)
+    'Middle_East_Spectator', // Middle East Spectator (4h)
+    'IsraelWarRoom',      // Israel War Room (3h)
   ],
   osint: [
-    'IntelSky',           // Intel Sky — aerial intelligence
-    'UAWeapons',          // Ukraine Weapons Tracker
-    'OSINTdefender',      // OSINTdefender
-    'OSINTtechnical',     // OSINT Technical — battlefield analysis
-    'wartranslated',      // War Translated
+    'OSINTdefender',      // OSINTdefender — conflict alerts (6h)
+    'wartranslated',      // War Translated — verified intelligence (< 1h)
+    'United24media',      // United24 — official Ukraine data (1h)
+    'boris_rozhin',       // Boris Rozhin — battlefield analysis (< 1h)
+    'WarMonitors',        // War Monitor — verified reports (2h)
   ],
   cyber: [
     'TheHackerNews',      // The Hacker News — CVE, malware, breaches

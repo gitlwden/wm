@@ -927,11 +927,11 @@ function youtubeLivePlugin(): Plugin {
 function telegramFeedDevPlugin(): Plugin {
   // Channel map: topic → channel usernames
   const CHANNELS: Record<string, string[]> = {
-    breaking: ['liveuamap', 'spectatorindex', 'OSINTdefender', 'AlJazeera'],
-    conflict: ['wartranslated', 'United24media', 'WarMonitors', 'OSINTdefender'],
-    geopolitics: ['DDGeopolitics', 'PeterZeihan', 'spectatorindex', 'IranIntl_En'],
-    middleeast: ['Middle_East_Spectator', 'IsraelWarRoom', 'AlJazeera', 'IranIntl_En'],
-    osint: ['IntelSky', 'UAWeapons', 'OSINTdefender', 'OSINTtechnical', 'wartranslated'],
+    breaking: ['liveuamap', 'stranaua', 'nexta_live', 'tass_agency'],
+    conflict: ['wartranslated', 'United24media', 'boris_rozhin', 'WarMonitors'],
+    geopolitics: ['DDGeopolitics', 'wartranslated', 'rybar', 'nexta_live'],
+    middleeast: ['AlHadath', 'AlArabiya', 'QudsNen', 'Middle_East_Spectator', 'IsraelWarRoom'],
+    osint: ['OSINTdefender', 'wartranslated', 'United24media', 'boris_rozhin', 'WarMonitors'],
     cyber: ['TheHackerNews', 'bleepingcomputer', 'vxunderground', 'CrowdStrike'],
   };
   const ALL_CHANNELS = [...new Set(Object.values(CHANNELS).flat())];
