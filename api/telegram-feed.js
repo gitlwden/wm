@@ -8,36 +8,34 @@ export const config = { runtime: 'edge' };
 const CHANNELS = {
   breaking: [
     'liveuamap',          // Live Universal Awareness Map
-    'Flash_news_ua',      // Flash News UA
-    'OSINTdefender',      // OSINTdefender
-    'nexta_live',         // NEXTA Live
+    'spectatorindex',     // The Spectator Index — global breaking events
+    'OSINTdefender',      // OSINTdefender — conflict & geopolitical alerts
+    'AlJazeera',          // Al Jazeera English — international breaking news
   ],
   conflict: [
-    'rybar',              // Rybar (Russian milblogger)
-    'wargonzo',           // WarGonzo
-    'ukraine_war_report',
-    'tass_agency',        // TASS (Russian state)
-    'OSINTdefender',
+    'wartranslated',      // War Translated — English conflict translations
+    'United24media',      // United24 — Ukraine official English
+    'WarMonitors',        // War Monitor — conflict tracking
+    'OSINTdefender',      // OSINTdefender
   ],
   geopolitics: [
-    'DDGeopolitics',
-    'IntelRepublic',
-    'TheEurasianist',
-    'novorossia_today',
-    'ghost_of_novorossiya',
+    'DDGeopolitics',      // DD Geopolitics — global power dynamics
+    'PeterZeihan',        // Peter Zeihan — geopolitical analysis
+    'spectatorindex',     // The Spectator Index
+    'IranIntl_En',        // Iran International English
   ],
   middleeast: [
-    'Middle_East_Spectator',
-    'IranIntl',
-    'MiddleEastEye',
-    'syriahm',
+    'Middle_East_Spectator', // Middle East Spectator
+    'IsraelWarRoom',      // Israel War Room — Middle East conflict
+    'AlJazeera',          // Al Jazeera English
+    'IranIntl_En',        // Iran International English
   ],
   osint: [
-    'wartranslated',      // War Translated (OSINT)
-    'IntelSky',           // Intel Sky
+    'IntelSky',           // Intel Sky — aerial intelligence
     'UAWeapons',          // Ukraine Weapons Tracker
     'OSINTdefender',      // OSINTdefender
-    'osinttv',            // OSINT TV
+    'OSINTtechnical',     // OSINT Technical — battlefield analysis
+    'wartranslated',      // War Translated
   ],
   cyber: [
     'TheHackerNews',      // The Hacker News — CVE, malware, breaches
