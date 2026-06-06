@@ -4,6 +4,7 @@ import { t } from '@/services/i18n';
 import { h, replaceChildren, safeHtml } from '@/utils/dom-utils';
 import {
   TELEGRAM_TOPICS,
+  fetchTelegramFeed,
   formatTelegramTime,
   type TelegramItem,
   type TelegramFeedResponse,
@@ -16,6 +17,7 @@ export class TelegramIntelPanel extends Panel {
   private activeTopic = 'all';
   private tabsEl: HTMLElement | null = null;
   private relayEnabled = true;
+  private topicCache = new Map<string, TelegramItem[]>();
 
   constructor() {
     super({
@@ -51,7 +53,34 @@ export class TelegramIntelPanel extends Panel {
       tab.classList.toggle('active', (tab as HTMLElement).dataset.topicId === topicId);
     });
 
-    this.renderItems();
+    // If we already have data for this topic in cache, use it
+    const cached = this.topicCache.get(topicId);
+    if (cached) {
+      this.items = cached;
+      this.renderItems();
+      return;
+    }
+
+    // Otherwise fetch topic-specific data
+    this.showLoading(t('components.telegramIntel.loading'));
+    this.fetchTopicData(topicId);
+  }
+
+  private async fetchTopicData(topicId: string): Promise<void> {
+    try {
+      const result = await fetchTelegramFeed(30, topicId === 'all' ? undefined : topicId);
+      // Only apply if user hasn't switched away
+      if (this.activeTopic === topicId) {
+        this.items = result.items || [];
+        this.topicCache.set(topicId, this.items);
+        this.renderItems();
+      }
+    } catch {
+      if (this.activeTopic === topicId) {
+        this.items = [];
+        this.renderItems();
+      }
+    }
   }
 
   public setData(response: TelegramFeedResponse & { error?: string }): void {

@@ -3524,7 +3524,7 @@ export class DataLoaderManager implements AppModule {
   async loadTelegramIntel(): Promise<void> {
     if (isDesktopRuntime() && !hasPremiumAccess()) return;
     try {
-      const result = await fetchTelegramFeed();
+      const result = await fetchTelegramFeed(30, 'breaking');
       this.callPanel('telegram-intel', 'setData', result);
     } catch (error) {
       console.error('[App] Telegram intel fetch failed:', error);
