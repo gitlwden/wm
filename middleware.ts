@@ -53,11 +53,11 @@ const BRIEF_CAROUSEL_PATH_RE =
   /^\/api\/brief\/carousel\/[^/]+\/\d{4}-\d{2}-\d{2}-\d{4}\/[0-2]\/?$/;
 
 const VARIANT_HOST_MAP: Record<string, string> = {
-  'tech.worldmonitor.app': 'tech',
-  'finance.worldmonitor.app': 'finance',
-  'commodity.worldmonitor.app': 'commodity',
-  'happy.worldmonitor.app': 'happy',
-  'energy.worldmonitor.app': 'energy',
+  'wm-tech-gitlwd-projects.vercel.app': 'tech',
+  'wm-finance.vercel.app': 'finance',
+  'wm-commodity-gitlwd-projects.vercel.app': 'commodity',
+  'wm-happy-gitlwd-projects.vercel.app': 'happy',
+  'wm-energy-gitlwd-projects.vercel.app': 'energy',
 };
 
 // Source of truth: src/config/variant-meta.ts — keep in sync when variant metadata changes.
@@ -69,41 +69,42 @@ const VARIANT_OG: Record<string, { name: string; title: string; description: str
     name: 'Tech Monitor',
     title: 'Tech Monitor - Real-Time AI & Tech Industry Dashboard',
     description: 'Real-time AI and tech industry dashboard tracking tech giants, AI labs, startup ecosystems, funding rounds, and tech events worldwide.',
-    image: 'https://tech.worldmonitor.app/favico/tech/og-image.png',
-    url: 'https://tech.worldmonitor.app/',
+    image: 'https://wm-tech-gitlwd-projects.vercel.app/favico/tech/og-image.png',
+    url: 'https://wm-tech-gitlwd-projects.vercel.app/',
   },
   finance: {
     name: 'Finance Monitor',
     title: 'Finance Monitor - Real-Time Markets & Trading Dashboard',
     description: 'Real-time finance and trading dashboard tracking global markets, stock exchanges, central banks, commodities, forex, crypto, and economic indicators worldwide.',
-    image: 'https://finance.worldmonitor.app/favico/finance/og-image.png',
-    url: 'https://finance.worldmonitor.app/',
+    image: 'https://wm-finance.vercel.app/favico/finance/og-image.png',
+    url: 'https://wm-finance.vercel.app/',
   },
   commodity: {
     name: 'Commodity Monitor',
     title: 'Commodity Monitor - Real-Time Commodity Markets & Supply Chain Dashboard',
     description: 'Real-time commodity markets dashboard tracking mining sites, processing plants, commodity ports, supply chains, and global commodity trade flows.',
-    image: 'https://commodity.worldmonitor.app/favico/commodity/og-image.png',
-    url: 'https://commodity.worldmonitor.app/',
+    image: 'https://wm-commodity-gitlwd-projects.vercel.app/favico/commodity/og-image.png',
+    url: 'https://wm-commodity-gitlwd-projects.vercel.app/',
   },
   happy: {
     name: 'Happy Monitor',
     title: 'Happy Monitor - Good News & Global Progress',
     description: 'Curated positive news, progress data, and uplifting stories from around the world.',
-    image: 'https://happy.worldmonitor.app/favico/happy/og-image.png',
-    url: 'https://happy.worldmonitor.app/',
+    image: 'https://wm-happy-gitlwd-projects.vercel.app/favico/happy/og-image.png',
+    url: 'https://wm-happy-gitlwd-projects.vercel.app/',
   },
   energy: {
     name: 'Energy Atlas',
     title: 'Energy Atlas - Real-Time Global Energy Intelligence Dashboard',
     description: 'Real-time global energy atlas tracking oil and gas pipelines, storage facilities, chokepoints, fuel shortages, tanker flows, and disruption events worldwide.',
-    image: 'https://energy.worldmonitor.app/favico/energy/og-image.png',
-    url: 'https://energy.worldmonitor.app/',
+    image: 'https://wm-energy-gitlwd-projects.vercel.app/favico/energy/og-image.png',
+    url: 'https://wm-energy-gitlwd-projects.vercel.app/',
   },
 };
 
 const ALLOWED_HOSTS = new Set([
   'worldmonitor.app',
+  'wm-neon.vercel.app',
   ...Object.keys(VARIANT_HOST_MAP),
 ]);
 const VERCEL_PREVIEW_RE = /^[a-z0-9-]+-[a-z0-9]{8,}\.vercel\.app$/;
@@ -181,10 +182,10 @@ export default function middleware(request: Request) {
 <h2>Explore the platform</h2>
 <ul>
 <li><a href="https://www.worldmonitor.app/">World Monitor — geopolitics &amp; intelligence</a></li>
-<li><a href="https://tech.worldmonitor.app/">Tech Monitor</a></li>
-<li><a href="https://finance.worldmonitor.app/">Finance Monitor</a></li>
-<li><a href="https://commodity.worldmonitor.app/">Commodity Monitor</a></li>
-<li><a href="https://happy.worldmonitor.app/">Happy Monitor</a></li>
+<li><a href="https://wm-tech-gitlwd-projects.vercel.app/">Tech Monitor</a></li>
+<li><a href="https://wm-finance.vercel.app/">Finance Monitor</a></li>
+<li><a href="https://wm-commodity-gitlwd-projects.vercel.app/">Commodity Monitor</a></li>
+<li><a href="https://wm-happy-gitlwd-projects.vercel.app/">Happy Monitor</a></li>
 <li><a href="https://www.worldmonitor.app/pro">World Monitor Pro</a></li>
 <li><a href="https://www.worldmonitor.app/blog/">Blog</a></li>
 <li><a href="https://github.com/koala73/worldmonitor">Open source on GitHub</a></li>

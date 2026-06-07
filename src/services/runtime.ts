@@ -211,8 +211,12 @@ function extractHostnames(...urls: (string | undefined)[]): string[] {
 const APP_HOSTS = new Set([
   'worldmonitor.app',
   'www.worldmonitor.app',
-  'tech.worldmonitor.app',
-  'api.worldmonitor.app',
+  'wm-neon.vercel.app',
+  'wm-tech-gitlwd-projects.vercel.app',
+  'wm-finance.vercel.app',
+  'wm-commodity-gitlwd-projects.vercel.app',
+  'wm-happy-gitlwd-projects.vercel.app',
+  'wm-energy-gitlwd-projects.vercel.app',
   'localhost',
   '127.0.0.1',
   ...extractHostnames(WS_API_URL, ENV.VITE_WS_RELAY_URL),
@@ -222,7 +226,7 @@ function isAppOriginUrl(urlStr: string): boolean {
   try {
     const u = new URL(urlStr);
     const host = u.hostname;
-    return APP_HOSTS.has(host) || host.endsWith('.worldmonitor.app');
+    return APP_HOSTS.has(host) || host.endsWith('.worldmonitor.app') || host.endsWith('.vercel.app');
   } catch {
     return false;
   }
