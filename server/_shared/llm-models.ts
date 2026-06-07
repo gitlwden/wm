@@ -4,16 +4,22 @@
 // Caches results with configurable TTL + file persistence.
 
 import type { LlmProviderName } from './llm';
-import * as fs from 'fs';
-import * as path from 'path';
+
+// Conditional Node.js imports — not available in Edge Runtime
+let fs: typeof import('fs') | null = null;
+let path: typeof import('path') | null = null;
+try {
+  fs = require('fs');
+  path = require('path');
+} catch { /* Edge Runtime — file cache disabled */ }
 
 const PROBE_TIMEOUT_MS = 5_000;
 const DISCOVERY_CACHE_TTL_MS = 4 * 60 * 60 * 1000; // re-discover every 4h
 const DISCOVERY_STALE_TTL_MS = 30 * 60 * 1000; // on failure, retry in 30min
 
-// File-based cache for persistence across restarts
-const MODEL_CACHE_DIR = path.join(process.cwd(), '.cache');
-const MODEL_CACHE_FILE = path.join(MODEL_CACHE_DIR, 'llm-models.json');
+// File-based cache for persistence across restarts (Node.js only)
+const MODEL_CACHE_DIR = path?.join(process.cwd(), '.cache') ?? '';
+const MODEL_CACHE_FILE = path ? path.join(MODEL_CACHE_DIR, 'llm-models.json') : '';
 
 interface ProviderConfig {
   url: string;          // base URL e.g. https://api.groq.com/openai/v1
@@ -62,6 +68,7 @@ function getApiKey(envKey: string): string | undefined {
  * Ensure cache directory exists
  */
 function ensureCacheDir(): void {
+  if (!fs) return;
   try {
     if (!fs.existsSync(MODEL_CACHE_DIR)) {
       fs.mkdirSync(MODEL_CACHE_DIR, { recursive: true });
@@ -74,6 +81,7 @@ function ensureCacheDir(): void {
  */
 function loadFileCache(): Record<string, ModelCacheEntry> {
   if (fileCacheLoaded) return fileCache;
+  if (!fs) { fileCacheLoaded = true; return fileCache; }
 
   try {
     ensureCacheDir();
@@ -95,6 +103,7 @@ function loadFileCache(): Record<string, ModelCacheEntry> {
  * Save model cache to file
  */
 function saveFileCache(): void {
+  if (!fs) return;
   try {
     ensureCacheDir();
     fs.writeFileSync(MODEL_CACHE_FILE, JSON.stringify(fileCache, null, 2));
