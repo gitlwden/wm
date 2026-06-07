@@ -7,7 +7,9 @@
 ```
 Browser → Vercel (前端 + Edge API) → Upstash Redis (缓存/限流)
                                  ↘ Convex (数据库/认证)
+                                 ↘ Render (AIS Relay) → aisstream.io WebSocket
 GitHub Actions (seed cron) → Upstash Redis + Cloudflare KV
+GitHub Actions (keepalive) → Render /health (防休眠)
 ```
 
 ## 已完成项
@@ -141,7 +143,76 @@ GitHub Actions → 选 `Seed Relay (Frequent)` → Run workflow → 检查日志
 
 ---
 
-### Phase 3: Convex 环境变量
+### Phase 3: AIS Relay (Render)
+
+AIS Relay 是一个 Node.js 长驻服务，连接 aisstream.io WebSocket 获取全球船舶实时位置，提供给前端地图显示。
+
+#### 3.1 注册 Render
+
+1. 打开 https://render.com → Get Started → 用 GitHub 账号登录
+2. 授权 Render 访问 worldmonitor 仓库
+
+#### 3.2 创建 Web Service
+
+1. Dashboard → **New** → **Web Service**
+2. 选择 worldmonitor 仓库 → **Connect**
+3. 配置如下：
+
+| 设置 | 值 |
+|------|-----|
+| Name | `worldmonitor-relay` (或自定义) |
+| Runtime | **Docker** |
+| Dockerfile Path | `Dockerfile.relay` |
+| Instance Type | **Free** |
+| Port | `3004` |
+
+4. 展开 **Health Check Path**，填入 `/health`
+
+#### 3.3 环境变量
+
+在 Render 的 **Environment** 标签页添加：
+
+```bash
+AISSTREAM_API_KEY=27f86ee09296de7aa76ae4d5d04177e27de46fb0
+RELAY_SHARED_SECRET=<从 .env.local 复制>
+RELAY_AUTH_HEADER=x-relay-key
+UPSTASH_REDIS_REST_URL=https://winning-meerkat-98455.upstash.io
+UPSTASH_REDIS_REST_TOKEN=<从 .env.local 复制>
+```
+
+#### 3.4 部署
+
+1. 点 **Create Web Service**
+2. 等待构建完成 (约 2-3 分钟)
+3. 查看 Logs 确认看到 `[Relay] Listening on :3004` 和 `[Relay] Connected to AISStream`
+4. 记录公网 URL (如 `https://worldmonitor-relay.onrender.com`)
+
+#### 3.5 回填 Vercel
+
+Render 部署成功后，回到 Vercel Dashboard → Settings → Environment Variables 添加：
+
+```bash
+WS_RELAY_URL=https://worldmonitor-relay.onrender.com
+AISSTREAM_API_KEY=27f86ee09296de7aa76ae4d5d04177e27de46fb0
+```
+
+然后 Redeploy Vercel。
+
+#### 3.6 Keep-Alive (防休眠)
+
+Render 免费 tier 在 15 分钟无请求后会休眠。已创建 `.github/workflows/relay-keepalive.yml`，每 10 分钟 ping `/health` 保持服务常驻。
+
+在 GitHub repo → Settings → Secrets and variables → Actions 添加：
+
+```bash
+RELAY_HEALTH_URL=https://worldmonitor-relay.onrender.com/health
+```
+
+> **注意**: Render URL 需在部署后获取，再填入此 secret。
+
+---
+
+### Phase 4: Convex 环境变量
 
 在 Convex Dashboard → Settings → Environment Variables 确认已有：
 
@@ -163,6 +234,7 @@ GitHub Actions → 选 `Seed Relay (Frequent)` → Run workflow → 检查日志
 | 5 | Seed 状态 | `/api/seed-health` 显示数据域新鲜度 |
 | 6 | Clerk 登录 | 点击登录按钮，完成注册/登录流程 |
 | 7 | GitHub Actions | 至少一个 seed workflow 运行成功 |
+| 8 | AIS Relay | Render Logs 显示 Connected to AISStream，`/health` 返回 200 |
 
 ---
 
@@ -171,7 +243,6 @@ GitHub Actions → 选 `Seed Relay (Frequent)` → Run workflow → 检查日志
 | 功能 | 操作 |
 |------|------|
 | Sentry 错误监控 | Vercel 加 `VITE_SENTRY_DSN` |
-| AIS 船舶追踪 | 部署 AIS Relay (Koyeb/Railway) + Vercel 加 `WS_RELAY_URL` |
 | Dodo 支付 | Vercel 加 Dodo 变量 + Convex 加 webhook secret |
 | Telegram 通知 | Relay 加 `TELEGRAM_API_ID` / `TELEGRAM_API_HASH` |
 | Slack/Discord OAuth | Vercel 加 `SLACK_*` / `DISCORD_*` |
@@ -181,16 +252,19 @@ GitHub Actions → 选 `Seed Relay (Frequent)` → Run workflow → 检查日志
 
 ## 环境变量来源速查
 
-| 变量 | Vercel | GitHub Secrets | Convex |
-|------|--------|---------------|--------|
-| UPSTASH_REDIS_REST_URL | ✅ | ✅ | |
-| UPSTASH_REDIS_REST_TOKEN | ✅ | ✅ | |
-| CONVEX_URL / VITE_CONVEX_URL | ✅ | | |
-| CONVEX_SITE_URL | ✅ | | |
-| CONVEX_SERVER_SHARED_SECRET | ✅ | | |
-| Clerk keys | ✅ | | |
-| CLERK_JWT_ISSUER_DOMAIN | ✅ | | ✅ |
-| RELAY_SHARED_SECRET | ✅ | | ✅ |
-| RELAY_AUTH_HEADER | ✅ | | |
-| CLOUDFLARE_* | | ✅ | |
-| 数据源 API keys | ✅ | ✅ | |
+| 变量 | Vercel | GitHub Secrets | Render | Convex |
+|------|--------|---------------|--------|--------|
+| UPSTASH_REDIS_REST_URL | ✅ | ✅ | ✅ | |
+| UPSTASH_REDIS_REST_TOKEN | ✅ | ✅ | ✅ | |
+| CONVEX_URL / VITE_CONVEX_URL | ✅ | | | |
+| CONVEX_SITE_URL | ✅ | | | |
+| CONVEX_SERVER_SHARED_SECRET | ✅ | | | |
+| Clerk keys | ✅ | | | |
+| CLERK_JWT_ISSUER_DOMAIN | ✅ | | | ✅ |
+| RELAY_SHARED_SECRET | ✅ | | ✅ | ✅ |
+| RELAY_AUTH_HEADER | ✅ | | ✅ | |
+| AISSTREAM_API_KEY | ✅ | | ✅ | |
+| WS_RELAY_URL | ✅ | | | |
+| CLOUDFLARE_* | | ✅ | | |
+| RELAY_HEALTH_URL | | ✅ | | |
+| 数据源 API keys | ✅ | ✅ | | |
