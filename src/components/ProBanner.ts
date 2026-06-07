@@ -2,6 +2,7 @@ import { trackGateHit } from '@/services/analytics';
 import { hasPremiumAccess } from '@/services/panel-gating';
 import { onEntitlementChange, getEntitlementState } from '@/services/entitlements';
 import { getCurrentClerkUser } from '@/services/clerk';
+import { getAuthState } from '@/services/auth-state';
 import { t } from '@/services/i18n';
 import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
 
@@ -74,7 +75,7 @@ export function showProBanner(container: HTMLElement): void {
   // have a Convex entitlement and would otherwise wait forever. The
   // listener handles re-mounting once the first snapshot confirms the
   // user is actually free.
-  if (getCurrentClerkUser() && getEntitlementState() === null) return;
+  if (getAuthState().isPending || (getCurrentClerkUser() && getEntitlementState() === null)) return;
 
   trackGateHit('pro-banner');
 
