@@ -100,6 +100,20 @@ type BriefPreview = {
   dateLong: string;
   greeting: string;
   threadCount: number;
+  lead?: string;
+  stories?: Array<{
+    category?: string;
+    headline?: string;
+    country?: string;
+    threatLevel?: string;
+    source?: string;
+    link?: string;
+    sourceUrl?: string;
+  }>;
+  threads?: Array<{
+    tag?: string;
+    teaser?: string;
+  }>;
 };
 
 async function readBriefPreview(
@@ -133,6 +147,17 @@ async function readBriefPreview(
     dateLong: data.dateLong,
     greeting: data.digest.greeting,
     threadCount: data.stories.length,
+    lead: data.digest?.lead,
+    stories: data.stories?.map((s: Record<string, unknown>) => ({
+      category: s.category,
+      headline: s.headline,
+      country: s.country,
+      threatLevel: s.threatLevel,
+      source: s.source,
+      link: s.link,
+      sourceUrl: s.sourceUrl,
+    })),
+    threads: data.digest?.threads,
   };
 }
 
@@ -309,6 +334,9 @@ export default async function handler(
       dateLong: preview.dateLong,
       greeting: preview.greeting,
       threadCount: preview.threadCount,
+      lead: preview.lead,
+      stories: preview.stories,
+      threads: preview.threads,
       magazineUrl,
     },
     200,
