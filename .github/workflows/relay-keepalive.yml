@@ -5,7 +5,7 @@ name: Relay Keep-Alive
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/14 * * * *'
   workflow_dispatch:
 
 jobs:

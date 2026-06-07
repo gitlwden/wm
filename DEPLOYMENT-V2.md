@@ -200,7 +200,7 @@ AISSTREAM_API_KEY=27f86ee09296de7aa76ae4d5d04177e27de46fb0
 
 #### 3.6 Keep-Alive (防休眠)
 
-Render 免费 tier 在 15 分钟无请求后会休眠。已创建 `.github/workflows/relay-keepalive.yml`，每 10 分钟 ping `/health` 保持服务常驻。
+Render 免费 tier 在 15 分钟无请求后会休眠。已创建 `.github/workflows/relay-keepalive.yml`，每 14 分钟 ping `/health` 保持服务常驻。
 
 在 GitHub repo → Settings → Secrets and variables → Actions 添加：
 
