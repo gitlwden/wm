@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, runSeed, getRedisCredentials } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, getUpstashCredentials } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
@@ -158,7 +158,7 @@ function safeNum(v) {
 
 // ── Read all source keys in parallel via Upstash pipeline ─────────────────────
 async function readAllSourceKeys() {
-  const { url, token } = getRedisCredentials();
+  const { url, token } = getUpstashCredentials();
   const pipeline = SOURCE_KEYS.map(k => ['GET', k]);
   const resp = await fetch(`${url}/pipeline`, {
     method: 'POST',
@@ -877,7 +877,7 @@ runSeed('intelligence', 'cross-source-signals', CANONICAL_KEY, aggregateCrossSou
   sourceVersion: 'cross-source-v1',
   recordCount: (data) => data.signals?.length ?? 0,
   afterPublish: async (data) => {
-    const { url, token } = getRedisCredentials();
+    const { url, token } = getUpstashCredentials();
     const metaKey = 'seed-meta:intelligence:cross-source-signals';
     const meta = { fetchedAt: Date.now(), recordCount: data.signals?.length ?? 0 };
     await fetch(url, {

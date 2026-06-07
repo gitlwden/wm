@@ -332,6 +332,11 @@ export function getRedisCredentials() {
   return { url: kvBase(accountId, namespaceId), token };
 }
 
+/** Returns { url, token } for Upstash Redis REST API usage. */
+export function getUpstashCredentials() {
+  return _upstashCredentials();
+}
+
 function kvBase(accountId, namespaceId) {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}`;
 }

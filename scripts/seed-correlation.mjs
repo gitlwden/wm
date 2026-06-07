@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { loadEnvFile, runSeed, getRedisCredentials, loadSharedConfig } from './_seed-utils.mjs';
+import { loadEnvFile, runSeed, getUpstashCredentials, loadSharedConfig } from './_seed-utils.mjs';
 import { resolveIso2, normalizeCountryToken } from './_country-resolver.mjs';
 
 loadEnvFile(import.meta.url);
@@ -21,7 +21,7 @@ const INPUT_KEYS = [
 ];
 
 async function fetchInputData() {
-  const { url, token } = getRedisCredentials();
+  const { url, token } = getUpstashCredentials();
   const pipeline = INPUT_KEYS.map(k => ['GET', k]);
   const resp = await fetch(`${url}/pipeline`, {
     method: 'POST',
