@@ -4,7 +4,7 @@
 // Extracted from the relay's startPositiveEventsSeedLoop so GitHub Actions
 // can run it independently of the long-lived WebSocket process.
 
-import { loadEnvFile, getRedisCredentials } from './_seed-utils.mjs';
+import { loadEnvFile, getUpstashCredentials } from './_seed-utils.mjs';
 import { buildEnvelope } from './_seed-envelope-source.mjs';
 
 loadEnvFile(import.meta.url);
@@ -137,7 +137,7 @@ async function fetchGdeltGeoPositive(query) {
 
 // ─── Main ──────────────────────────────────────────────────────────────
 
-const { url: redisUrl, token: redisToken } = getRedisCredentials();
+const { url: redisUrl, token: redisToken } = getUpstashCredentials();
 
 console.log('=== Positive Events Seed ===');
 console.log(`  Key:     ${CANONICAL_KEY}`);
