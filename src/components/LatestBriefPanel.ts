@@ -27,6 +27,8 @@ import { getAuthState, subscribeAuthState } from '@/services/auth-state';
 import { hasTier, getEntitlementState } from '@/services/entitlements';
 
 import { h, rawHtml, replaceChildren, clearChildren, trustedHtml, type TrustedHtml } from '@/utils/dom-utils';
+import { setDigestSettings } from '@/services/notification-channels';
+import { SITE_VARIANT } from '@/config';
 
 interface BriefStory {
   category?: string;
@@ -103,6 +105,7 @@ const COMPOSING_POLL_MS = 60_000;
 export class LatestBriefPanel extends Panel {
   private refreshing = false;
   private refreshQueued = false;
+  private digestAutoEnrolled = false;
   /**
    * Local mirror of Panel base `_locked`. The base doesn't expose a
    * getter, so we track transitions by overriding showGatedCta() +
@@ -219,6 +222,17 @@ export class LatestBriefPanel extends Panel {
       if (data.status === 'ready') {
         this.renderReady(data);
       } else {
+        // Auto-enroll: create a default daily digest rule so the cron
+        // will compose a brief for this user on the next tick.
+        if (requestUserId && !this.digestAutoEnrolled) {
+          this.digestAutoEnrolled = true;
+          setDigestSettings({
+            variant: SITE_VARIANT,
+            digestMode: 'daily',
+            digestHour: 8,
+            digestTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+          }).catch(() => { /* best-effort, ignore errors */ });
+        }
         this.renderComposing(data);
       }
     } catch (err) {
