@@ -70,7 +70,7 @@ export function stripThinkingTags(text: string): string {
 }
 
 
-const PROVIDER_CHAIN: LlmProviderName[] = ['nvidia', 'cerebras', 'sambanova'];
+const PROVIDER_CHAIN: LlmProviderName[] = ['groq', 'nvidia', 'cerebras', 'sambanova'];
 const PROVIDER_SET = new Set<string>(PROVIDER_CHAIN);
 
 export interface LlmCallOptions {
