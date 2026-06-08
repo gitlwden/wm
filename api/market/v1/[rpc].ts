@@ -1,4 +1,4 @@
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs' };
 
 import { createDomainGateway, serverOptions } from '../../../server/gateway';
 import { createMarketServiceRoutes } from '../../../src/generated/server/worldmonitor/market/v1/service_server';
