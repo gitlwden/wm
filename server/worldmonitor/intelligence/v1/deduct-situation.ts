@@ -6,7 +6,7 @@ import type {
 
 import { cachedFetchJson, getCachedJson } from '../../../_shared/redis';
 import { sha256Hex } from './_shared';
-import { callLlmReasoning } from '../../../_shared/llm';
+import { callLlm } from '../../../_shared/llm';
 // Issue #3724 (extension): prediction-market titles flow into the deduction
 // LLM's prompt. Use sanitizeForPrompt (semantic + structural), not the lighter
 // sanitizeHeadline, so that a compromised market feed cannot inject
@@ -115,7 +115,7 @@ export async function deductSituation(
         cacheKey,
         DEDUCT_CACHE_TTL,
         async () => {
-            const result = await callLlmReasoning({
+            const result = await callLlm({
                 messages: [
                     { role: 'system', content: systemPrompt },
                     { role: 'user', content: userPrompt },
@@ -124,6 +124,8 @@ export async function deductSituation(
                 maxTokens: 1500,
                 timeoutMs: DEDUCT_TIMEOUT_MS,
                 systemAppend: framework || undefined,
+                providerOrder: ['groq', 'nvidia', 'cerebras', 'sambanova'],
+                modelOverrides: { groq: 'llama-3.3-70b-versatile' },
             });
 
             if (!result) {
