@@ -94,19 +94,15 @@ async function readBody(req) {
 }
 
 export default async function handler(req) {
-  // if (isDisallowedOrigin(req)) {
-  //   return new Response('Forbidden', { status: 403 });
-  // }
-  //
-  // const cors = getCorsHeaders(req, 'POST, OPTIONS');
-  //
-  // if (req.method === 'OPTIONS') {
-  //   return new Response(null, { status: 204, headers: cors });
-  // }
-  //
-  // if (req.method !== 'POST') {
-  //   return jsonResponse({ error: 'Method not allowed' }, 405, cors);
-  // }
+  const cors = getCorsHeaders(req, 'POST, OPTIONS');
+
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: cors });
+  }
+
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405, cors);
+  }
 
   // Rate-limit per IP. Without this, an attacker can farm tokens cheaply.
   // Token TTL is 12h, so a sustained ~1 RPS yields 86400 tokens/day per IP —
