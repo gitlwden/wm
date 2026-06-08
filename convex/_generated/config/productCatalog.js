@@ -28,8 +28,8 @@ const FREE_FEATURES = {
 const PRO_FEATURES = {
     tier: 1,
     maxDashboards: 10,
-    apiAccess: false,
-    apiRateLimit: 0,
+    apiAccess: true,
+    apiRateLimit: 30,
     prioritySupport: false,
     exportFormats: ["csv", "pdf"],
     mcpAccess: true,
