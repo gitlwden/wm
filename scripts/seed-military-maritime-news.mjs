@@ -28,8 +28,8 @@ const API_BASE = 'https://api.worldmonitor.app';
 const TIMEOUT = 30_000;
 
 // Defense-in-depth auth — see seed-infra.mjs for the same pattern + rationale.
-// Set WORLDMONITOR_RELAY_KEY on the Railway service to a value already
-// present in Vercel's WORLDMONITOR_VALID_KEYS.
+// Set WORLDMONITOR_RELAY_KEY to a value present in
+// Vercel's WORLDMONITOR_VALID_KEYS.
 const RELAY_API_KEY = process.env.WORLDMONITOR_RELAY_KEY || '';
 
 function warmPingHeaders() {

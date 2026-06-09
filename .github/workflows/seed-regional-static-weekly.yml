@@ -2,7 +2,7 @@ name: Seed Regional & Static Ref (Weekly)
 
 on:
   schedule:
-    # Weekly Sunday 03:00 UTC — matches Railway seed-bundle-static-ref
+    # Weekly Sunday 03:00 UTC — matches seed-bundle-static-ref
     - cron: '0 3 * * 0'
   workflow_dispatch:
 

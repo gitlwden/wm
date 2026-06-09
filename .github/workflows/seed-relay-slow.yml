@@ -1,6 +1,6 @@
 name: Seed Relay (Slow)
 
-# Replaces Railway cron for low-frequency seeds (6h+ cadence).
+# Replaces cron for low-frequency seeds (6h+ cadence).
 # Bundled into one workflow to reduce Upstash connection overhead.
 
 on:

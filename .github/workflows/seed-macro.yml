@@ -2,7 +2,7 @@ name: Seed Macro & Economics
 
 on:
   schedule:
-    # Daily 08:00 UTC — matches Railway seed-bundle-macro
+    # Daily 08:00 UTC — matches seed-bundle-macro
     - cron: '0 8 * * *'
   workflow_dispatch:
 

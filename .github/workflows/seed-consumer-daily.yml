@@ -2,7 +2,7 @@ name: Seed Consumer Prices & BigMac
 
 on:
   schedule:
-    # Daily — matches Railway cadence
+    # Daily — matches cron cadence
     - cron: '0 9 * * *'
   workflow_dispatch:
 
