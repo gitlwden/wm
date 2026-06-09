@@ -403,7 +403,7 @@ async function redisCommand(url, token, command) {
   }
 }
 
-async function redisGet(url, token, key) {
+export async function redisGet(url, token, key) {
   if (shouldUseUpstash(key)) {
     try {
       const raw = await _upstashGet(key);
