@@ -68,7 +68,7 @@ export async function getOilInventories(
   _req: GetOilInventoriesRequest,
 ): Promise<GetOilInventoriesResponse> {
   try {
-    const oilBatch = await getCachedJsonBatch([CRUDE_KEY, SPR_KEY, NAT_GAS_KEY, EU_GAS_KEY, IEA_KEY, REFINERY_KEY], true);
+    const oilBatch = await getCachedJsonBatch([CRUDE_KEY, SPR_KEY, NAT_GAS_KEY, EU_GAS_KEY, IEA_KEY, REFINERY_KEY]);
     const crudeRaw = oilBatch.get(CRUDE_KEY) as CrudeRaw | null | undefined ?? null;
     const sprRaw = oilBatch.get(SPR_KEY) as SprRaw | null | undefined ?? null;
     const natGasRaw = oilBatch.get(NAT_GAS_KEY) as NatGasRaw | null | undefined ?? null;

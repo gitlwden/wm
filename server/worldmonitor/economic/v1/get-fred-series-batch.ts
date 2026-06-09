@@ -37,7 +37,7 @@ export async function getFredSeriesBatch(
     const redisKeys = limitedList.map((id) => fredSeedKey(id));
 
     // Single pipeline request for all keys (raw = skip env prefix, matching seed writes).
-    const batch = await getCachedJsonBatch(redisKeys, true);
+    const batch = await getCachedJsonBatch(redisKeys);
 
     const results: Record<string, FredSeries> = {};
     for (let i = 0; i < limitedList.length; i++) {
