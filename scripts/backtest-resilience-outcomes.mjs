@@ -4,7 +4,7 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveIso2 } from './_country-resolver.mjs';
-import { getUpstashCredentials, loadEnvFile } from './_seed-utils.mjs';
+import { getRedisCredentials, loadEnvFile } from './_seed-utils.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 import {
   currentCacheFormulaLocal,
@@ -581,7 +581,7 @@ function findFalsePositives(scores, labels, allCountries, limit = 3) {
 }
 
 async function runBacktest() {
-  const { url, token } = getUpstashCredentials();
+  const { url, token } = getRedisCredentials();
 
   console.log('=== OUTCOME BACKTEST: RESILIENCE vs REAL-WORLD EVENTS ===');
   console.log(`Holdout period: 2024-2025`);

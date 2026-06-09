@@ -328,8 +328,7 @@ async function _upstashRedisCommand(command) {
 
 /** Returns { url, token } for direct Cloudflare KV API usage. */
 export function getRedisCredentials() {
-  const { accountId, namespaceId, token } = _cfCredentials();
-  return { url: kvBase(accountId, namespaceId), token };
+  return _upstashCredentials();
 }
 
 /** Returns { url, token } for Upstash Redis REST API usage. */
