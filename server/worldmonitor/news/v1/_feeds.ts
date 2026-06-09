@@ -83,7 +83,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'ArXiv AI', url: 'https://export.arxiv.org/rss/cs.AI' },
     ],
     hardware: [
-      { name: "Tom's Hardware", url: 'https://www.tomshardware.com/feeds/all' },
       { name: 'SemiAnalysis', url: 'https://www.semianalysis.com/feed' },
       { name: 'Semiconductor News', url: gn('semiconductor OR chip OR TSMC OR NVIDIA OR Intel when:3d') },
     ],
@@ -125,7 +124,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
     ],
     africa: [
       { name: 'BBC Africa', url: 'https://feeds.bbci.co.uk/news/world/africa/rss.xml' },
-      { name: 'News24', url: 'https://feeds.news24.com/articles/news24/TopStories/rss' },
       { name: 'Africanews', url: 'https://www.africanews.com/feed/' },
       { name: 'Jeune Afrique', url: 'https://www.jeuneafrique.com/feed/', lang: 'fr' },
       { name: 'Premium Times', url: 'https://www.premiumtimesng.com/feed' },
@@ -167,7 +165,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'CSIS', url: 'https://www.csis.org/rss.xml' },
     ],
     crisis: [
-      { name: 'CrisisWatch', url: 'https://www.crisisgroup.org/rss' },
       { name: 'IAEA', url: 'https://www.iaea.org/feeds/topnews' },
       { name: 'WHO', url: 'https://www.who.int/rss-feeds/news-english.xml' },
     ],
@@ -185,7 +182,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'Open Source News', url: gn('"open source" project release OR launch when:3d') },
     ],
     vcblogs: [
-      { name: 'Y Combinator Blog', url: 'https://www.ycombinator.com/blog/rss/' },
       { name: 'a16z Blog', url: gn('site:a16z.com OR "Andreessen Horowitz" blog when:14d') },
       { name: 'Sequoia Blog', url: gn('site:sequoiacap.com when:7d') },
       { name: 'Paul Graham Essays', url: gn('"Paul Graham" essay OR blog when:30d') },
@@ -239,7 +235,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'Cointelegraph', url: 'https://cointelegraph.com/rss' },
       { name: 'The Block', url: 'https://news.google.com/rss/search?q=site:theblock.co+when:1d&hl=en-US&gl=US&ceid=US:en' },
       { name: 'Decrypt', url: 'https://decrypt.co/feed' },
-      { name: 'Blockworks', url: 'https://blockworks.co/feed' },
       { name: 'Bitcoin Magazine', url: 'https://bitcoinmagazine.com/feed' },
       { name: 'CryptoSlate', url: 'https://cryptoslate.com/feed/' },
     ],
@@ -254,7 +249,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
     ],
     accelerators: [
       { name: 'YC News', url: 'https://news.ycombinator.com/rss' },
-      { name: 'YC Blog', url: 'https://www.ycombinator.com/blog/rss/' },
       { name: 'Demo Day News', url: gn('("demo day" OR "YC batch" OR "accelerator batch") startup when:7d') },
     ],
     cloud: [
@@ -263,7 +257,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
     ],
     ipo: [
       { name: 'TechCrunch IPO', url: 'https://techcrunch.com/tag/ipo/feed/' },
-      { name: 'Renaissance Capital', url: 'https://www.renaissancecapital.com/IPOHome/Press/IPO%20News%20RSS.ashx' },
     ],
     producthunt: [
       { name: 'Product Hunt', url: 'https://www.producthunt.com/feed' },
@@ -289,7 +282,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'Crunchbase News', url: 'https://news.crunchbase.com/feed/' },
     ],
     vcblogs: [
-      { name: 'Y Combinator Blog', url: 'https://www.ycombinator.com/blog/rss/' },
       { name: 'a16z Blog', url: gn('site:a16z.com OR "Andreessen Horowitz" blog when:14d') },
       { name: 'Sequoia Blog', url: gn('site:sequoiacap.com when:7d') },
       { name: 'Paul Graham Essays', url: gn('"Paul Graham" essay OR blog when:30d') },
@@ -311,7 +303,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
     ],
     accelerators: [
       { name: 'YC News', url: 'https://news.ycombinator.com/rss' },
-      { name: 'YC Blog', url: 'https://www.ycombinator.com/blog/rss/' },
       { name: 'Demo Day News', url: gn('("demo day" OR "YC batch" OR "accelerator batch") startup when:7d') },
     ],
     security: [
@@ -360,7 +351,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'Product Hunt', url: 'https://www.producthunt.com/feed' },
     ],
     hardware: [
-      { name: "Tom's Hardware", url: 'https://www.tomshardware.com/feeds.xml' },
       { name: 'SemiAnalysis', url: 'https://www.semianalysis.com/feed' },
       { name: 'Semiconductor News', url: gn('semiconductor OR chip OR TSMC OR NVIDIA OR Intel when:3d') },
     ],
@@ -400,7 +390,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'Bitcoin Magazine', url: 'https://bitcoinmagazine.com/feed' },
       { name: 'DL News', url: 'https://news.google.com/rss/search?q=site:dlnews.com+when:3d&hl=en-US&gl=US&ceid=US:en' },
       { name: 'CryptoSlate', url: 'https://cryptoslate.com/feed/' },
-      { name: 'Unchained', url: 'https://unchainedcrypto.com/feed/' },
       { name: 'DeFi News', url: 'https://news.google.com/rss/search?q=(DeFi+OR+"decentralized+finance")+when:3d&hl=en-US&gl=US&ceid=US:en' },
       { name: 'Bloomberg Crypto', url: 'https://news.google.com/rss/search?q=bloomberg+crypto+when:1d&hl=en-US&gl=US&ceid=US:en' },
       { name: 'Reuters Crypto', url: 'https://news.google.com/rss/search?q=reuters+crypto+when:1d&hl=en-US&gl=US&ceid=US:en' },
@@ -465,7 +454,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
   commodity: {
     'commodity-news': [
       { name: 'Kitco News', url: gn('site:kitco.com gold OR silver OR commodity OR metals when:1d') },
-      { name: 'Mining.com', url: 'https://www.mining.com/feed/' },
       { name: 'Bloomberg Commodities', url: gn('site:bloomberg.com commodities OR metals OR mining when:1d') },
       { name: 'Reuters Commodities', url: gn('site:reuters.com commodities OR metals OR mining when:1d') },
       { name: 'S&P Global Commodity', url: gn('site:spglobal.com commodities metals when:3d') },
@@ -490,7 +478,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
     energy: [
       { name: 'OilPrice.com', url: 'https://oilprice.com/rss/main' },
       { name: 'Rigzone', url: 'https://www.rigzone.com/news/rss/rigzone_latest.aspx' },
-      { name: 'EIA Reports', url: gn('site:eia.gov energy oil gas when:14d') },
       { name: 'OPEC News', url: gn('(OPEC OR "oil price" OR "crude oil" OR WTI OR Brent OR "oil production") when:1d') },
       { name: 'Natural Gas News', url: gn('("natural gas" OR LNG OR "gas price" OR "Henry Hub") when:1d') },
       { name: 'Energy Intel', url: gn('(energy commodities OR "energy market" OR "energy prices") when:2d') },
@@ -500,7 +487,6 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
       { name: 'Mining Journal', url: gn('site:mining-journal.com when:7d') },
       { name: 'Northern Miner', url: gn('site:northernminer.com when:7d') },
       { name: 'Mining Weekly', url: gn('site:miningweekly.com when:7d') },
-      { name: 'Mining Technology', url: 'https://www.mining-technology.com/feed/' },
       { name: 'Australian Mining', url: 'https://www.australianmining.com.au/feed/' },
       { name: 'Mine Web (SNL)', url: gn('("mining company" OR "mine production" OR "mining operations") when:2d') },
       { name: 'Resource World', url: gn('("mining project" OR "mineral exploration" OR "mine development") when:3d') },
@@ -562,12 +548,10 @@ export const VARIANT_FEEDS: Record<string, Record<string, ServerFeed[]>> = {
     positive: [
       { name: 'Good News Network', url: 'https://www.goodnewsnetwork.org/feed/' },
       { name: 'Positive.News', url: 'https://www.positive.news/feed/' },
-      { name: 'Reasons to be Cheerful', url: 'https://reasonstobecheerful.world/feed/' },
       { name: 'Optimist Daily', url: 'https://www.optimistdaily.com/feed/' },
     ],
     science: [
       { name: 'ScienceDaily', url: 'https://www.sciencedaily.com/rss/all.xml' },
-      { name: 'Nature News', url: 'https://feeds.nature.com/nature/rss/current' },
       { name: 'Singularity Hub', url: 'https://singularityhub.com/feed/' },
       { name: 'Human Progress', url: 'https://humanprogress.org/feed/' },
     ],
@@ -594,7 +578,6 @@ export const INTEL_SOURCES: ServerFeed[] = [
   { name: 'Task & Purpose', url: 'https://taskandpurpose.com/feed/' },
   { name: 'USNI News', url: 'https://news.google.com/rss/search?q=site:news.usni.org+when:3d&hl=en-US&gl=US&ceid=US:en' },
   { name: 'gCaptain', url: 'https://gcaptain.com/feed/' },
-  { name: 'Oryx OSINT', url: 'https://www.oryxspioenkop.com/feeds/posts/default?alt=rss' },
   { name: 'Foreign Policy', url: 'https://foreignpolicy.com/feed/' },
   { name: 'Foreign Affairs', url: 'https://www.foreignaffairs.com/rss.xml' },
   { name: 'Atlantic Council', url: 'https://www.atlanticcouncil.org/feed/' },
@@ -605,7 +588,6 @@ export const INTEL_SOURCES: ServerFeed[] = [
   { name: 'FAO News', url: 'https://www.fao.org/feeds/fao-newsroom-rss' },
   { name: 'OCCRP', url: 'https://www.occrp.org/en/feed' },
   { name: 'DFRLab', url: 'https://dfrlab.org/feed/' },
-  { name: 'Lighthouse Reports', url: 'https://www.lighthousereports.com/feed/' },
   { name: 'The Sentry', url: 'https://thesentry.org/feed/' },
   { name: 'GITOC', url: 'https://globalinitiative.net/feed/' },
   { name: 'VSquare', url: 'https://vsquare.org/feed/' },
