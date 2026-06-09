@@ -90,10 +90,9 @@ function parseEnvFile(filePath) {
   return env;
 }
 
-// deploy.env (deployment-only vars) takes priority over .env.local
-const deployEnv = parseEnvFile(resolve(ROOT, 'deploy.env'));
+// .env.local is the single source of truth (deploy.env merged and deleted)
 const localEnv = parseEnvFile(resolve(ROOT, '.env.local'));
-const ENV = { ...localEnv, ...deployEnv };
+const ENV = { ...localEnv };
 
 // ─── Config ─────────────────────────────────────────────────────────
 

@@ -6,7 +6,6 @@ public/blog/
 *.log
 .env
 .env.local
-deploy.env
 .playwright-mcp/
 *-network.txt
 .vercel
@@ -93,5 +92,7 @@ playground-pricing.html
 temp_lint.txt
 temp_log.txt
 git_command.txt
+
+.vercel
 
 .vercel
