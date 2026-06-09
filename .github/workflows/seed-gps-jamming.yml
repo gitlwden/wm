@@ -1,0 +1,30 @@
+name: Seed GPS Jamming
+
+on:
+  schedule:
+    - cron: '45 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Fetch GPS jamming data (Wingbits)
+        run: node scripts/fetch-gpsjam.mjs
+        env:
+          WINGBITS_API_KEY: ${{ secrets.WINGBITS_API_KEY }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
