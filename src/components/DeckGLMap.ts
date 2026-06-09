@@ -5150,6 +5150,15 @@ export class DeckGLMap {
           if (this.state.layers.weather && !prevRadar) this.startWeatherRadar();
           else if (!this.state.layers.weather && prevRadar) this.stopWeatherRadar();
           if (this.state.layers.cyberThreats && !prevCyber && !this.aptGroupsLoaded) this.loadAptGroups();
+          // Trigger data fetch for layers whose data isn't loaded by the
+          // data-loader's loadDataForLayer() switch (bases uses a viewport
+          // fetch internal to this class; irradiators is static; the energy
+          // registries are hydrated from bootstrap).
+          if (enabled) {
+            if (layer === 'bases') this.fetchServerBases();
+            if (layer === 'irradiators') this.setLayerReady('irradiators', true);
+            if (layer === 'storageFacilities' || layer === 'fuelShortages') this.setLayerReady(layer, true);
+          }
           this.render();
           this.updateLegend();
           this.onLayerChange?.(layer, enabled, 'user');

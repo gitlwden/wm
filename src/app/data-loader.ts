@@ -580,12 +580,18 @@ export class DataLoaderManager implements AppModule {
         }
       } catch { /* non-fatal */ }
     }
-    // Intelligence signals: run for any variant that shows these panels
-    if (shouldLoadAny(['cii', 'strategic-risk', 'strategic-posture', 'climate', 'population-exposure', 'security-advisories', 'radiation-watch', 'displacement', 'ucdp-events', 'satellite-fires', 'oref-sirens'])) {
+    // Intelligence signals: run for any variant that shows these panels, OR
+    // when any intelligence-dependent map layer is enabled (so toggling e.g.
+    // "Internet Disruptions" ON at startup actually loads data even when the
+    // internet-disruptions panel is below the fold).
+    const _intelLayers = this.ctx.mapLayers;
+    if (shouldLoadAny(['cii', 'strategic-risk', 'strategic-posture', 'climate', 'population-exposure', 'security-advisories', 'radiation-watch', 'displacement', 'ucdp-events', 'satellite-fires', 'oref-sirens'])
+      || _intelLayers.outages || _intelLayers.climate || _intelLayers.gpsJamming
+      || _intelLayers.displacement || _intelLayers.ucdpEvents || _intelLayers.protests || _intelLayers.military) {
       tasks.push({ name: 'intelligence', task: runGuarded('intelligence', () => this.loadIntelligenceSignals()) });
     }
 
-    if (SITE_VARIANT === 'full' && (shouldLoad('satellite-fires') || this.ctx.mapLayers.natural)) {
+    if (SITE_VARIANT === 'full' && (shouldLoad('satellite-fires') || this.ctx.mapLayers.natural || this.ctx.mapLayers.fires)) {
       tasks.push({ name: 'firms', task: runGuarded('firms', () => this.loadFirmsData()) });
     }
     if (this.ctx.mapLayers.natural) tasks.push({ name: 'natural', task: runGuarded('natural', () => this.loadNatural()) });
