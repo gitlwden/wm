@@ -37,6 +37,10 @@ async function probe(url: string, headers: Record<string, string>): Promise<{ ok
 
 function getAuthHeaders(url: string): Record<string, string> {
   const origin = new URL(url).origin;
+  if (origin === 'https://api.groq.com') {
+    const key = process.env.GROQ_API_KEY;
+    if (key) return { Authorization: `Bearer ${key}` };
+  }
   if (origin === 'https://integrate.api.nvidia.com') {
     const key = process.env.NVIDIA_NIM_API_KEY;
     if (key) return { Authorization: `Bearer ${key}` };
@@ -123,6 +127,9 @@ export async function reprobeAll(): Promise<void> {
 export function warmHealthCache(): void {
   const providerUrls: string[] = [];
 
+  if (typeof process !== 'undefined' && process.env?.GROQ_API_KEY) {
+    providerUrls.push('https://api.groq.com/openai/v1/chat/completions');
+  }
   if (typeof process !== 'undefined' && process.env?.NVIDIA_NIM_API_KEY) {
     providerUrls.push('https://integrate.api.nvidia.com/v1/chat/completions');
   }
