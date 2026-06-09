@@ -41,6 +41,19 @@ jobs:
         continue-on-error: true
         timeout-minutes: 3
 
+      - name: Warm up Render relay (prevent cold start)
+        run: |
+          if [ -n "$RELAY_HEALTH_URL" ]; then
+            echo "Pinging relay at $RELAY_HEALTH_URL ..."
+            curl -sf --max-time 30 "$RELAY_HEALTH_URL" || echo "relay ping failed (may be deploying)"
+          else
+            echo "RELAY_HEALTH_URL not set — skipping warm-up"
+          fi
+        env:
+          RELAY_HEALTH_URL: ${{ secrets.RELAY_HEALTH_URL }}
+        continue-on-error: true
+        timeout-minutes: 1
+
       - name: Seed military flights
         run: node scripts/seed-military-flights.mjs
         continue-on-error: true

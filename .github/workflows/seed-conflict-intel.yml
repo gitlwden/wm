@@ -78,6 +78,7 @@ jobs:
       - name: Seed unrest events
         run: node scripts/seed-unrest-events.mjs
         continue-on-error: true
+        timeout-minutes: 10
         env:
           PROXY_URL: ${{ steps.proxy.outputs.proxy_url || secrets.PROXY_URL }}
           PROXY_POOL: ${{ steps.proxy.outputs.proxy_pool || secrets.PROXY_POOL }}
