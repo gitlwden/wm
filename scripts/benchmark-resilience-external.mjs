@@ -13,7 +13,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { loadEnvFile, getRedisCredentials, CHROME_UA } from './_seed-utils.mjs';
+import { loadEnvFile, getUpstashCredentials, CHROME_UA } from './_seed-utils.mjs';
 import {
   currentCacheFormulaLocal,
   currentMethodologyFormulaLocal,
@@ -371,7 +371,7 @@ function median(arr) {
 }
 
 async function readWmScoresFromRedis() {
-  const { url, token } = getRedisCredentials();
+  const { url, token } = getUpstashCredentials();
   const rankingResp = await fetch(`${url}/get/${encodeURIComponent('resilience:ranking:v24')}`, {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(10_000),
@@ -512,7 +512,7 @@ export async function runBenchmark(opts = {}) {
     console.log(`[benchmark] Wrote benchmark-results.json`);
 
     try {
-      const { url, token } = getRedisCredentials();
+      const { url, token } = getUpstashCredentials();
       const payload = JSON.stringify(result);
       const resp = await fetch(url, {
         method: 'POST',
