@@ -36,6 +36,7 @@ jobs:
           CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CONVEX_URL: ${{ secrets.CONVEX_URL }}
+          CONVEX_SITE_URL: ${{ secrets.CONVEX_SITE_URL }}
           RELAY_SHARED_SECRET: ${{ secrets.RELAY_SHARED_SECRET }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
