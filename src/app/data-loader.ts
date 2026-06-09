@@ -2436,30 +2436,28 @@ export class DataLoaderManager implements AppModule {
       })());
     }
 
-    // GPS/GNSS jamming (cloud-only — seeded by Wingbits API via fetch-gpsjam.mjs)
-    if (!isDesktopRuntime()) {
-      tasks.push((async () => {
-        try {
-          const data = await fetchGpsInterference();
-          if (!data) {
-            ingestGpsJammingForCII([]);
-            this.ctx.map?.setLayerReady('gpsJamming', false);
-            return;
-          }
-          ingestGpsJammingForCII(data.hexes);
-          if (this.ctx.mapLayers.gpsJamming) {
-            this.ctx.map?.setGpsJamming(data.hexes);
-            this.ctx.map?.setLayerReady('gpsJamming', data.hexes.length > 0);
-          }
-          this.ctx.statusPanel?.updateFeed('GPS Jam', { status: 'ok', itemCount: data.hexes.length });
-          dataFreshness.recordUpdate('gpsjam', data.hexes.length);
-        } catch (error) {
+    // GPS/GNSS jamming (seeded by Wingbits API via fetch-gpsjam.mjs)
+    tasks.push((async () => {
+      try {
+        const data = await fetchGpsInterference();
+        if (!data) {
+          ingestGpsJammingForCII([]);
           this.ctx.map?.setLayerReady('gpsJamming', false);
-          this.ctx.statusPanel?.updateFeed('GPS Jam', { status: 'error' });
-          dataFreshness.recordError('gpsjam', String(error));
+          return;
         }
-      })());
-    }
+        ingestGpsJammingForCII(data.hexes);
+        if (this.ctx.mapLayers.gpsJamming) {
+          this.ctx.map?.setGpsJamming(data.hexes);
+          this.ctx.map?.setLayerReady('gpsJamming', data.hexes.length > 0);
+        }
+        this.ctx.statusPanel?.updateFeed('GPS Jam', { status: 'ok', itemCount: data.hexes.length });
+        dataFreshness.recordUpdate('gpsjam', data.hexes.length);
+      } catch (error) {
+        this.ctx.map?.setLayerReady('gpsJamming', false);
+        this.ctx.statusPanel?.updateFeed('GPS Jam', { status: 'error' });
+        dataFreshness.recordError('gpsjam', String(error));
+      }
+    })());
 
     await Promise.allSettled(tasks);
 

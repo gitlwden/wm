@@ -211,13 +211,13 @@ const isHappyVariant = SITE_VARIANT === 'happy';
 // Zoom thresholds for layer visibility and labels (matches old Map.ts)
 // Zoom-dependent layer visibility and labels
 const LAYER_ZOOM_THRESHOLDS: Partial<Record<keyof MapLayers, { minZoom: number; showLabels?: number }>> = {
-  bases: { minZoom: 3, showLabels: 5 },
+  bases: { minZoom: 1, showLabels: 5 },
   nuclear: { minZoom: 3 },
   conflicts: { minZoom: 1, showLabels: 3 },
   economic: { minZoom: 3 },
   natural: { minZoom: 1, showLabels: 2 },
   datacenters: { minZoom: 5 },
-  irradiators: { minZoom: 4 },
+  irradiators: { minZoom: 1 },
   spaceports: { minZoom: 3 },
   gulfInvestments: { minZoom: 2, showLabels: 5 },
 };
@@ -6196,7 +6196,7 @@ export class DeckGLMap {
     const mapLayers = this.state.layers;
     if (!mapLayers.bases) return;
     const zoom = this.maplibreMap.getZoom();
-    if (zoom < 3) return;
+    if (zoom < 1) return;
     const bounds = this.maplibreMap.getBounds();
     const sw = bounds.getSouthWest();
     const ne = bounds.getNorthEast();
