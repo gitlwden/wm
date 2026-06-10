@@ -2690,8 +2690,6 @@ body.live-news-fullscreen-active #mapSection.live-news-fullscreen .map-container
   min-height: 0 !important;
 }
 
-}
-
 /* Hide map overlays and sibling panels behind fullscreen panel (#829, #859) */
 body.live-news-fullscreen-active .layer-toggles,
 body.live-news-fullscreen-active .map-legend {
