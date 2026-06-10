@@ -431,10 +431,10 @@ export async function clearProMcpTokenNegCache(tokenId: string): Promise<void> {
  * single Redis INCR counter for predictable reset and clean UI copy.").
  *
  * Env-prefixed: when running on a Vercel preview deploy
- * (VERCEL_ENV=preview, with VERCEL_GIT_COMMIT_SHA), the key is prefixed
+ * (CONTEXT=deploy-preview, with COMMIT_REF), the key is prefixed
  * `<env>:<sha8>:<base>` so preview traffic does NOT collide with
  * production counters in the shared Upstash instance. Production
- * (VERCEL_ENV unset or 'production') uses the bare base key — preserves
+ * (CONTEXT unset or 'production') uses the bare base key — preserves
  * the historical wire format.
  *
  * Mirrors `server/_shared/redis.ts`'s `prefixKey` convention; replicated
@@ -459,13 +459,13 @@ export function dailyCounterKey(userId: string, date?: Date): string {
 
 /**
  * Compute the env-prefix at call time (NOT memoized — tests may mutate
- * VERCEL_ENV between calls; the cost is one trivial string read).
+ * CONTEXT between calls; the cost is one trivial string read).
  * Production / unset → empty string. Mirrors `redis.ts::getKeyPrefix`.
  */
 function envPrefix(): string {
-  const env = process.env.VERCEL_ENV;
+  const env = process.env.CONTEXT;
   if (!env || env === 'production') return '';
-  const sha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) || 'dev';
+  const sha = process.env.COMMIT_REF?.slice(0, 8) || 'dev';
   return `${env}:${sha}:`;
 }
 

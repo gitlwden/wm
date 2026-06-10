@@ -1086,11 +1086,11 @@ export default defineConfig(({ mode }) => {
     cacheDir,
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
-      // Vercel sets VERCEL_GIT_COMMIT_SHA on production + preview builds.
+      // Netlify sets COMMIT_REF on production + preview builds.
       // Local `vite build` falls back to 'dev' — installStaleBundleCheck
       // detects the marker and skips the comparison so dev tabs don't
       // reload on every focus.
-      __BUILD_HASH__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev'),
+      __BUILD_HASH__: JSON.stringify(process.env.COMMIT_REF ?? 'dev'),
     },
     plugins: [
       // Widget Agent — Full implementation with LLM support (no relay needed)
@@ -1396,7 +1396,7 @@ export default defineConfig(({ mode }) => {
           this.emitFile({
             type: 'asset',
             fileName: 'build-hash.txt',
-            source: process.env.VERCEL_GIT_COMMIT_SHA ?? 'dev',
+            source: process.env.COMMIT_REF ?? 'dev',
           });
         },
       },

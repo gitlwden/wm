@@ -85,8 +85,8 @@ function buildEnvelope(err, ctx, runtimeCfg) {
     timestamp,
     level,
     platform: runtimeCfg.platform,
-    environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? 'production',
-    release: process.env.VERCEL_GIT_COMMIT_SHA,
+    environment: process.env.CONTEXT ?? process.env.NODE_ENV ?? 'production',
+    release: process.env.COMMIT_REF,
     exception: {
       values: [
         {

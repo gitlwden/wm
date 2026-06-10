@@ -36,7 +36,7 @@ export async function verifyTurnstile({
   if (!secret) {
     if (missingSecretPolicy === 'allow') return true;
 
-    const isDevelopment = (process.env.VERCEL_ENV ?? 'development') === 'development';
+    const isDevelopment = (process.env.CONTEXT ?? 'development') === 'development';
     if (isDevelopment) return true;
 
     console.error(`${logPrefix} TURNSTILE_SECRET_KEY not set in production, rejecting`);

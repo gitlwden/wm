@@ -14,9 +14,9 @@ const BLOCKLIST_PREFIXES = ['rl:', '__'];
 const DURABLE_DATA_PREFIXES = ['military:bases:', 'conflict:iran-events:', 'conflict:ucdp-events:'];
 
 function getKeyPrefix() {
-  const env = process.env.VERCEL_ENV;
+  const env = process.env.CONTEXT;
   if (!env || env === 'production') return '';
-  const sha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) || 'dev';
+  const sha = process.env.COMMIT_REF?.slice(0, 8) || 'dev';
   return `${env}:${sha}:`;
 }
 

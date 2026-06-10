@@ -1,0 +1,113 @@
+# Netlify configuration — migrated from vercel.json
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+  ignore = "git diff --quiet HEAD^ HEAD -- src/ api/ server/ public/ package.json vite.config.ts"
+
+# SPA fallback — all non-API/static paths serve index.html
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api-gateway"
+  status = 200
+
+[[redirects]]
+  from = "/docs/*"
+  to = "https://worldmonitor.mintlify.dev/docs/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/pro"
+  to = "/pro/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/mcp"
+  to = "/.netlify/functions/api-gateway"
+  status = 200
+
+[[redirects]]
+  from = "/mcp-grant"
+  to = "/mcp-grant.html"
+  status = 200
+
+[[redirects]]
+  from = "/oauth/token"
+  to = "/.netlify/functions/api-gateway"
+  status = 200
+
+[[redirects]]
+  from = "/oauth/register"
+  to = "/.netlify/functions/api-gateway"
+  status = 200
+
+[[redirects]]
+  from = "/oauth/authorize"
+  to = "/.netlify/functions/api-gateway"
+  status = 200
+
+[[redirects]]
+  from = "/oauth/authorize-pro"
+  to = "/.netlify/functions/api-gateway"
+  status = 200
+
+[[redirects]]
+  from = "/.well-known/oauth-protected-resource"
+  to = "/.netlify/functions/api-gateway"
+  status = 200
+
+[[redirects]]
+  from = "/docs"
+  to = "/docs/documentation"
+  status = 302
+
+[[redirects]]
+  from = "/security.txt"
+  to = "/.well-known/security.txt"
+  status = 301
+
+# SPA catch-all — must be last
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# ─── Headers ─────────────────────────────────────────
+
+[[headers]]
+  for = "/mcp"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization, X-WorldMonitor-Key"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/map-styles/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/data/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/textures/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+[[headers]]
+  for = "/favico/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# ─── Functions ───────────────────────────────────────
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["api/_*.js", "api/_*.ts", "server/**/*.ts", "server/**/*.js", "src/generated/**/*.ts"]

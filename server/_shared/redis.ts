@@ -38,9 +38,9 @@ function hasRemoteRedisConfig(): boolean {
  * share the same Upstash Redis instance (M-6 fix).
  */
 function getKeyPrefix(): string {
-  const env = process.env.VERCEL_ENV; // 'production' | 'preview' | 'development'
+  const env = process.env.CONTEXT; // 'production' | 'deploy-preview' | 'branch-deploy' | 'dev'
   if (!env || env === 'production') return '';
-  const sha = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) || 'dev';
+  const sha = process.env.COMMIT_REF?.slice(0, 8) || 'dev';
   return `${env}:${sha}:`;
 }
 
@@ -52,7 +52,7 @@ function prefixKey(key: string): string {
 }
 
 // Test-only: invalidate the memoized key prefix so a test that mutates
-// process.env.VERCEL_ENV / VERCEL_GIT_COMMIT_SHA sees the new value on the
+// process.env.CONTEXT / COMMIT_REF sees the new value on the
 // next read. No production caller should ever invoke this.
 export function __resetKeyPrefixCacheForTests(): void {
   cachedPrefix = undefined;
