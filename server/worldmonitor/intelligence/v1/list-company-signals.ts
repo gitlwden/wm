@@ -5,7 +5,7 @@
  * mappings and keyword co-occurrence in third-party discussion threads. The
  * upstream sources verified neither ownership nor authorship, so outputs were
  * structurally indistinguishable from fabricated intelligence. See issues
- * #3754 and #3755 (koala73/worldmonitor) for the full diagnosis.
+ * #3754 and #3755 (jlulwd/wm) for the full diagnosis.
  *
  * The route is preserved (proto contract, OpenAPI op, gateway entry) so
  * existing callers keep working. The handler now returns an empty envelope.

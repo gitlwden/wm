@@ -531,7 +531,7 @@ function summary(relayUrl) {
   console.log('  Deployment Complete');
   console.log(`${'═'.repeat(60)}\n`);
 
-  console.log(`  GitHub:    https://github.com/gtlwd/${CFG.repoName}`);
+  console.log(`  GitHub:    https://github.com/jlulwd/${CFG.repoName}`);
   console.log(`  Vercel:    https://${CFG.repoName}.vercel.app`);
   if (CFG.customDomain) console.log(`  Custom:    https://${CFG.customDomain}`);
   console.log(`  Upstash:   ${ENV.UPSTASH_REDIS_REST_URL}`);

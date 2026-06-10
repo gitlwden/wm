@@ -98,3 +98,6 @@ git_command.txt
 .vercel
 
 .vercel
+
+# Local Netlify folder
+.netlify

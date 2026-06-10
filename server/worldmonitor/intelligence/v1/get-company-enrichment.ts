@@ -7,7 +7,7 @@
  * search, third-party discussion mentions). No ownership verification, no
  * filer-CIK match — any domain whose label collapsed to an unrelated org slug
  * was attributed someone else's footprint. Same anti-pattern as issue #3754
- * (koala73/worldmonitor) which only named the sibling list-company-signals
+ * (jlulwd/wm) which only named the sibling list-company-signals
  * route; this handler had the identical bug.
  *
  * The route is preserved (proto contract, OpenAPI op, gateway entry) so

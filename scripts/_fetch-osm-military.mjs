@@ -40,7 +40,7 @@ out center;
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'worldmonitor/2.8.0 (https://github.com/gtlwd/wm)',
+      'User-Agent': 'worldmonitor/2.8.0 (https://github.com/jlulwd/wm)',
     },
     body: 'data=' + encodeURIComponent(query),
     signal: AbortSignal.timeout(200_000),
