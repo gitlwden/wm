@@ -5,7 +5,7 @@
   publish = "dist"
   ignore = "git diff --quiet HEAD^ HEAD -- src/ api/ server/ public/ package.json vite.config.ts"
 
-# SPA fallback — all non-API/static paths serve index.html
+# API catch-all — single gateway function handles all routes
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api-gateway"

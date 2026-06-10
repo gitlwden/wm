@@ -148,8 +148,28 @@ const allRoutes = [
 
 const gateway = createDomainGateway(allRoutes);
 
+// Standalone route handlers (not part of the RPC gateway)
+const STANDALONE_ROUTES: Record<string, () => Promise<{ default: (req: Request) => Promise<Response> }>> = {
+  '/api/bootstrap': () => import('../api/bootstrap.js'),
+  '/api/health': () => import('../api/health.js'),
+  '/api/version': () => import('../api/version.js'),
+  '/api/gpsjam': () => import('../api/gpsjam.js'),
+  '/api/wm-session': () => import('../api/wm-session.js'),
+};
+
 // Netlify Function handler
 export default async (req: Request): Promise<Response> => {
+  const url = new URL(req.url);
+  const pathname = url.pathname.replace(/\/+$/, '') || '/';
+
+  // Check standalone routes first
+  const standaloneImport = STANDALONE_ROUTES[pathname];
+  if (standaloneImport) {
+    const mod = await standaloneImport();
+    return mod.default(req);
+  }
+
+  // Fall through to gateway for all RPC routes
   return gateway(req);
 };
 
