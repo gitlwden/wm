@@ -274,7 +274,7 @@ Register in `api/mcp.ts`:
 
 ---
 
-## Frontend Variant: `health.worldmonitor.app`
+## Frontend Variant: `health.wm.vercel.app`
 
 Add to `src/config/variant.ts`:
 
@@ -315,4 +315,4 @@ health: {
 6. **`seed-vaccination-coverage.mjs`** — WHO immunization API (weekly, lowest priority)
 7. **Proto + handler additions** for each new RPC
 8. **MCP tool registration** `get_health_data`
-9. **Hostname variant config** `health.worldmonitor.app`
+9. **Hostname variant config** `health.wm.vercel.app`

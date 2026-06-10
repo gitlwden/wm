@@ -349,7 +349,7 @@ The 30-year normal fetch should run as a separate monthly seed and cache in `cli
 
 ---
 
-## Frontend Variant: `climate.worldmonitor.app`
+## Frontend Variant: `climate.wm.vercel.app`
 
 Add to `src/config/variant.ts`:
 
@@ -376,4 +376,4 @@ climate: {
 7. **`seed-climate-zone-normals.mjs`** — one-time + monthly refresh, feeds anomaly baseline
 8. **Proto + handler additions** for each new RPC
 9. **Update MCP tool** `get_climate_data` with new cache keys
-10. **Hostname variant config** `climate.worldmonitor.app`
+10. **Hostname variant config** `climate.wm.vercel.app`

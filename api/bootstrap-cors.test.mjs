@@ -4,7 +4,7 @@ import handler from './bootstrap.js';
 import { issueSessionToken } from './_session.js';
 
 function makePreflight(origin) {
-  return new Request('https://api.worldmonitor.app/api/bootstrap?keys=techReadiness', {
+  return new Request('https://api.wm.vercel.app/api/bootstrap?keys=techReadiness', {
     method: 'OPTIONS',
     headers: {
       origin,
@@ -14,10 +14,10 @@ function makePreflight(origin) {
 }
 
 test('bootstrap preflight is compatible with credentialed browser fetches', async () => {
-  const resp = await handler(makePreflight('https://www.worldmonitor.app'));
+  const resp = await handler(makePreflight('https://wm.vercel.app'));
 
   assert.equal(resp.status, 204);
-  assert.equal(resp.headers.get('access-control-allow-origin'), 'https://www.worldmonitor.app');
+  assert.equal(resp.headers.get('access-control-allow-origin'), 'https://wm.vercel.app');
   assert.equal(resp.headers.get('access-control-allow-credentials'), 'true');
   assert.equal(resp.headers.get('vary'), 'Origin');
 });
@@ -27,16 +27,16 @@ test('bootstrap GET response is compatible with credentialed browser fetches', a
   process.env.WM_SESSION_SECRET = 'test-secret-for-bootstrap-cors-guardrail';
   try {
     const { token } = await issueSessionToken();
-    const resp = await handler(new Request('https://api.worldmonitor.app/api/bootstrap?keys=techReadiness', {
+    const resp = await handler(new Request('https://api.wm.vercel.app/api/bootstrap?keys=techReadiness', {
       method: 'GET',
       headers: {
-        origin: 'https://www.worldmonitor.app',
+        origin: 'https://wm.vercel.app',
         cookie: `wm-session=${token}`,
       },
     }));
 
     assert.equal(resp.status, 200);
-    assert.equal(resp.headers.get('access-control-allow-origin'), 'https://www.worldmonitor.app');
+    assert.equal(resp.headers.get('access-control-allow-origin'), 'https://wm.vercel.app');
     assert.equal(resp.headers.get('access-control-allow-credentials'), 'true');
     assert.equal(resp.headers.get('vary'), 'Origin');
   } finally {

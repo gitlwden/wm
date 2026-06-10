@@ -32,11 +32,11 @@ function appendHeader(headers, name, value) {
 
 function shouldUseSharedCookieDomain(req) {
   const host = (req.headers.get('host') || new URL(req.url).hostname).toLowerCase();
-  return host === 'worldmonitor.app' || host.endsWith('.worldmonitor.app');
+  return host === 'wm.vercel.app' || host.endsWith('.wm.vercel.app');
 }
 
 function cookieDomainAttribute(req) {
-  return shouldUseSharedCookieDomain(req) ? '; Domain=.worldmonitor.app' : '';
+  return '';
 }
 
 function sessionCookie(req, name, value) {
@@ -44,7 +44,7 @@ function sessionCookie(req, name, value) {
 }
 
 function clearReadableCookie(name) {
-  return `${name}=; Domain=.worldmonitor.app; Path=/; Max-Age=0; Secure; SameSite=Lax`;
+  return `${name}=; Path=/; Max-Age=0; Secure; SameSite=Lax`;
 }
 
 function normalizeLegacyKey(value) {

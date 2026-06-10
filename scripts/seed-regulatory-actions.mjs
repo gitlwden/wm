@@ -10,7 +10,7 @@ const CANONICAL_KEY = 'regulatory:actions:v1';
 const FEED_TIMEOUT_MS = 15_000;
 const TTL_SECONDS = 21600;
 const XML_ACCEPT = 'application/atom+xml, application/rss+xml, application/xml, text/xml, */*';
-const SEC_USER_AGENT = 'WorldMonitor/2.0 (monitor@worldmonitor.app)';
+const SEC_USER_AGENT = 'WorldMonitor/2.0 (monitor@wm.vercel.app)';
 const DEFAULT_FETCH = (...args) => globalThis.fetch(...args);
 const HIGH_KEYWORDS = [
   'enforcement', 'charges', 'charged', 'fraud', 'failure', 'failed bank',

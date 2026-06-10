@@ -5098,7 +5098,7 @@ export class DeckGLMap {
     //   1. Clerk role === 'pro' (subscribeAuthState fires on Clerk changes)
     //   2. Convex entitlement tier >= 1 (onEntitlementChange fires on Convex changes)
     // Subscribing to BOTH covers Dodo subscribers whose Pro flag arrives via
-    // Convex (NOT via Clerk role). User-reported on energy.worldmonitor.app:
+    // Convex (NOT via Clerk role). User-reported on energy wm.vercel.app:
     // "Pro Monthly" in settings UI but Resilience layer still showed the lock
     // because subscribeAuthState alone never fires on Convex transitions.
     //

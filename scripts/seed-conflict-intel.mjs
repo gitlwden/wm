@@ -157,7 +157,7 @@ async function fetchHapiSummary(countryCode) {
   const iso3 = ISO2_TO_ISO3[countryCode];
   if (!iso3) return null;
 
-  const appId = Buffer.from('worldmonitor:monitor@worldmonitor.app').toString('base64');
+  const appId = Buffer.from('worldmonitor:monitor@wm.vercel.app').toString('base64');
   const url = `https://hapi.humdata.org/api/v2/coordination-context/conflict-events?output_format=json&limit=1000&offset=0&app_identifier=${appId}&location_code=${iso3}`;
 
   const resp = await fetch(url, {

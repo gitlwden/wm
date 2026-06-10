@@ -24,7 +24,7 @@ import { loadEnvFile, CHROME_UA } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
-const API_BASE = 'https://api.worldmonitor.app';
+const API_BASE = 'https://api.wm.vercel.app';
 const TIMEOUT = 30_000;
 
 // Defense-in-depth auth — see seed-infra.mjs for the same pattern + rationale.
@@ -36,7 +36,7 @@ function warmPingHeaders() {
   const h = {
     'Content-Type': 'application/json',
     'User-Agent': CHROME_UA,
-    Origin: 'https://worldmonitor.app',
+    Origin: 'https://wm.vercel.app',
   };
   if (RELAY_API_KEY) h['X-WorldMonitor-Key'] = RELAY_API_KEY;
   return h;

@@ -4,10 +4,10 @@ info:
     description: Unified OpenAPI bundle spanning all WorldMonitor services.
     contact:
         name: WorldMonitor
-        email: support@worldmonitor.app
+        email: support@wm.vercel.app
     version: 1.0.0
 servers:
-    - url: https://api.worldmonitor.app
+    - url: https://api.wm.vercel.app
 paths:
     /api/aviation/v1/list-airport-delays:
         get:

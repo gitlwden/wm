@@ -73,7 +73,7 @@ Relevant background in the repository:
 ```bash
 # Online (hits the live API; requires WORLDMONITOR_API_KEY)
 WORLDMONITOR_API_KEY=wm_xxx \
-API_BASE=https://api.worldmonitor.app \
+API_BASE=https://api.wm.vercel.app \
 BASELINE=docs/snapshots/resilience-ranking-live-pre-cohort-audit-2026-04-24.json \
 OUT=/tmp/cohort-audit-$(date +%Y-%m-%d).md \
 node scripts/audit-resilience-cohorts.mjs
@@ -88,7 +88,7 @@ Recommended environment variables:
 
 | Var | Default | Notes |
 |---|---|---|
-| `API_BASE` | (required unless FIXTURE set) | e.g. `https://api.worldmonitor.app` |
+| `API_BASE` | (required unless FIXTURE set) | e.g. `https://api.wm.vercel.app` |
 | `WORLDMONITOR_API_KEY` | (required unless FIXTURE set) | resilience RPCs are in `PREMIUM_RPC_PATHS` |
 | `FIXTURE` | (empty) | JSON fixture with `{ ranking, scores }` shape — skips all network calls |
 | `BASELINE` | (empty) | Path to a frozen ranking JSON for movers comparison |

@@ -29,7 +29,7 @@
 //     report and decides whether to hold publication.
 //
 // Usage:
-//   WORLDMONITOR_API_KEY=wm_xxx API_BASE=https://api.worldmonitor.app \
+//   WORLDMONITOR_API_KEY=wm_xxx API_BASE=https://api.wm.vercel.app \
 //     node scripts/audit-resilience-cohorts.mjs
 //   WORLDMONITOR_API_KEY=wm_xxx API_BASE=... \
 //     BASELINE=docs/snapshots/resilience-ranking-live-pre-cohort-audit-2026-04-24.json \
@@ -77,7 +77,7 @@ const FIXTURE_PATH = process.env.FIXTURE || '';
 const API_BASE = (process.env.API_BASE || '').replace(/\/$/, '');
 if (!FIXTURE_PATH) {
   if (!API_BASE) {
-    console.error('[audit-resilience-cohorts] API_BASE env var required (e.g. https://api.worldmonitor.app), or FIXTURE=path.json for offline mode');
+    console.error('[audit-resilience-cohorts] API_BASE env var required (e.g. https://api.wm.vercel.app), or FIXTURE=path.json for offline mode');
     process.exit(2);
   }
   if (!process.env.WORLDMONITOR_API_KEY) {

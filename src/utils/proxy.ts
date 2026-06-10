@@ -10,14 +10,14 @@ const RSS_DIRECT_TO_RELAY = import.meta.env.VITE_RSS_DIRECT_TO_RELAY === 'true';
 const RSS_PROXY_BASE = isDev
   ? '' // Dev uses Vite's rssProxyPlugin
   : RSS_DIRECT_TO_RELAY
-    ? 'https://proxy.worldmonitor.app'
+    ? 'https://wm.vercel.app'
     : '';
 
 // Widget agent proxy:
 //   dev       → Vite proxy /widget-agent → local relay (localhost:3004)
 //   desktop   → relay directly (sidecar buffers arrayBuffer() which destroys SSE streaming)
 //   prod web  → relay directly (bypass Vercel edge for testing)
-const WIDGET_RELAY_BASE = 'https://proxy.worldmonitor.app';
+const WIDGET_RELAY_BASE = 'https://wm.vercel.app';
 export function widgetAgentUrl(): string {
   if (isDev) return '/widget-agent';  // Vite proxy handles this
   return `${WIDGET_RELAY_BASE}/widget-agent`;

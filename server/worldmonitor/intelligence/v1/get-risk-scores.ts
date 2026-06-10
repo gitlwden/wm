@@ -841,7 +841,7 @@ export async function getRiskScores(
       // Write seed-meta on every FRESH upstream fetch so /api/health.riskScores
       // stays green from real user traffic, independent of the ais-relay
       // CII warm-ping. Pre-2026-05-02 the warm-ping was the SOLE writer of
-      // this seed-meta — when the relay → api.worldmonitor.app auth path
+      // this seed-meta — when the relay → api.wm.vercel.app auth path
       // broke (all warm-ping types started returning HTTP 401 simultaneously),
       // riskScores was the only key that flipped STALE because cable-health
       // and chokepoints had RPC-side seed-meta writes keeping them fresh

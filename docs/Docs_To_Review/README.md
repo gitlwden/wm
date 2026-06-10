@@ -9,7 +9,7 @@ Files here are internal / archival / pending-audit. They are **not** the source 
 | If you want... | See |
 |---|---|
 | Architecture overview | `/docs/architecture.mdx` |
-| API reference (RPC) | `/docs/api/*.openapi.yaml` + https://docs.worldmonitor.app |
+| API reference (RPC) | `/docs/api/*.openapi.yaml` + https://docs.wm.vercel.app |
 | Non-RPC API endpoints | `/docs/api-{platform,brief,commerce,notifications,shipping-v2,proxies,oauth}.mdx` |
 | MCP server | `/docs/mcp-server.mdx` |
 | External data sources | `/docs/data-sources.mdx` |

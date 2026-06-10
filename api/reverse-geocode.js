@@ -6,7 +6,7 @@ import { readJsonFromUpstash, setCachedData } from './_upstash-json.js';
 export const config = { runtime: 'edge' };
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/reverse';
-const CHROME_UA = 'WorldMonitor/2.0 (https://worldmonitor.app)';
+const CHROME_UA = 'WorldMonitor/2.0 (https://wm.vercel.app)';
 
 export default async function handler(req, ctx) {
   // if (isDisallowedOrigin(req))

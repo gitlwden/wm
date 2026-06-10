@@ -223,7 +223,7 @@ export default async function handler(
       {
         error: 'pro_required',
         message: 'The Brief is available on the Pro plan.',
-        upgradeUrl: 'https://worldmonitor.app/pro',
+        upgradeUrl: 'https://wm.vercel.app/pro',
       },
       403,
       cors,

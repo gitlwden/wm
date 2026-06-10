@@ -68,5 +68,5 @@ OAuth endpoints follow [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rf
 ## Debugging
 
 - Every edge response includes `x-vercel-id` and `x-worldmonitor-deploy` headers — include those when reporting issues.
-- Sentry alerts forward to [status.worldmonitor.app](https://status.worldmonitor.app/).
+- Sentry alerts forward to [status.wm.vercel.app](https://status.wm.vercel.app/).
 - `GET /api/health` and `GET /api/seed-health` show per-seed freshness; a stale seed is the most common root cause of unexpected empty payloads.

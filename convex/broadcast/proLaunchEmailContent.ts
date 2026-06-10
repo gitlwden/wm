@@ -9,14 +9,14 @@
  * separate PR — don't change it inline as part of operational work.
  */
 
-export const PRO_LAUNCH_FROM = "Elie from WorldMonitor <news@worldmonitor.app>";
-export const PRO_LAUNCH_REPLY_TO = "elie@worldmonitor.app";
+export const PRO_LAUNCH_FROM = "Elie from WorldMonitor <news@wm.vercel.app>";
+export const PRO_LAUNCH_REPLY_TO = "elie@wm.vercel.app";
 export const PRO_LAUNCH_SUBJECT = "You waitlisted WorldMonitor PRO. It's now live.";
 
 // Primary CTA destination. UTMs scoped to this campaign so we can attribute
 // conversions in analytics. Update if the upgrade page moves.
 export const PRO_LAUNCH_UPGRADE_URL =
-  "https://worldmonitor.app/pro?utm_source=resend&utm_medium=email&utm_campaign=pro-launch&utm_content=launch-email";
+  "https://wm.vercel.app/pro?utm_source=resend&utm_medium=email&utm_campaign=pro-launch&utm_content=launch-email";
 
 // CAN-SPAM physical address. Required in every commercial email footer.
 // Update if the company physical address changes.
@@ -31,7 +31,7 @@ const UNSUBSCRIBE_TOKEN = "{{{RESEND_UNSUBSCRIBE_URL}}}";
  * deliverability spam-filter input. Should communicate the same value
  * as the HTML version, not be a stripped-down preview of it.
  */
-export const PRO_LAUNCH_TEXT = `I'm Elie, founder of WorldMonitor. PRO launched today (https://worldmonitor.app/pro). I'm writing because you signed up a month ago, when the product was smaller and different.
+export const PRO_LAUNCH_TEXT = `I'm Elie, founder of WorldMonitor. PRO launched today (https://wm.vercel.app/pro). I'm writing because you signed up a month ago, when the product was smaller and different.
 
 Here's what it is now.
 
@@ -39,7 +39,7 @@ WorldMonitor stopped being only a real-time monitoring dashboard, though it stil
 
 The dashboard grew sideways. Conflicts stream live alongside sanctions, regime shifts, GPS jamming, displacement, climate anomalies. Bilateral trade flows, tariff trends, chokepoint indices, route disruption, cost-shock simulations, stability scoring across 137 countries with deep coverage on 40+ indicators. AI stock analysis with price targets, backtesting, a scanner for tickers trending on Reddit. Live aircraft tracking, civilian and military: fighter scrambles over the Taiwan Strait, carrier strike groups in the Persian Gulf, special-ops by callsign, 100+ airports for delays and cascades. Useful when something breaks at 3 a.m. and a price chart won't tell you why.
 
-It grew a dedicated energy variant. energy.worldmonitor.app: live traffic and exposure on the four major shipping chokepoints, tanker positions in real time, 631 oil and gas pipelines mapped, global strategic storage atlas, refinery utilization, retail fuel prices.
+It grew a dedicated energy variant. energy.wm.vercel.app: live traffic and exposure on the four major shipping chokepoints, tanker positions in real time, 631 oil and gas pipelines mapped, global strategic storage atlas, refinery utilization, retail fuel prices.
 
 It grew a new way to interact with it. Describe any visualization in plain language: "crude oil versus gold today," "worst international flight delays right now." The AI builds it as a live widget on your dashboard. Save as many as you want.
 
@@ -51,7 +51,7 @@ Most of it is in the free dashboard. PRO is where the two things you just read a
 
 AI Widget Builder. Plain language, live widget on your dashboard. Save as many as you want.
 
-Native AI context. MCP server plus a 27-endpoint REST API — full docs at https://worldmonitor.app/docs/documentation. Plug it into Claude, ChatGPT, Cursor, or anything you're building.
+Native AI context. MCP server plus a 27-endpoint REST API — full docs at https://wm.vercel.app/docs/documentation. Plug it into Claude, ChatGPT, Cursor, or anything you're building.
 
 Also included:
 - WM Analyst. AI analyst with the full signal stack: ticker, country, sector, sanctions package. Ask it what you'd Google for an hour.
@@ -62,7 +62,7 @@ Also included:
 
 Code EARLYWM30: 30% off any PRO plan, 30 days. If anything above made you think "I'd check this every morning," that's your nudge.
 
-→ Upgrade to PRO: https://worldmonitor.app/pro?utm_source=resend&utm_medium=email&utm_campaign=pro-launch&utm_content=launch-email
+→ Upgrade to PRO: https://wm.vercel.app/pro?utm_source=resend&utm_medium=email&utm_campaign=pro-launch&utm_content=launch-email
 
 If not, reply and tell me what was missing. That's the one I'll act on.
 
@@ -81,17 +81,17 @@ ${PRO_LAUNCH_PHYSICAL_ADDRESS}
  */
 export const PRO_LAUNCH_HTML = `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#ffffff;color:#111;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.6;">
 <div style="max-width:620px;margin:0 auto;padding:32px 24px;">
-<p>I'm Elie, founder of WorldMonitor. <a href="https://worldmonitor.app/pro?utm_source=resend&utm_medium=email&utm_campaign=pro-launch&utm_content=opener" style="color:#0066cc;">PRO launched today</a>. I'm writing because you signed up a month ago, when the product was smaller and different.</p>
+<p>I'm Elie, founder of WorldMonitor. <a href="https://wm.vercel.app/pro?utm_source=resend&utm_medium=email&utm_campaign=pro-launch&utm_content=opener" style="color:#0066cc;">PRO launched today</a>. I'm writing because you signed up a month ago, when the product was smaller and different.</p>
 <p>Here's what it is now.</p>
 <p>WorldMonitor stopped being only a real-time monitoring dashboard, though it still excels at that. It's also a research tool now. It tracks what's happening, and it forecasts what happens next: scenario probabilities on conflicts, market reactions to headlines, supply-chain shock paths, country stability trajectories. You read the present and stress-test the future in the same place.</p>
 <p><strong>The dashboard grew sideways.</strong> Conflicts stream live alongside sanctions, regime shifts, GPS jamming, displacement, climate anomalies. Bilateral trade flows, tariff trends, chokepoint indices, route disruption, cost-shock simulations, stability scoring across 137 countries with deep coverage on 40+ indicators. AI stock analysis with price targets, backtesting, a scanner for tickers trending on Reddit. Live aircraft tracking, civilian and military: fighter scrambles over the Taiwan Strait, carrier strike groups in the Persian Gulf, special-ops by callsign, 100+ airports for delays and cascades. Useful when something breaks at 3 a.m. and a price chart won't tell you why.</p>
-<p><strong>It grew a dedicated energy variant.</strong> <a href="https://energy.worldmonitor.app" style="color:#0066cc;">energy.worldmonitor.app</a>: live traffic and exposure on the four major shipping chokepoints, tanker positions in real time, 631 oil and gas pipelines mapped, global strategic storage atlas, refinery utilization, retail fuel prices.</p>
+<p><strong>It grew a dedicated energy variant.</strong> <a href="https://energy.wm.vercel.app" style="color:#0066cc;">energy.wm.vercel.app</a>: live traffic and exposure on the four major shipping chokepoints, tanker positions in real time, 631 oil and gas pipelines mapped, global strategic storage atlas, refinery utilization, retail fuel prices.</p>
 <p><strong>It grew a new way to interact with it.</strong> Describe any visualization in plain language: <em>"crude oil versus gold today," "worst international flight delays right now."</em> The AI builds it as a live widget on your dashboard. Save as many as you want.</p>
 <p><strong>And it became something your AI can use.</strong> WorldMonitor is accessible via REST API and MCP server. Connect it to Claude, ChatGPT, or Cursor in three minutes, and 28 live data tools become available inside your AI chat. Ask Claude <em>"what's happening in the Taiwan Strait right now"</em> and it pulls real-time data instead of training-set memories.</p>
 <p>More than half of this didn't exist 45 days ago. The <a href="https://github.com/koala73/worldmonitor" style="color:#0066cc;">open-source repo</a> crossed 50,000 GitHub stars in the same window. That's the build pace.</p>
 <p>Most of it is in the free dashboard. PRO is where the two things you just read about earn their keep:</p>
 <p><strong>AI Widget Builder.</strong> Plain language, live widget on your dashboard. Save as many as you want.</p>
-<p><strong>Native AI context.</strong> MCP server plus a 27-endpoint REST API — <a href="https://worldmonitor.app/docs/documentation" style="color:#0066cc;">full docs</a>. Plug it into Claude, ChatGPT, Cursor, or anything you're building.</p>
+<p><strong>Native AI context.</strong> MCP server plus a 27-endpoint REST API — <a href="https://wm.vercel.app/docs/documentation" style="color:#0066cc;">full docs</a>. Plug it into Claude, ChatGPT, Cursor, or anything you're building.</p>
 <p>Also included:</p>
 <ul style="padding-left:20px;">
 <li><strong>WM Analyst.</strong> AI analyst with the full signal stack: ticker, country, sector, sanctions package. Ask it what you'd Google for an hour.</li>
@@ -102,7 +102,7 @@ export const PRO_LAUNCH_HTML = `<!DOCTYPE html><html><body style="margin:0;paddi
 </ul>
 <p>Code <strong>EARLYWM30</strong>: 30% off any PRO plan, 30 days. If anything above made you think <em>"I'd check this every morning,"</em> that's your nudge.</p>
 <p style="margin:24px 0;text-align:center;">
-<a href="https://worldmonitor.app/pro?utm_source=resend&utm_medium=email&utm_campaign=pro-launch&utm_content=cta-button" style="display:inline-block;background:#111;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:600;">Upgrade to PRO with EARLYWM30 →</a>
+<a href="https://wm.vercel.app/pro?utm_source=resend&utm_medium=email&utm_campaign=pro-launch&utm_content=cta-button" style="display:inline-block;background:#111;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:6px;font-weight:600;">Upgrade to PRO with EARLYWM30 →</a>
 </p>
 <p>If not, reply and tell me what was missing. That's the one I'll act on.</p>
 <p>Elie</p>

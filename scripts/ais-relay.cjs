@@ -3438,7 +3438,7 @@ const CLASSIFY_LLM_PROVIDERS = [
     envKey: 'OPENROUTER_API_KEY',
     apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
     model: 'google/gemini-2.5-flash',
-    headers: (key) => ({ Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://worldmonitor.app', 'X-Title': 'World Monitor', 'User-Agent': CHROME_UA }),
+    headers: (key) => ({ Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://wm.vercel.app', 'X-Title': 'World Monitor', 'User-Agent': CHROME_UA }),
     timeout: 30000,
   },
 ];
@@ -3509,7 +3509,7 @@ async function classifyFetchLlm(titles) {
 let classifyInFlight = false;
 
 async function seedClassifyForVariant(variant, seenTitles) {
-  const digestUrl = `https://api.worldmonitor.app/api/news/v1/list-feed-digest?variant=${variant}&lang=en`;
+  const digestUrl = `https://api.wm.vercel.app/api/news/v1/list-feed-digest?variant=${variant}&lang=en`;
   let digest;
   try {
     const resp = await new Promise((resolve, reject) => {
@@ -3743,7 +3743,7 @@ async function startClassifySeedLoop() {
 // so service statuses are always cached (TTL is 30 min).
 // ─────────────────────────────────────────────────────────────
 const SERVICE_STATUSES_SEED_INTERVAL_MS = 15 * 60 * 1000; // 15 min (TTL/2)
-const SERVICE_STATUSES_RPC_URL = 'https://api.worldmonitor.app/api/infrastructure/v1/list-service-statuses';
+const SERVICE_STATUSES_RPC_URL = 'https://api.wm.vercel.app/api/infrastructure/v1/list-service-statuses';
 
 async function seedServiceStatuses() {
   try {
@@ -3752,7 +3752,7 @@ async function seedServiceStatuses() {
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': CHROME_UA,
-        Origin: 'https://worldmonitor.app',
+        Origin: 'https://wm.vercel.app',
       },
       body: '{}',
       signal: AbortSignal.timeout(60_000),
@@ -4317,10 +4317,10 @@ function startTheaterPostureSeedLoop() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Warm-ping shared auth — relay → api.worldmonitor.app
+// Warm-ping shared auth — relay → api.wm.vercel.app
 //
-// All warm-pings call api.worldmonitor.app/api/* edge functions. Pre-2026-05-02
-// these used Origin-trust alone (the relay sent `Origin: https://worldmonitor.app`
+// All warm-pings call api.wm.vercel.app/api/* edge functions. Pre-2026-05-02
+// these used Origin-trust alone (the relay sent `Origin: https://wm.vercel.app`
 // which `api/_api-key.js::validateApiKey` accepts via BROWSER_ORIGIN_PATTERNS).
 // On 2026-05-02 ALL three warm-pings (CII + Chokepoints + CableHealth) started
 // returning HTTP 401 simultaneously despite the relay sending the correct
@@ -4351,7 +4351,7 @@ if (!RELAY_API_KEY) {
 function warmPingHeaders(extra = {}) {
   const h = {
     'User-Agent': CHROME_UA,
-    Origin: 'https://worldmonitor.app',
+    Origin: 'https://wm.vercel.app',
     ...extra,
   };
   if (RELAY_API_KEY) h['X-WorldMonitor-Key'] = RELAY_API_KEY;
@@ -4364,7 +4364,7 @@ function warmPingHeaders(extra = {}) {
 // The RPC handler itself refreshes the stale key on every call.
 // ─────────────────────────────────────────────────────────────
 const CII_WARM_PING_INTERVAL_MS = 8 * 60 * 1000; // 8 min (live cache TTL is 10 min)
-const CII_RPC_URL = 'https://api.worldmonitor.app/api/intelligence/v1/get-risk-scores';
+const CII_RPC_URL = 'https://api.wm.vercel.app/api/intelligence/v1/get-risk-scores';
 
 async function seedCiiWarmPing() {
   try {
@@ -4402,7 +4402,7 @@ function startCiiWarmPingLoop() {
 // Interval matches health.js maxStaleMin (60 min) with a 2× margin.
 // ─────────────────────────────────────────────────────────────
 const CHOKEPOINT_WARM_PING_INTERVAL_MS = 30 * 60 * 1000; // 30 min
-const CHOKEPOINT_RPC_URL = 'https://api.worldmonitor.app/api/supply-chain/v1/get-chokepoint-status';
+const CHOKEPOINT_RPC_URL = 'https://api.wm.vercel.app/api/supply-chain/v1/get-chokepoint-status';
 
 async function seedChokepointWarmPing() {
   try {
@@ -4440,7 +4440,7 @@ function startChokepointWarmPingLoop() {
 // seed-meta on every live fetch; we just need to call it regularly.
 // ─────────────────────────────────────────────────────────────
 const CABLE_HEALTH_WARM_PING_INTERVAL_MS = 30 * 60 * 1000; // 30 min
-const CABLE_HEALTH_RPC_URL = 'https://api.worldmonitor.app/api/infrastructure/v1/get-cable-health';
+const CABLE_HEALTH_RPC_URL = 'https://api.wm.vercel.app/api/infrastructure/v1/get-cable-health';
 
 async function seedCableHealthWarmPing() {
   try {
@@ -5775,7 +5775,7 @@ async function writeSocialVelocityHealthyMeta(recordCount) {
 async function fetchRedditHot(subreddit, failures = []) {
   const url = `https://www.reddit.com/r/${subreddit}/hot.json?limit=25&raw_json=1`;
   const resp = await fetch(url, {
-    headers: { Accept: 'application/json', 'User-Agent': 'WorldMonitor/1.0 (contact: info@worldmonitor.app)' },
+    headers: { Accept: 'application/json', 'User-Agent': 'WorldMonitor/1.0 (contact: info@wm.vercel.app)' },
     signal: AbortSignal.timeout(10000),
   });
   if (!resp.ok) {
@@ -6367,10 +6367,10 @@ const DODO_PRODUCT_IDS = [
 ];
 
 const DODO_TIER_CONFIG = {
-  free: { name: 'Free', description: 'Get started with the essentials', features: ['Core dashboard panels', 'Global news feed', 'Earthquake & weather alerts', 'Basic map view'], cta: 'Get Started', href: 'https://worldmonitor.app', highlighted: false },
+  free: { name: 'Free', description: 'Get started with the essentials', features: ['Core dashboard panels', 'Global news feed', 'Earthquake & weather alerts', 'Basic map view'], cta: 'Get Started', href: 'https://wm.vercel.app', highlighted: false },
   pro: { name: 'Pro', description: 'Full intelligence dashboard', features: ['Everything in Free', 'AI stock analysis & backtesting', 'Daily market briefs', 'Military & geopolitical tracking', 'Custom widget builder', 'MCP data connectors', 'Priority data refresh'], highlighted: true },
   api_starter: { name: 'API', description: 'Programmatic access to intelligence data', features: ['REST API access', 'Real-time data streams', '1,000 requests/day', 'Webhook notifications', 'Custom data exports'], highlighted: false },
-  enterprise: { name: 'Enterprise', description: 'Custom solutions for organizations', features: ['Everything in Pro + API', 'Unlimited API requests', 'Dedicated support', 'Custom integrations', 'SLA guarantee', 'On-premise option'], cta: 'Contact Sales', href: 'mailto:enterprise@worldmonitor.app', highlighted: false },
+  enterprise: { name: 'Enterprise', description: 'Custom solutions for organizations', features: ['Everything in Pro + API', 'Unlimited API requests', 'Dedicated support', 'Custom integrations', 'SLA guarantee', 'On-premise option'], cta: 'Contact Sales', href: 'mailto:enterprise@wm.vercel.app', highlighted: false },
 };
 
 const DODO_PRODUCT_META = {
@@ -8511,7 +8511,7 @@ function handleWorldBankRequest(req, res) {
   const request = https.get(wbUrl, {
     headers: {
       'Accept': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (compatible; WorldMonitor/1.0; +https://worldmonitor.app)',
+      'User-Agent': 'Mozilla/5.0 (compatible; WorldMonitor/1.0; +https://wm.vercel.app)',
     },
     timeout: 15000,
   }, (response) => {
@@ -9242,9 +9242,9 @@ function handleNotamProxyRequest(req, res) {
 
 // CORS origin allowlist — only our domains can use this relay
 const ALLOWED_ORIGINS = [
-  'https://worldmonitor.app',
-  'https://tech.worldmonitor.app',
-  'https://finance.worldmonitor.app',
+  'https://wm.vercel.app',
+  'https://tech.wm.vercel.app',
+  'https://finance.wm.vercel.app',
   'http://localhost:5173',   // Vite dev
   'http://localhost:5174',   // Vite dev alt port
   'http://localhost:4173',   // Vite preview
@@ -9255,10 +9255,10 @@ const ALLOWED_ORIGINS = [
 function getCorsOrigin(req) {
   const origin = req.headers.origin || '';
   if (ALLOWED_ORIGINS.includes(origin)) return origin;
-  // Wildcard: any *.worldmonitor.app subdomain (for variant subdomains)
+  // Wildcard: any *.wm.vercel.app subdomain (for variant subdomains)
   try {
     const url = new URL(origin);
-    if (url.hostname.endsWith('.worldmonitor.app') && url.protocol === 'https:') return origin;
+    if (url.hostname.endsWith('.wm.vercel.app') && url.protocol === 'https:') return origin;
   } catch { /* invalid origin — fall through */ }
   // Optional: allow Vercel preview deployments when explicitly enabled.
   if (ALLOW_VERCEL_PREVIEW_ORIGINS && origin.endsWith('.vercel.app')) return origin;
@@ -11233,7 +11233,7 @@ async function handleWidgetAgentRequest(req, res) {
           }
 
           try {
-            const url = new URL(endpoint, 'https://api.worldmonitor.app');
+            const url = new URL(endpoint, 'https://api.wm.vercel.app');
             for (const [k, v] of Object.entries(params)) {
               url.searchParams.set(k, String(v));
             }

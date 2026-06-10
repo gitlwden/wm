@@ -9,7 +9,7 @@ WorldMonitor has **three** authentication modes. Which one applies depends on ho
 
 | Mode | Header | Used by | Trusted on which endpoints? |
 |------|--------|---------|------------------------------|
-| **Browser origin** | `Origin: https://www.worldmonitor.app` (browser-set) | Dashboard, desktop app | Most public endpoints — but **not** `forceKey: true` routes. |
+| **Browser origin** | `Origin: https://wm.vercel.app` (browser-set) | Dashboard, desktop app | Most public endpoints — but **not** `forceKey: true` routes. |
 | **API key** | `X-WorldMonitor-Key: wm_live_...` | Server-to-server, scripts, SDKs | All endpoints, including `forceKey: true`. |
 | **OAuth bearer** | `Authorization: Bearer <oauth-token>` | MCP clients (Claude, Cursor, Inspector) | `/api/mcp`. The handler also accepts a direct `X-WorldMonitor-Key` in lieu of an OAuth token — see [MCP](/mcp-server#authentication). |
 | **Clerk session JWT** | `Authorization: Bearer <clerk-jwt>` | Authenticated browser users | User-specific routes: `/api/latest-brief`, `/api/user-prefs`, `/api/notification-channels`, `/api/brief/share-url`, etc. |
@@ -35,7 +35,7 @@ CORS and `validateApiKey` together decide whether a given `Origin` is trusted. T
 See [CORS](/cors) for the origin patterns.
 
 <Warning>
-**A Cloudflare Worker** (`api-cors-preflight`) is the authoritative CORS handler for `api.worldmonitor.app` — it overrides `_cors.js` and `vercel.json`. If you're changing origin rules, change them in the Cloudflare dashboard.
+**A Cloudflare Worker** (`api-cors-preflight`) is the authoritative CORS handler for `api.wm.vercel.app` — it overrides `_cors.js` and `vercel.json`. If you're changing origin rules, change them in the Cloudflare dashboard.
 </Warning>
 
 ## API key mode

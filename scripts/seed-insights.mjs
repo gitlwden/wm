@@ -136,7 +136,7 @@ const LLM_PROVIDERS = [
     envKey: 'OPENROUTER_API_KEY',
     apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
     model: 'google/gemini-2.5-flash',
-    headers: (key) => ({ 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://worldmonitor.app', 'X-Title': 'World Monitor', 'User-Agent': CHROME_UA }),
+    headers: (key) => ({ 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://wm.vercel.app', 'X-Title': 'World Monitor', 'User-Agent': CHROME_UA }),
     timeout: 20_000,
   },
 ];
@@ -256,10 +256,10 @@ function buildImportanceObservability(clusters, topStories) {
 }
 
 async function warmDigestCache() {
-  const apiBase = process.env.API_BASE_URL || 'https://api.worldmonitor.app';
+  const apiBase = process.env.API_BASE_URL || 'https://api.wm.vercel.app';
   const headers = {
     'User-Agent': CHROME_UA,
-    Origin: 'https://worldmonitor.app',
+    Origin: 'https://wm.vercel.app',
   };
   if (RELAY_API_KEY) headers['X-WorldMonitor-Key'] = RELAY_API_KEY;
   try {

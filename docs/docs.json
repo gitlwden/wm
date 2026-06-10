@@ -6,18 +6,18 @@
   "logo": {
     "dark": "/logo.png",
     "light": "/logo.png",
-    "href": "https://www.worldmonitor.app"
+    "href": "https://wm.vercel.app"
   },
   "favicon": "/favicon.png",
   "seo": {
     "metatags": {
-      "og:image": "https://www.worldmonitor.app/favico/og-image.png",
+      "og:image": "https://wm.vercel.app/favico/og-image.png",
       "og:site_name": "World Monitor Documentation",
       "og:type": "website",
       "og:locale": "en_US",
       "twitter:card": "summary_large_image",
       "twitter:site": "@worldmonitorai",
-      "twitter:image": "https://www.worldmonitor.app/favico/og-image.png"
+      "twitter:image": "https://wm.vercel.app/favico/og-image.png"
     }
   },
   "colors": {
@@ -29,15 +29,15 @@
     "links": [
       {
         "label": "Blog",
-        "href": "https://www.worldmonitor.app/blog"
+        "href": "https://wm.vercel.app/blog"
       },
       {
         "label": "Dashboard",
-        "href": "https://www.worldmonitor.app"
+        "href": "https://wm.vercel.app"
       },
       {
         "label": "Pro",
-        "href": "https://www.worldmonitor.app/pro"
+        "href": "https://wm.vercel.app/pro"
       },
       {
         "label": "GitHub",
@@ -47,7 +47,7 @@
     "primary": {
       "type": "button",
       "label": "Get Early Access",
-      "href": "https://www.worldmonitor.app/pro#waitlist"
+      "href": "https://wm.vercel.app/pro#waitlist"
     }
   },
   "navigation": {
@@ -415,15 +415,15 @@
         "items": [
           {
             "label": "Dashboard",
-            "href": "https://www.worldmonitor.app"
+            "href": "https://wm.vercel.app"
           },
           {
             "label": "Pro",
-            "href": "https://www.worldmonitor.app/pro"
+            "href": "https://wm.vercel.app/pro"
           },
           {
             "label": "Blog",
-            "href": "https://www.worldmonitor.app/blog"
+            "href": "https://wm.vercel.app/blog"
           }
         ]
       },
@@ -444,7 +444,7 @@
           },
           {
             "label": "Status",
-            "href": "https://status.worldmonitor.app/"
+            "href": "https://status.wm.vercel.app/"
           }
         ]
       }

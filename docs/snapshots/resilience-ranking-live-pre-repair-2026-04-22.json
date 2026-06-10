@@ -1,6 +1,6 @@
 {
   "capturedAt": "2026-04-22",
-  "source": "Live capture via https://api.worldmonitor.app/api/resilience/v1/get-resilience-ranking",
+  "source": "Live capture via https://api.wm.vercel.app/api/resilience/v1/get-resilience-ranking",
   "commitSha": "425507d15a9d0492213931e23435e2477dff66da",
   "schemaVersion": "2.0",
   "methodology": {

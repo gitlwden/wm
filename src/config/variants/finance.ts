@@ -1,4 +1,4 @@
-// Finance/Trading variant - finance.worldmonitor.app
+// Finance/Trading variant - wm.vercel.app
 import type { PanelConfig, MapLayers } from '@/types';
 import type { VariantConfig } from './base';
 

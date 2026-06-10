@@ -95,7 +95,7 @@ async function _createCheckoutSession(
   user: UserInfo,
 ) {
   // Validate returnUrl to prevent open-redirect attacks.
-  const siteUrl = process.env.SITE_URL ?? "https://worldmonitor.app";
+  const siteUrl = process.env.SITE_URL ?? "https://wm.vercel.app";
   let returnUrl = siteUrl;
   if (args.returnUrl) {
     let parsedReturnUrl: URL;
@@ -106,19 +106,19 @@ async function _createCheckoutSession(
     }
 
     const allowedOrigins = new Set([
-      "https://worldmonitor.app",
-      "https://www.worldmonitor.app",
-      "https://app.worldmonitor.app",
-      "https://tech.worldmonitor.app",
-      "https://finance.worldmonitor.app",
-      "https://commodity.worldmonitor.app",
-      "https://happy.worldmonitor.app",
-      "https://energy.worldmonitor.app",
+      "https://wm.vercel.app",
+      "https://wm.vercel.app",
+      "https://app.wm.vercel.app",
+      "https://tech.wm.vercel.app",
+      "https://finance.wm.vercel.app",
+      "https://commodity.wm.vercel.app",
+      "https://happy.wm.vercel.app",
+      "https://energy.wm.vercel.app",
       new URL(siteUrl).origin,
     ]);
     if (!allowedOrigins.has(parsedReturnUrl.origin)) {
       throw new ConvexError(
-        "Invalid returnUrl: must use a trusted worldmonitor.app origin",
+        "Invalid returnUrl: must use a trusted wm.vercel.app origin",
       );
     }
     returnUrl = parsedReturnUrl.toString();

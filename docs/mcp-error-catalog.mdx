@@ -72,7 +72,7 @@ Example wire payload (case 1):
 
 ```http
 HTTP/1.1 401 Unauthorized
-WWW-Authenticate: Bearer realm="worldmonitor", resource_metadata="https://worldmonitor.app/.well-known/oauth-protected-resource"
+WWW-Authenticate: Bearer realm="worldmonitor", resource_metadata="https://wm.vercel.app/.well-known/oauth-protected-resource"
 Content-Type: application/json
 ```
 
@@ -218,7 +218,7 @@ Client recovery is identical for all three (honour `Retry-After: 5`); the messag
 
 **HTTP 200 — `resources/read` payload was empty or unparseable.** Defensive guard inside `resources/read` for the never-should-happen case where the inner `tools/call` dispatcher returned no `content[0].text` or non-JSON text.
 
-**What to do.** For HTTP 200 tool errors: retry once after ~1 second; if a specific tool returns `-32603` consistently, check [status.worldmonitor.app](https://status.worldmonitor.app) for the relevant seeder. For HTTP 503: honour `Retry-After`. For the `resources/read` defensive case: file an issue — it indicates a dispatcher contract violation upstream of your call.
+**What to do.** For HTTP 200 tool errors: retry once after ~1 second; if a specific tool returns `-32603` consistently, check [status.wm.vercel.app](https://status.wm.vercel.app) for the relevant seeder. For HTTP 503: honour `Retry-After`. For the `resources/read` defensive case: file an issue — it indicates a dispatcher contract violation upstream of your call.
 
 ## HTTP statuses
 

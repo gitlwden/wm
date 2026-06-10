@@ -10,7 +10,7 @@ const ENV = (() => {
 })();
 
 const WS_API_URL = ENV.VITE_WS_API_URL || '';
-const DEFAULT_WEB_API_URL = 'https://api.worldmonitor.app';
+const DEFAULT_WEB_API_URL = 'https://wm.vercel.app';
 
 const DEFAULT_REMOTE_HOSTS: Record<string, string> = {
   tech: WS_API_URL,
@@ -120,9 +120,8 @@ export function getApiBaseUrl(): string {
 }
 
 function isWorldMonitorWebHost(hostname: string): boolean {
-  return hostname === 'worldmonitor.app'
-    || hostname === 'www.worldmonitor.app'
-    || hostname.endsWith('.worldmonitor.app');
+  return hostname === 'wm.vercel.app'
+    || hostname.endsWith('.vercel.app');
 }
 
 export function getConfiguredWebApiBaseUrl(): string {
@@ -165,7 +164,7 @@ export function getRemoteApiBaseUrl(): string {
   if (fromHosts) return fromHosts;
 
   // Desktop builds may not set VITE_WS_API_URL; default to production.
-  if (isDesktopRuntime()) return 'https://worldmonitor.app';
+  if (isDesktopRuntime()) return 'https://wm.vercel.app';
   return '';
 }
 
@@ -209,8 +208,7 @@ function extractHostnames(...urls: (string | undefined)[]): string[] {
 }
 
 const APP_HOSTS = new Set([
-  'worldmonitor.app',
-  'www.worldmonitor.app',
+  'wm.vercel.app',
   'wm-neon.vercel.app',
   'wm-tech-gitlwd-projects.vercel.app',
   'wm-finance.vercel.app',
@@ -226,7 +224,7 @@ function isAppOriginUrl(urlStr: string): boolean {
   try {
     const u = new URL(urlStr);
     const host = u.hostname;
-    return APP_HOSTS.has(host) || host.endsWith('.worldmonitor.app') || host.endsWith('.vercel.app');
+    return APP_HOSTS.has(host) || host.endsWith('.vercel.app');
   } catch {
     return false;
   }
@@ -781,7 +779,7 @@ export function installWebApiRedirect(): void {
           return fetchWithRedirectFallback(`${API_BASE}${input}`, input, enriched ? withCredentials(enriched) : withCredentials(init));
         }
         // Absolute URL already targeting the API base (generated clients call fetch
-        // with full URLs like https://api.worldmonitor.app/api/...) — just inject auth.
+        // with full URLs like https://wm.vercel.app/api/...) — just inject auth.
         if (input.startsWith(`${API_BASE}/api/`)) {
           const pathAndSearch = input.slice(API_BASE.length);
           const enriched = await enrichInitForPremium(pathAndSearch, init);

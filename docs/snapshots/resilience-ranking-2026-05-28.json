@@ -1,13 +1,13 @@
 {
   "capturedAt": "2026-05-28",
-  "source": "Live capture via https://api.worldmonitor.app/api/resilience/v1/get-resilience-ranking?refresh=1",
+  "source": "Live capture via https://api.wm.vercel.app/api/resilience/v1/get-resilience-ranking?refresh=1",
   "snapshotNote": "Pre-P1-1 historical capture: pillar scores used the coverage-only member aggregation active on 2026-05-28, before domain design weights were applied inside pillar aggregation.",
   "commitSha": "aeaeb0286e0a312d7956ef03724accbd7858692f",
   "schemaVersion": "2.0",
   "methodologyFormula": "pillar-combined-penalized-v1",
   "formulaVerification": {
     "declaredFormula": "pillar-combined-penalized-v1",
-    "scoreEndpoint": "https://api.worldmonitor.app/api/resilience/v1/get-resilience-score",
+    "scoreEndpoint": "https://api.wm.vercel.app/api/resilience/v1/get-resilience-score",
     "tolerance": 0.25,
     "checks": [
       {
@@ -41,7 +41,7 @@
         "rankingAbsoluteError": 0
       }
     ],
-    "rankingEndpoint": "https://api.worldmonitor.app/api/resilience/v1/get-resilience-ranking?refresh=1"
+    "rankingEndpoint": "https://api.wm.vercel.app/api/resilience/v1/get-resilience-ranking?refresh=1"
   },
   "methodology": {
     "overallScoreFormula": "penalizedPillarScore(pillars): sum(pillar.score * pillar.weight) multiplied by (1 - 0.5 * (1 - min_pillar / 100)). Pillar weights: structural-readiness=0.40, live-shock-exposure=0.35, recovery-capacity=0.25.",

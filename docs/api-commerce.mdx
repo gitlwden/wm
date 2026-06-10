@@ -14,7 +14,7 @@ Creates a Dodo checkout session and returns the hosted-checkout URL.
 - **Auth**: Clerk bearer (required)
 - **Body**:
   ```json
-  { "productId": "pro-monthly", "returnUrl": "https://www.worldmonitor.app/pro/success" }
+  { "productId": "pro-monthly", "returnUrl": "https://wm.vercel.app/pro/success" }
   ```
 - **Response**: `{ "checkoutUrl": "https://checkout.dodopayments.com/..." }`
 - **returnUrl** is validated against an allowlist on the Convex side.
@@ -42,7 +42,7 @@ Returns the tier view-model used by the `/pro` pricing page. Cached in Redis und
       "description": "Get started with the essentials",
       "features": ["Core dashboard panels", "..."],
       "cta": "Get Started",
-      "href": "https://worldmonitor.app",
+      "href": "https://wm.vercel.app",
       "highlighted": false,
       "price": 0,
       "period": "forever"
@@ -72,7 +72,7 @@ Returns the tier view-model used by the `/pro` pricing page. Cached in Redis und
       "description": "Custom solutions for organizations",
       "features": ["..."],
       "cta": "Contact Sales",
-      "href": "mailto:enterprise@worldmonitor.app",
+      "href": "mailto:enterprise@wm.vercel.app",
       "highlighted": false,
       "price": null
     }
@@ -100,7 +100,7 @@ Returns the caller's deterministic referral code (an 8-char HMAC of the Clerk us
 ```json
 {
   "code": "a1b2c3d4",
-  "shareUrl": "https://worldmonitor.app/pro?ref=a1b2c3d4"
+  "shareUrl": "https://wm.vercel.app/pro?ref=a1b2c3d4"
 }
 ```
 

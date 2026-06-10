@@ -212,7 +212,7 @@ export class ResilienceWidget {
           return;
         }
         void this.openUpgradeFlow().catch(() => {
-          window.open('https://worldmonitor.app/pro', '_blank');
+          window.open('https://wm.vercel.app/pro', '_blank');
         });
       },
     }, cta) as HTMLButtonElement;
@@ -481,15 +481,15 @@ export class ResilienceWidget {
 
     if (isDesktopRuntime()) {
       const { invokeTauri } = await import('@/services/tauri-bridge');
-      await invokeTauri<void>('open_url', { url: 'https://worldmonitor.app/pro' })
-        .catch(() => { window.open('https://worldmonitor.app/pro', '_blank'); });
+      await invokeTauri<void>('open_url', { url: 'https://wm.vercel.app/pro' })
+        .catch(() => { window.open('https://wm.vercel.app/pro', '_blank'); });
       return;
     }
 
     await import('@/services/checkout')
       .then((module) => module.startCheckout(DEFAULT_UPGRADE_PRODUCT))
       .catch(() => {
-        window.open('https://worldmonitor.app/pro', '_blank');
+        window.open('https://wm.vercel.app/pro', '_blank');
       });
   }
 }

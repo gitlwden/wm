@@ -26,7 +26,7 @@ function restoreEnv() {
 }
 
 function makeRequest(headers = {}) {
-  return new Request('https://worldmonitor.app/api/test', { headers });
+  return new Request('https://wm.vercel.app/api/test', { headers });
 }
 
 async function importFreshRateLimitModule() {
@@ -87,7 +87,7 @@ describe('api/_rate-limit checkRateLimit fail-open / fail-closed (#3531 M9)', ()
   it('failClosed=true: returns 503 with the X-RateLimit-Mode degraded marker', async () => {
     const res = await checkRateLimit(
       makeRequest({ 'cf-connecting-ip': '203.0.113.7' }),
-      { 'Access-Control-Allow-Origin': 'https://worldmonitor.app' },
+      { 'Access-Control-Allow-Origin': 'https://wm.vercel.app' },
       { failClosed: true },
     );
     assert.ok(res, 'expected a Response when fail-closed');
@@ -96,7 +96,7 @@ describe('api/_rate-limit checkRateLimit fail-open / fail-closed (#3531 M9)', ()
     assert.equal(res.headers.get('Retry-After'), '5');
     assert.equal(
       res.headers.get('Access-Control-Allow-Origin'),
-      'https://worldmonitor.app',
+      'https://wm.vercel.app',
     );
   });
 
@@ -107,7 +107,7 @@ describe('api/_rate-limit checkRateLimit fail-open / fail-closed (#3531 M9)', ()
 
     const res = await mod.checkRateLimit(
       makeRequest({ 'cf-connecting-ip': '203.0.113.7' }),
-      { 'Access-Control-Allow-Origin': 'https://worldmonitor.app' },
+      { 'Access-Control-Allow-Origin': 'https://wm.vercel.app' },
       { failClosed: true },
     );
 
@@ -117,7 +117,7 @@ describe('api/_rate-limit checkRateLimit fail-open / fail-closed (#3531 M9)', ()
     assert.equal(res.headers.get('Retry-After'), '5');
     assert.equal(
       res.headers.get('Access-Control-Allow-Origin'),
-      'https://worldmonitor.app',
+      'https://wm.vercel.app',
     );
   });
 });

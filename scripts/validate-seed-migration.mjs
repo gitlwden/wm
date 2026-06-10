@@ -7,14 +7,14 @@
  *   node scripts/validate-seed-migration.mjs [--base-url URL]
  *
  * Requires: Referer header from trusted origin OR X-WorldMonitor-Key header.
- * Uses api.worldmonitor.app by default.
+ * Uses api.wm.vercel.app by default.
  */
 
 const BASE_URL = process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
-  : 'https://api.worldmonitor.app';
+  : 'https://api.wm.vercel.app';
 
-const ORIGIN = 'https://worldmonitor.app';
+const ORIGIN = 'https://wm.vercel.app';
 
 // ========================================================================
 // Test definitions — one per migrated handler

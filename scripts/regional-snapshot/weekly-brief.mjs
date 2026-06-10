@@ -44,7 +44,7 @@ const DEFAULT_PROVIDERS = [
     headers: (key) => ({
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://worldmonitor.app',
+      'HTTP-Referer': 'https://wm.vercel.app',
       'X-Title': 'World Monitor',
       'User-Agent': CHROME_UA,
     }),

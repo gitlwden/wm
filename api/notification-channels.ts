@@ -221,7 +221,7 @@ export default async function handler(req: Request, ctx: { waitUntil: (p: Promis
     //   return json({
     //     error: 'pro_required',
     //     message: 'Real-time alerts are available on the Pro plan.',
-    //     upgradeUrl: 'https://worldmonitor.app/pro',
+    //     upgradeUrl: 'https://wm.vercel.app/pro',
     //   }, 403, corsHeaders);
     // }
 

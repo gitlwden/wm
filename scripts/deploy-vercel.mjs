@@ -14,7 +14,7 @@
  * Optional (env vars or .env.local):
  *   VERCEL_TOKEN         — https://vercel.com/account/tokens
  *   RENDER_API_KEY       — https://dashboard.render.com/account/api-keys
- *   CUSTOM_DOMAIN        — e.g. worldmonitor.app (skip to use .vercel.app)
+ *   CUSTOM_DOMAIN        — e.g. wm.vercel.app (skip to use .vercel.app)
  *   CLOUDFLARE_ZONE_ID   — Cloudflare → domain → Overview → Zone ID
  *   GITHUB_REPO_NAME     — defaults to "wm"
  */

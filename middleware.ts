@@ -103,7 +103,7 @@ const VARIANT_OG: Record<string, { name: string; title: string; description: str
 };
 
 const ALLOWED_HOSTS = new Set([
-  'worldmonitor.app',
+  'wm.vercel.app',
   'wm-neon.vercel.app',
   ...Object.keys(VARIANT_HOST_MAP),
 ]);
@@ -169,7 +169,7 @@ export default function middleware(request: Request) {
             isPartOf: {
               '@type': 'WebSite',
               name: 'World Monitor',
-              url: 'https://www.worldmonitor.app/',
+              url: 'https://wm.vercel.app/',
             },
             sameAs: [
               'https://github.com/koala73/worldmonitor',
@@ -181,13 +181,13 @@ export default function middleware(request: Request) {
 <p>${eDesc}</p>
 <h2>Explore the platform</h2>
 <ul>
-<li><a href="https://www.worldmonitor.app/">World Monitor — geopolitics &amp; intelligence</a></li>
+<li><a href="https://wm.vercel.app/">World Monitor — geopolitics &amp; intelligence</a></li>
 <li><a href="https://wm-tech-gitlwd-projects.vercel.app/">Tech Monitor</a></li>
 <li><a href="https://wm-finance.vercel.app/">Finance Monitor</a></li>
 <li><a href="https://wm-commodity-gitlwd-projects.vercel.app/">Commodity Monitor</a></li>
 <li><a href="https://wm-happy-gitlwd-projects.vercel.app/">Happy Monitor</a></li>
-<li><a href="https://www.worldmonitor.app/pro">World Monitor Pro</a></li>
-<li><a href="https://www.worldmonitor.app/blog/">Blog</a></li>
+<li><a href="https://wm.vercel.app/pro">World Monitor Pro</a></li>
+<li><a href="https://wm.vercel.app/blog/">Blog</a></li>
 <li><a href="https://github.com/koala73/worldmonitor">Open source on GitHub</a></li>
 </ul>
 <h2>Sources</h2>

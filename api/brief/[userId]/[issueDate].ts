@@ -75,7 +75,7 @@ function renderErrorPage(heading: string, body: string): string {
     + '</head><body><div>'
     + `<h1>${heading}</h1>`
     + `<p>${body}</p>`
-    + '<p><a href="https://worldmonitor.app">Return to WorldMonitor</a></p>'
+    + '<p><a href="https://wm.vercel.app">Return to WorldMonitor</a></p>'
     + '</div></body></html>'
   );
 }

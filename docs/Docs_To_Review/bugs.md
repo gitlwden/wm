@@ -121,7 +121,7 @@ Extract `layerToSource` to a shared constant (e.g., in `src/config/panels.ts`), 
 | **Depends on** | — |
 
 **Description**
-The Polymarket dev proxy targets `https://worldmonitor.app` (the live production site).
+The Polymarket dev proxy targets `https://wm.vercel.app` (the live production site).
 This creates a circular dependency in dev → prod, means dev can break when prod is deploying, and masks local proxy bugs until they hit production.
 
 **AI instructions**

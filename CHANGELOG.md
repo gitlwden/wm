@@ -40,7 +40,7 @@ All notable changes to World Monitor are documented here.
 
 ### Security
 
-- CDN-Cache-Control header now only set for trusted origins (worldmonitor.app, Vercel previews, Tauri); no-origin server-side requests always reach the edge function so `validateApiKey` can run, closing a potential cache-bypass path for external scrapers
+- CDN-Cache-Control header now only set for trusted origins (wm.vercel.app, Vercel previews, Tauri); no-origin server-side requests always reach the edge function so `validateApiKey` can run, closing a potential cache-bypass path for external scrapers
 - **Shipping v2 webhook tenant isolation (#3242)** — `POST /api/v2/shipping/webhooks` (register) and `GET /api/v2/shipping/webhooks` (list) now enforce `validateApiKey(req, { forceKey: true })`, matching the sibling `[subscriberId]{,/[action]}` routes and the documented contract in `docs/api-shipping-v2.mdx`. Without this gate, a Clerk-authenticated pro user with no API key would fall through `callerFingerprint()` to the shared `'anon'` bucket and see/overwrite webhooks owned by other `'anon'`-bucket tenants.
 
 ### Fixed
@@ -350,7 +350,7 @@ All notable changes to World Monitor are documented here.
 ### Added
 
 - **Edge caching**: Complete Cloudflare edge cache tier coverage with degraded-response policy (#484)
-- **Edge caching**: Cloudflare edge caching for proxy.worldmonitor.app (#478) and api.worldmonitor.app (#471)
+- **Edge caching**: Cloudflare edge caching for proxy.wm.vercel.app (#478) and api.wm.vercel.app (#471)
 - **Edge caching**: Tiered edge Cache-Control aligned to upstream TTLs (#474)
 - **API migration**: Convert 52 API endpoints from POST to GET for edge caching (#468)
 - **Gateway**: Configurable VITE_WS_API_URL + harden POST-to-GET shim (#480)
@@ -566,7 +566,7 @@ All notable changes to World Monitor are documented here.
 
 ### Added
 
-- **Finance variant**: Added a dedicated market-first variant (`finance.worldmonitor.app`) with finance/trading-focused feeds, panels, and map defaults
+- **Finance variant**: Added a dedicated market-first variant (`finance.wm.vercel.app`) with finance/trading-focused feeds, panels, and map defaults
 - **Finance desktop profile**: Added finance-specific desktop config and build profile for Tauri packaging
 
 ### Changed

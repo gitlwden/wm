@@ -54,7 +54,7 @@ function reportServerError(res: Response, input: RequestInfo | URL): void {
   if (res.status < 500) return;
   try {
     const href = input instanceof Request ? input.url : String(input);
-    const path = new URL(href, globalThis.location?.href ?? 'https://worldmonitor.app').pathname;
+    const path = new URL(href, globalThis.location?.href ?? 'https://wm.vercel.app').pathname;
     // Cloudflare edge errors (520-527) are CDN<->origin transport failures, not
     // origin application errors — a single one is a transient blip. Capture at
     // `warning` so a sustained outage still escalates by volume without a lone
@@ -83,7 +83,7 @@ function withCredentials(init?: RequestInit): RequestInit {
 function isPremiumRpcTarget(input: RequestInfo | URL): boolean {
   try {
     const href = input instanceof Request ? input.url : String(input);
-    const path = new URL(href, globalThis.location?.href ?? 'https://worldmonitor.app').pathname;
+    const path = new URL(href, globalThis.location?.href ?? 'https://wm.vercel.app').pathname;
     return PREMIUM_RPC_PATHS.has(path);
   } catch {
     // If we can't parse the URL, fall through to the strict path: keep

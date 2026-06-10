@@ -494,7 +494,7 @@ IMPORT_HHI_VERBOSE=1 FORCE_RESEED=true node scripts/seed-recovery-import-hhi.mjs
 Then warm live scores so `importConcentration` reads the refreshed canonical key:
 
 ```bash
-API_BASE_URL=https://api.worldmonitor.app \
+API_BASE_URL=https://api.wm.vercel.app \
 WORLDMONITOR_SEED_REFRESH_KEY=<seed-refresh-key> \
 WORLDMONITOR_API_KEY=<read-key> \
 node scripts/seed-resilience-scores.mjs
@@ -519,9 +519,9 @@ counts `intervalMissingScorePayloadCount`, `intervalStaleScorePayloadCount`,
 Verify the public audit surfaces after the run:
 
 ```bash
-curl -fsS https://api.worldmonitor.app/api/resilience/v1/get-runtime-manifest \
+curl -fsS https://api.wm.vercel.app/api/resilience/v1/get-runtime-manifest \
   | jq '{formulaTag, rankingCache, constructVersions, intervals}'
-curl -fsS https://api.worldmonitor.app/api/health \
+curl -fsS https://api.wm.vercel.app/api/health \
   | jq '.checks.resilienceIntervals'
 ```
 

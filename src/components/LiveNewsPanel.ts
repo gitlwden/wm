@@ -514,7 +514,7 @@ export class LiveNewsPanel extends Panel {
 
   private get embedOrigin(): string {
     if (isDesktopRuntime()) return `http://localhost:${getLocalApiPort()}`;
-    try { return new URL(getRemoteApiBaseUrl()).origin; } catch { return 'https://worldmonitor.app'; }
+    try { return new URL(getRemoteApiBaseUrl()).origin; } catch { return 'https://wm.vercel.app'; }
   }
 
   private setupBridgeMessageListener(): void {
@@ -552,8 +552,8 @@ export class LiveNewsPanel extends Panel {
 
   private static resolveYouTubeOrigin(): string | null {
     const fallbackOrigin = SITE_VARIANT === 'tech'
-      ? 'https://worldmonitor.app'
-      : 'https://worldmonitor.app';
+      ? 'https://wm.vercel.app'
+      : 'https://wm.vercel.app';
 
     try {
       const { protocol, origin, host } = window.location;
@@ -1155,7 +1155,7 @@ export class LiveNewsPanel extends Panel {
     if (quality !== 'auto') params.set('vq', quality);
     // origin = canonical site origin YouTube trusts for embed restrictions.
     // parentOrigin = actual parent frame origin so postMessage round-trips work.
-    params.set('origin', this.youtubeOrigin || 'https://worldmonitor.app');
+    params.set('origin', this.youtubeOrigin || 'https://wm.vercel.app');
     params.set('parentOrigin', window.location.origin);
     const embedUrl = `http://localhost:${getLocalApiPort()}/api/youtube-embed?${params.toString()}`;
 

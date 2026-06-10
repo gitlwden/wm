@@ -16,9 +16,9 @@ Thank you for helping spread the word about World Monitor! This guide provides t
 
 | Link | Description |
 |------|-------------|
-| [worldmonitor.app](https://worldmonitor.app) | Main dashboard — geopolitics, military, conflicts |
-| [tech.worldmonitor.app](https://tech.worldmonitor.app) | Tech variant — startups, AI/ML, cybersecurity |
-| [finance.worldmonitor.app](https://finance.worldmonitor.app) | Finance variant — markets, exchanges, central banks |
+| [wm.vercel.app](https://wm.vercel.app) | Main dashboard — geopolitics, military, conflicts |
+| [tech.wm.vercel.app](https://tech.wm.vercel.app) | Tech variant — startups, AI/ML, cybersecurity |
+| [finance.wm.vercel.app](https://finance.wm.vercel.app) | Finance variant — markets, exchanges, central banks |
 | [GitHub](https://github.com/koala73/worldmonitor) | Source code (AGPL-3.0) |
 
 ---

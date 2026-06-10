@@ -4,7 +4,7 @@ import test from 'node:test';
 import handler from './report.js';
 
 function makeReportRequest({ body, contentType = 'application/reports+json' } = {}) {
-  return new Request('https://worldmonitor.app/api/security/report', {
+  return new Request('https://wm.vercel.app/api/security/report', {
     method: 'POST',
     headers: { 'content-type': contentType },
     body: body ?? JSON.stringify([]),
@@ -24,7 +24,7 @@ test('security report endpoint accepts Reporting API batches and redacts URLs in
       {
         type: 'coep',
         age: 10,
-        url: 'https://tech.worldmonitor.app/panel?token=secret',
+        url: 'https://tech.wm.vercel.app/panel?token=secret',
         body: {
           type: 'corp-not-same-origin',
           disposition: 'reporting',
@@ -53,7 +53,7 @@ test('security report endpoint accepts Reporting API single-report content type'
 });
 
 test('security report endpoint rejects unsupported methods', async () => {
-  const response = await handler(new Request('https://worldmonitor.app/api/security/report'));
+  const response = await handler(new Request('https://wm.vercel.app/api/security/report'));
   assert.equal(response.status, 405);
 });
 
