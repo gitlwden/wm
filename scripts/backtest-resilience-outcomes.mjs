@@ -137,10 +137,10 @@ const EVENT_FAMILIES = [
     id: 'conflict-spillover',
     label: 'Conflict Spillover',
     description: 'Armed conflict spreading to a previously-stable neighbor',
-    redisKey: 'conflict:ucdp-events:v1',
+    redisKey: 'conflict:gdelt:v1:all:0:0',
     detect: detectConflictSpillover,
     dataSource: 'live',
-    labelSources: ['Live Redis payload from conflict:ucdp-events:v1, sourced from the UCDP event seeding path.'],
+    labelSources: ['Live Redis payload from conflict:gdelt:v1:all:0:0, sourced from GDELT conflict intel seed.'],
   },
 ];
 
