@@ -110,4 +110,6 @@
 
 [functions]
   node_bundler = "esbuild"
-  included_files = ["api/_*.js", "api/_*.ts", "server/**/*.ts", "server/**/*.js", "src/generated/**/*.ts"]
+  directory = "functions"
+  included_files = ["api/_*.js", "api/_*.ts", "server/**", "src/generated/**"]
+  external_node_modules = ["@upstash/redis", "@upstash/ratelimit"]
