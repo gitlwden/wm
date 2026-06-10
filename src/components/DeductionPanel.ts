@@ -274,10 +274,10 @@ export class DeductionPanel extends Panel {
               this.resultContainer.textContent = `Pro access required (${status}). Sign in or add an API key in Settings to use Deduct Situation. ${msg}`;
             } else if (status === 429) {
               this.resultContainer.textContent = 'Rate limited — please wait a moment and try again.';
-            } else if (status === 503 || status === 502) {
-              this.resultContainer.textContent = 'AI service temporarily unavailable. Please try again shortly.';
+            } else if (status === 503 || status === 502 || status === 500) {
+              this.resultContainer.textContent = `Server error (${status}). The AI service may be temporarily unavailable. Please try again shortly.`;
             } else {
-              this.resultContainer.textContent = 'An error occurred while analyzing the situation. Check console for details.';
+              this.resultContainer.textContent = `Request failed${status ? ` (HTTP ${status})` : ''}. ${msg}`;
             }
         } finally {
             this.isSubmitting = false;

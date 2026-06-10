@@ -330,6 +330,7 @@ import { PREMIUM_RPC_PATHS } from '../src/shared/premium-paths';
 
 export const PUBLIC_NO_AUTH_RPC_PATHS = new Set<string>([
   '/api/resilience/v1/get-runtime-manifest',
+  '/api/intelligence/v1/deduct-situation',
 ]);
 
 /**
