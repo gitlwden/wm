@@ -10,7 +10,7 @@ import { getActiveFrameworkForPanel } from '@/services/analysis-framework-store'
 import { FrameworkSelector } from './FrameworkSelector';
 
 // deduct-situation + list-market-implications are premium-gated.
-const client = new IntelligenceServiceClient(getRpcBaseUrl(), { fetch: window.fetch });
+const client = new IntelligenceServiceClient(getRpcBaseUrl(), { fetch: (...args: [RequestInfo | URL, RequestInit?]) => window.fetch(...args) });
 
 const COOLDOWN_MS = 5_000;
 
