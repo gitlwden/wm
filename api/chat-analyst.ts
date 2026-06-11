@@ -21,7 +21,7 @@ import { checkRateLimit } from '../server/_shared/rate-limit';
 import { assembleAnalystContext } from '../server/worldmonitor/intelligence/v1/chat-analyst-context';
 import { buildAnalystSystemPrompt } from '../server/worldmonitor/intelligence/v1/chat-analyst-prompt';
 import { buildActionEvents } from '../server/worldmonitor/intelligence/v1/chat-analyst-actions';
-import { callLlmReasoningStream } from '../server/_shared/llm';
+import { callLlm } from '../server/_shared/llm';
 import { sanitizeForPrompt } from '../server/_shared/llm-sanitize.js';
 
 const MAX_QUERY_LEN = 500;
@@ -46,24 +46,6 @@ function json(body: unknown, status: number, cors: Record<string, string>): Resp
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json', ...cors },
-  });
-}
-
-function prependSseEvents(events: Array<Record<string, unknown>>, stream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
-  const enc = new TextEncoder();
-  const prefixes = events.map((e) => enc.encode(`data: ${JSON.stringify(e)}\n\n`));
-  let innerReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-  return new ReadableStream<Uint8Array>({
-    async start(controller) {
-      for (const p of prefixes) controller.enqueue(p);
-      innerReader = stream.getReader();
-      while (true) {
-        const { done, value } = await innerReader.read();
-        if (done) { controller.close(); return; }
-        controller.enqueue(value);
-      }
-    },
-    cancel() { innerReader?.cancel(); },
   });
 }
 
@@ -148,26 +130,33 @@ export default async function handler(req: Request): Promise<Response> {
     { role: 'user', content: query },
   ];
 
-  const llmStream = callLlmReasoningStream({
-    messages,
-    maxTokens: 600,
-    temperature: 0.35,
-    timeoutMs: 25_000,
-    signal: req.signal,
-  });
+  // Non-streaming LLM call — Netlify Functions don't reliably support
+  // long-lived streaming responses (the ReadableStream stalls). Collect
+  // the full response then send it as a single SSE delta event.
+  let llmResult = null;
+  try {
+    llmResult = await callLlm({
+      messages,
+      maxTokens: 600,
+      temperature: 0.35,
+      timeoutMs: 25_000,
+      providerOrder: ['groq', 'nvidia', 'cerebras', 'sambanova'],
+    });
+  } catch (err) {
+    console.error('[chat-analyst] LLM call failed:', (err as Error).message);
+  }
 
-  // Always prepend a meta event so the client knows which sources are live
-  // and whether context is degraded — before the first token arrives.
-  // Optionally follows with an action event for visual/chart queries.
-  const stream = prependSseEvents(
-    [
-      { meta: { sources: context.activeSources, degraded: context.degraded } },
-      ...buildActionEvents(query).map((a) => ({ action: a })),
-    ],
-    llmStream,
-  );
+  const ssePayload = [
+    { meta: { sources: context.activeSources, degraded: context.degraded } },
+    ...buildActionEvents(query).map((a) => ({ action: a })),
+    ...(llmResult
+      ? [{ delta: llmResult.content }, { done: true }]
+      : [{ error: 'llm_unavailable' }]),
+  ];
 
-  return new Response(stream, {
+  const sseBody = ssePayload.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+
+  return new Response(sseBody, {
     status: 200,
     headers: {
       'Content-Type': 'text/event-stream',

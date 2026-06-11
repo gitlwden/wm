@@ -27,6 +27,7 @@ interface ProviderConfig {
 }
 
 const PROVIDERS: Record<LlmProviderName, ProviderConfig> = {
+  groq:      { url: 'https://api.groq.com/openai/v1',       envKey: 'GROQ_API_KEY' },
   nvidia:    { url: 'https://integrate.api.nvidia.com/v1', envKey: 'NVIDIA_NIM_API_KEY' },
   cerebras:  { url: 'https://api.cerebras.ai/v1',          envKey: 'CEREBRAS_API_KEY' },
   sambanova: { url: 'https://api.sambanova.ai/v1',         envKey: 'SAMBANOVA_API_KEY' },
@@ -150,6 +151,7 @@ function updateFileCache(provider: LlmProviderName, models: string[], latencyMs?
  */
 async function discoverModels(provider: LlmProviderName): Promise<string[]> {
   const config = PROVIDERS[provider];
+  if (!config) return [];
   const apiKey = getApiKey(config.envKey);
   if (!apiKey) return [];
 
