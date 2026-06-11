@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
+import { getFeaturesForPlan } from "./lib/entitlements";
 
 /** Maximum number of active (non-revoked) API keys per user. */
 const MAX_KEYS_PER_USER = 5;
@@ -16,8 +17,7 @@ const MAX_KEYS_PER_USER = 5;
  * and pass the SHA-256 hex hash + the first 8 chars (prefix) here.
  * The plaintext key is NEVER stored in Convex.
  *
- * Requires an active entitlement with apiAccess=true (API_STARTER+ plans).
- * Pro plans (tier 1) have apiAccess=false and cannot create keys.
+ * Requires an active entitlement with apiAccess=true (all paid plans).
  */
 export const createApiKey = mutation({
   args: {
@@ -29,17 +29,27 @@ export const createApiKey = mutation({
     const userId = await requireUserId(ctx);
 
     // Entitlement gate: only users with apiAccess may create API keys.
-    // This is catalog-driven — Pro (tier 1) has apiAccess=false;
-    // API_STARTER+ (tier 2+) have apiAccess=true.
+    // This is catalog-driven — all paid plans (Pro tier 1, API Starter
+    // tier 2+, Enterprise tier 3) have apiAccess=true in PRODUCT_CATALOG.
     const entitlement = await ctx.db
       .query("entitlements")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
+    if (!entitlement || entitlement.validUntil < Date.now()) {
+      throw new ConvexError("API_ACCESS_REQUIRED");
+    }
+
+    // Refresh features from current catalog — stale entitlement records
+    // (written before apiAccess was added) would otherwise block paid users.
+    const freshFeatures = getFeaturesForPlan(entitlement.planKey);
     if (
-      !entitlement ||
-      entitlement.validUntil < Date.now() ||
-      !entitlement.features.apiAccess
+      freshFeatures.apiAccess !== entitlement.features.apiAccess ||
+      freshFeatures.tier !== entitlement.features.tier
     ) {
+      await ctx.db.patch(entitlement._id, { features: freshFeatures });
+    }
+
+    if (!freshFeatures.apiAccess) {
       throw new ConvexError("API_ACCESS_REQUIRED");
     }
 
