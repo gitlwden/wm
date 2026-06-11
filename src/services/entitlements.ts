@@ -84,6 +84,28 @@ export async function initEntitlementSubscription(_userId?: string): Promise<voi
       return;
     }
 
+    // Sync Clerk Pro role to Convex entitlement. Covers test accounts and
+    // manually-granted Pro roles that bypass the Dodo webhook pipeline.
+    // Fire-and-forget — the subscription below will pick up the result.
+    try {
+      const api = await getConvexApi();
+      if (api) {
+        const syncFn = (api as unknown as Record<string, Record<string, unknown>>)
+          .syncEntitlement?.syncFromClerk;
+        if (syncFn) {
+          const syncResult = await client.action(
+            syncFn as Parameters<typeof client.action>[0],
+            {},
+          ).catch(() => null);
+          if (syncResult && (syncResult as Record<string, unknown>).synced) {
+            console.log('[entitlements] Synced Clerk Pro → Convex entitlement');
+          }
+        }
+      }
+    } catch (syncErr) {
+      console.warn('[entitlements] Clerk sync failed (non-fatal):', (syncErr as Error).message);
+    }
+
     const watch = client.onUpdate(
       api.entitlements.getEntitlementsForUser,
       {},

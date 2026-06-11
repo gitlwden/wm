@@ -32,21 +32,6 @@ async function getEntitlementsHandler(
     .first();
 
   if (!entitlement) {
-    // No Convex entitlement record — check if Clerk marks this user as Pro.
-    // This covers test accounts and manually-granted Pro roles that never
-    // went through the Dodo checkout → webhook → Convex pipeline.
-    const identity = await ctx.auth.getUserIdentity();
-    const clerkRole = (identity as Record<string, unknown> | null)?.role
-      ?? (identity as Record<string, unknown> | null)?.publicMetadata;
-    const isClerkPro = clerkRole === 'pro'
-      || (typeof clerkRole === 'object' && clerkRole !== null && (clerkRole as Record<string, unknown>).role === 'pro');
-    if (isClerkPro) {
-      return {
-        planKey: "pro_monthly" as const,
-        features: getFeaturesForPlan("pro_monthly"),
-        validUntil: Date.now() + 365 * 24 * 60 * 60 * 1000,
-      };
-    }
     return FREE_TIER_DEFAULTS;
   }
 
