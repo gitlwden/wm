@@ -127,6 +127,15 @@ export function installStaleBundleCheck(options: StaleBundleCheckOptions = {}): 
       if (deployedHash !== currentHash) {
         // eslint-disable-next-line no-console
         console.warn('[stale-bundle] reload:', currentHash, '→', deployedHash);
+        // Force SW to re-check and clear precache so the reload fetches fresh assets.
+        // Without this, the old SW serves cached JS bundles on reload — the user
+        // sees the same stale code and the check fires again in a loop.
+        try {
+          const reg = await navigator.serviceWorker?.getRegistration();
+          await reg?.update();
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        } catch { /* best-effort */ }
         reload();
       }
     } catch {
