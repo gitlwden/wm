@@ -109,6 +109,9 @@ import { leadsHandler } from '../server/worldmonitor/leads/v1/handler';
 import { createShippingV2ServiceRoutes } from '../src/generated/server/worldmonitor/shipping/v2/service_server';
 import { shippingV2Handler } from '../server/worldmonitor/shipping/v2/handler';
 
+import { createWebcamServiceRoutes } from '../src/generated/server/worldmonitor/webcam/v1/service_server';
+import { webcamHandler } from '../server/worldmonitor/webcam/v1/handler';
+
 // Merge all domain routes into a single gateway
 const allRoutes = [
   ...createWildfireServiceRoutes(wildfireHandler, serverOptions),
@@ -144,6 +147,7 @@ const allRoutes = [
   ...createUnrestServiceRoutes(unrestHandler, serverOptions),
   ...createLeadsServiceRoutes(leadsHandler, serverOptions),
   ...createShippingV2ServiceRoutes(shippingV2Handler, serverOptions),
+  ...createWebcamServiceRoutes(webcamHandler, serverOptions),
 ];
 
 const gateway = createDomainGateway(allRoutes);
