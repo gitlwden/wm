@@ -3,6 +3,10 @@ name: Refresh Free Proxies
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  variables: write
+
 jobs:
   refresh:
     runs-on: ubuntu-latest

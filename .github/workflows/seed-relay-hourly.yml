@@ -46,6 +46,11 @@ jobs:
       - name: Seed classify
         run: node scripts/seed-classify.mjs
         continue-on-error: true
+        env:
+          OLLAMA_API_URL: ${{ secrets.OLLAMA_API_URL }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
       - name: Seed corridor risk
         run: node scripts/seed-corridor-risk.mjs
