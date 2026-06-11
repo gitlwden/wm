@@ -37,7 +37,7 @@ const VALID_VARIANTS = new Set(['full', 'tech', 'finance', 'happy', 'commodity']
 const fallbackDigestCache = new Map<string, { data: ListFeedDigestResponse; ts: number }>();
 const ITEMS_PER_FEED = 5;
 const MAX_ITEMS_PER_CATEGORY = 20;
-const FEED_TIMEOUT_MS = 8_000;
+const FEED_TIMEOUT_MS = 4_000;
 const OVERALL_DEADLINE_MS = 25_000;
 const BATCH_CONCURRENCY = 20;
 
