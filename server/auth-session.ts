@@ -44,22 +44,26 @@ export interface SessionResult {
   name?: string;
 }
 
-function getAllowedAudiences(): string[] {
-  const configured = [
+export function getClerkJwtVerifyOptions() {
+  // Only enforce audience matching when CLERK_JWT_AUDIENCE is explicitly set.
+  // Clerk Backend API session tokens (created via /v1/sessions/{id}/tokens)
+  // do not include an `aud` claim by default. jose.jwtVerify rejects tokens
+  // whose aud doesn't match the expected audience list, even when the token
+  // has no aud at all. Skipping the audience check when unconfigured allows
+  // both browser-issued tokens (with aud) and Backend API tokens (without)
+  // to pass verification — the issuer and signature checks still apply.
+  const configuredAudiences = [
     process.env.CLERK_JWT_AUDIENCE,
-    process.env.CLERK_PUBLISHABLE_KEY,
   ]
     .flatMap((value) => (value ?? '').split(','))
     .map((value) => value.trim())
     .filter(Boolean);
 
-  return Array.from(new Set(['convex', ...configured]));
-}
-
-export function getClerkJwtVerifyOptions() {
   return {
     issuer: CLERK_JWT_ISSUER_DOMAIN,
-    audience: getAllowedAudiences(),
+    audience: configuredAudiences.length > 0
+      ? Array.from(new Set(['convex', ...configuredAudiences]))
+      : undefined,
     algorithms: ['RS256'],
   };
 }
