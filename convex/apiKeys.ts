@@ -31,10 +31,26 @@ export const createApiKey = mutation({
     // Entitlement gate: only users with apiAccess may create API keys.
     // This is catalog-driven — all paid plans (Pro tier 1, API Starter
     // tier 2+, Enterprise tier 3) have apiAccess=true in PRODUCT_CATALOG.
-    const entitlement = await ctx.db
+    let entitlement = await ctx.db
       .query("entitlements")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .first();
+
+    // Auto-create Pro entitlement for users without one (e.g. test accounts
+    // that authenticated via Clerk but never went through Dodo checkout).
+    if (!entitlement) {
+      const proFeatures = getFeaturesForPlan("pro_monthly");
+      const now = Date.now();
+      const id = await ctx.db.insert("entitlements", {
+        userId,
+        planKey: "pro_monthly",
+        features: proFeatures,
+        validUntil: now + 365 * 24 * 60 * 60 * 1000,
+        updatedAt: now,
+      });
+      entitlement = await ctx.db.get(id);
+    }
+
     if (!entitlement || entitlement.validUntil < Date.now()) {
       throw new ConvexError("API_ACCESS_REQUIRED");
     }

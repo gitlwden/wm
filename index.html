@@ -392,6 +392,25 @@
       if(!('serviceWorker' in navigator))return;
       var key='wm-sw-nuke';
       if(sessionStorage.getItem(key))return;
+      // Proactive: clear SW caches on version mismatch (bumps per deploy)
+      var V='3';
+      var vk='wm-v';
+      var sv=localStorage.getItem(vk);
+      if(sv&&sv!==V){
+        localStorage.setItem(vk,V);
+        sessionStorage.setItem(key,'1');
+        navigator.serviceWorker.getRegistrations().then(function(regs){
+          var p=regs.map(function(r){return r.unregister()});
+          Promise.all(p).then(function(){
+            if(caches&&caches.keys){caches.keys().then(function(ks){
+              return Promise.all(ks.map(function(k){return caches.delete(k)}));
+            }).then(function(){location.reload()})}else{location.reload()}
+          });
+        });
+        return;
+      }
+      if(!sv)localStorage.setItem(vk,V);
+      // Reactive: clear SW on asset 404
       window.addEventListener('error',function(e){
         var u=e.target&&(e.target.src||e.target.href)||'';
         if(u&&/\/assets\//.test(u)){
