@@ -183,6 +183,7 @@ const STANDALONE_ROUTES: Record<string, () => Promise<{ default: (req: Request) 
   '/api/oref-alerts':             () => import('../api/oref-alerts.js'),
   '/api/reverse-geocode':         () => import('../api/reverse-geocode.js'),
   '/api/rss-proxy':               () => import('../api/rss-proxy.js'),
+  '/api/supply-chain/hormuz-tracker': () => import('../api/supply-chain/hormuz-tracker.js'),
   '/api/story':                   () => import('../api/story.js'),
   '/api/mcp':                     () => import('../api/mcp.ts'),
   '/mcp':                         () => import('../api/mcp.ts'),
