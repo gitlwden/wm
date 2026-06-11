@@ -22,7 +22,7 @@ function safeReadableCookieGet(name: BrowserSessionKeyName): string {
 
 function clearLegacyReadableCookie(name: BrowserSessionKeyName): void {
   try {
-    document.cookie = `${name}=; domain=wm.vercel.app; path=/; max-age=0; SameSite=Lax; Secure`;
+    document.cookie = `${name}=; domain=wm-worldmonitor.netlify.app; path=/; max-age=0; SameSite=Lax; Secure`;
     document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax; Secure`;
   } catch {
     // ignore

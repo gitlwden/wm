@@ -266,12 +266,12 @@
     </style>
 
     <!-- Preconnect: critical first-paint origins.
-         api.worldmonitor.app: credentialed CORS (runtime.ts defaults
+         wm-worldmonitor.netlify.app: credentialed CORS (runtime.ts defaults
          credentials: 'include') — must use `use-credentials` so the
          pre-opened socket lands in the same connection pool as the
          credentialed fetches.
          Sentry ingest: anonymous (DSN key in headers, no cookies). -->
-    <link rel="preconnect" href="https://api.worldmonitor.app" crossorigin="use-credentials">
+    <link rel="preconnect" href="https://wm-worldmonitor.netlify.app" crossorigin="use-credentials">
     <link rel="preconnect" href="https://o4509927897890816.ingest.us.sentry.io" crossorigin>
     <link rel="dns-prefetch" href="https://clerk.worldmonitor.app">
 

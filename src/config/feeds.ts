@@ -1021,7 +1021,7 @@ const COMMODITY_FEEDS: Record<string, Feed[]> = {
   ],
 };
 
-// Energy variant feeds — energy wm.vercel.app
+// Energy variant feeds — energy wm-worldmonitor.netlify.app
 // Keys are matched against panel IDs in src/config/panels.ts ENERGY_PANELS +
 // brief news-category overrides in src/app/data-loader.ts. Keep in sync when
 // ENERGY_PANELS changes.

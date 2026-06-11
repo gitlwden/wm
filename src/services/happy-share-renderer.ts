@@ -176,7 +176,7 @@ export async function renderHappyShareCard(item: NewsItem): Promise<HTMLCanvasEl
 
   ctx.font = '400 22px Nunito, system-ui, sans-serif';
   ctx.fillStyle = '#A0AEC0';
-  ctx.fillText('wm.vercel.app', PAD, brandY + 34);
+  ctx.fillText('wm-worldmonitor.netlify.app', PAD, brandY + 34);
 
   return canvas;
 }

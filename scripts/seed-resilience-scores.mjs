@@ -17,7 +17,7 @@ import {
 
 loadEnvFile(import.meta.url);
 
-const API_BASE = process.env.API_BASE_URL || 'https://api.wm.vercel.app';
+const API_BASE = process.env.API_BASE_URL || 'https://wm-worldmonitor.netlify.app';
 // Normal premium reads/warmups use the standard API key allowlist.
 const WM_KEY = process.env.WORLDMONITOR_API_KEY
   || (process.env.WORLDMONITOR_VALID_KEYS ?? '').split(',').map((k) => k.trim()).filter(Boolean)[0]

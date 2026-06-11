@@ -26,7 +26,7 @@ export type NoUserPathOutcome =
   | { kind: 'redirect-pro'; persist: false; redirectUrl: string }
   | { kind: 'inline-signin'; persist: true };
 
-const PRO_URL = 'https://wm.vercel.app/pro';
+const PRO_URL = 'https://wm-worldmonitor.netlify.app/pro';
 
 export function decideNoUserPathOutcome(fallbackToPricingPage: boolean): NoUserPathOutcome {
   if (fallbackToPricingPage) {

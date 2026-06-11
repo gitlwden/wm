@@ -32,7 +32,7 @@ function appendHeader(headers, name, value) {
 
 function shouldUseSharedCookieDomain(req) {
   const host = (req.headers.get('host') || new URL(req.url).hostname).toLowerCase();
-  return host === 'wm.vercel.app' || host.endsWith('.wm.vercel.app');
+  return host === 'wm-worldmonitor.netlify.app' || host.endsWith('.wm-worldmonitor.netlify.app');
 }
 
 function cookieDomainAttribute(req) {

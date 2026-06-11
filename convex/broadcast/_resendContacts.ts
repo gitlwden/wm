@@ -25,7 +25,7 @@
 
 export const RESEND_API_BASE = "https://api.resend.com";
 export const USER_AGENT =
-  "WorldMonitor-PROLaunchExporter/1.0 (+https://wm.vercel.app)";
+  "WorldMonitor-PROLaunchExporter/1.0 (+https://wm-worldmonitor.netlify.app)";
 
 /**
  * Heuristic for distinguishing duplicate-shaped 422 responses from other

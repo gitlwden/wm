@@ -21,7 +21,7 @@
  *   - A wm_live_... env key (header: X-WorldMonitor-Key)
  *   - A wm_pro_... Pro MCP token (header: Authorization: Bearer ...)
  *
- * Endpoint defaults to https://wm.vercel.app/mcp; override with
+ * Endpoint defaults to https://wm-worldmonitor.netlify.app/mcp; override with
  * WM_MCP_ENDPOINT for staging.
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const FIXTURES_DIR = resolve(ROOT, 'tests/fixtures/jmespath-samples');
-const ENDPOINT = process.env.WM_MCP_ENDPOINT ?? 'https://wm.vercel.app/mcp';
+const ENDPOINT = process.env.WM_MCP_ENDPOINT ?? 'https://wm-worldmonitor.netlify.app/mcp';
 const BEARER = process.env.WM_MCP_BEARER;
 
 function parseArgs(argv) {

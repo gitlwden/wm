@@ -50,7 +50,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   const ent = await getEntitlements(session.userId);
   // if (!ent || ent.features.tier < 1) {
-  //   return new Response(JSON.stringify({ error: 'pro_required', message: 'Discord notifications are available on the Pro plan.', upgradeUrl: 'https://wm.vercel.app/pro' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  //   return new Response(JSON.stringify({ error: 'pro_required', message: 'Discord notifications are available on the Pro plan.', upgradeUrl: 'https://wm-worldmonitor.netlify.app/pro' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   // }
 
   // Generate one-time state token (20 random bytes → base64url)

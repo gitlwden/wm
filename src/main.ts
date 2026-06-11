@@ -1,7 +1,6 @@
 import './styles/base-layer.css';
 import './styles/happy-theme.css';
 import * as Sentry from '@sentry/browser';
-import { inject } from '@vercel/analytics';
 import { App } from './App';
 import { installUtmInterceptor } from './utils/utm';
 
@@ -13,7 +12,7 @@ const sentryDsn = import.meta.env.VITE_SENTRY_DSN?.trim();
 // first-party callers that hit the same hosts directly (e.g.
 // `MapContainer.fetchAndApplyRadar` → `api.rainviewer.com`). The set IS the
 // safety: only known third-party hosts are suppressed; first-party fetches
-// to `wm.vercel.app` and the self-hosted R2 PMTiles bucket are NOT
+// to `wm-worldmonitor.netlify.app` and the self-hosted R2 PMTiles bucket are NOT
 // in the set, so genuine basemap / API regressions still surface.
 const THIRD_PARTY_FETCH_HOST_ALLOWLIST = new Set([
   'tilecache.rainviewer.com',
@@ -26,7 +25,7 @@ const THIRD_PARTY_FETCH_HOST_ALLOWLIST = new Set([
   // itself (`retryImmediately`); a `Failed to fetch (clerk.vercel.app)`
   // that leaks to onunhandledrejection is a Clerk-SDK-internal network blip,
   // not our code — same disposition as the existing `/ClerkJS: Network error/`
-  // ignoreError. NOT our `wm.vercel.app`, which stays off the list so
+  // ignoreError. NOT our `wm-worldmonitor.netlify.app`, which stays off the list so
   // genuine API regressions still surface (WORLDMONITOR-SA/SB).
   'good-bonefish-27.clerk.accounts.dev',
 ]);
@@ -35,12 +34,12 @@ const THIRD_PARTY_FETCH_HOST_ALLOWLIST = new Set([
 Sentry.init({
   dsn: sentryDsn || undefined,
   release: `worldmonitor@${__APP_VERSION__}`,
-  environment: (location.hostname === 'wm.vercel.app' || location.hostname.endsWith('.vercel.app')) ? 'production'
-    : location.hostname.includes('vercel.app') ? 'preview'
+  environment: (location.hostname === 'wm-worldmonitor.netlify.app' || location.hostname.endsWith('.netlify.app')) ? 'production'
+    : location.hostname.includes('netlify.app') ? 'preview'
     : 'development',
   enabled: Boolean(sentryDsn) && !location.hostname.startsWith('localhost') && !('__TAURI_INTERNALS__' in window),
   allowUrls: [
-    /https?:\/\/.*\.vercel\.app/,
+    /https?:\/\/.*\.netlify\.app/,
   ],
   sendDefaultPii: true,
   tracesSampleRate: 0.1,
@@ -348,7 +347,7 @@ Sentry.init({
     // `MapContainer.fetchAndApplyRadar` hitting `api.rainviewer.com`. The
     // host-allowlist set is the load-bearing safety: only known third-party
     // hosts get suppressed; first-party fetch failures (self-hosted R2 PMTiles
-    // bucket, `wm.vercel.app`) are intentionally NOT in the set so a
+    // bucket, `wm-worldmonitor.netlify.app`) are intentionally NOT in the set so a
     // real basemap / API regression is never silently dropped
     // (WORLDMONITOR-NE/NF, WORLDMONITOR-QG).
     if (isHostScopedFetchFailure) {
@@ -638,15 +637,15 @@ function shouldSuppressCspViolation(
   // ships no http:// subresource loads, and every fetch directive we DO use
   // (connect-src, img-src, script-src, media-src) is set explicitly, so a genuine
   // first-party mixed-content fetch surfaces under its specific directive — never
-  // this default-src fallback. Preserve first-party wm.vercel.app http blocks
+  // this default-src fallback. Preserve first-party wm-worldmonitor.netlify.app http blocks
   // so a real mixed-content regression on our own assets still surfaces
   // (WORLDMONITOR-S0 — http://www.euronews.com article prefetch, 1 user/775 ev).
   if (directive === 'default-src') {
     try {
       const u = new URL(blockedURI);
       if (u.protocol === 'http:'
-          && u.hostname !== 'wm.vercel.app'
-          && !u.hostname.endsWith('.vercel.app')) return true;
+          && u.hostname !== 'wm-worldmonitor.netlify.app'
+          && !u.hostname.endsWith('.netlify.app')) return true;
     } catch { /* scheme-only values fall through */ }
   }
   // First-party Convex backend: corporate proxies / privacy extensions that mutate the
@@ -667,13 +666,13 @@ function shouldSuppressCspViolation(
   // CloudSOC, school content-filters) can strip both `'self'` and `https:` from img-src
   // in the user's effective policy, causing our own favicon and panel icons to be
   // CSP-blocked even though our policy (`img-src 'self' data: blob: https:`) allows
-  // them. Scope to `wm.vercel.app` and its subdomains — img-src blocks to foreign
+  // them. Scope to `wm-worldmonitor.netlify.app` and its subdomains — img-src blocks to foreign
   // hosts (a third-party CDN we never load, attacker-controlled host) still surface
   // (WORLDMONITOR-JP). Suffix check uses a leading `.` so lookalikes like
-  // `wm.vercel.app.evil.com` do NOT match.
+  // `wm-worldmonitor.netlify.app.evil.com` do NOT match.
   //
   // REQUIRE https: protocol — our CSP only allows https: for img-src, so a real
-  // mixed-content regression (`<img src="http://wm.vercel.app/...">`) would be
+  // mixed-content regression (`<img src="http://wm-worldmonitor.netlify.app/...">`) would be
   // blocked by the browser. Suppressing http: blocks on first-party hosts would mask
   // that regression in Sentry. The `cspConnectSrcAllowsHttps` block above uses the
   // same protocol gate for connect-src.
@@ -681,7 +680,7 @@ function shouldSuppressCspViolation(
     try {
       const url = new URL(blockedURI);
       if (url.protocol === 'https:'
-          && (url.hostname === 'wm.vercel.app' || url.hostname.endsWith('.vercel.app'))) return true;
+          && (url.hostname === 'wm-worldmonitor.netlify.app' || url.hostname.endsWith('.netlify.app'))) return true;
     } catch { /* scheme-only values fall through */ }
   }
   // YouTube IFrame API loader: explicitly allowed by our script-src
@@ -724,15 +723,13 @@ function shouldSuppressCspViolation(
   if (/googlevideo\.com|youtube\.com\/generate_204/.test(blockedURI)) return true;
   // Corporate/school content filter injections.
   if (/securly\.com|goguardian\.com|contentkeeper\.com/.test(blockedURI)) return true;
-  // Vercel Analytics script.
-  if (/_vercel\/insights\/script\.js/.test(blockedURI)) return true;
   // Third-party stylesheet injection from public CDNs (browser extensions,
   // bookmarklets, "inspect element" UI tools loading antd/bootstrap/etc.).
   // We legitimately load JSON + JS from `cdn.jsdelivr.net` (world-atlas /
   // us-atlas TopoJSON, chart.js in widget-sanitizer iframe), but never
   // CSS — so a `style-src*` block on jsDelivr is by definition third-party
   // injection (WORLDMONITOR-J0 — antd@4 CSS injection, 270 events / 26
-  // users on wm.vercel.app).
+  // users on wm-worldmonitor.netlify.app).
   if (/^style-src(-elem)?$/.test(directive) && /^https:\/\/cdn\.jsdelivr\.net\//.test(blockedURI)) return true;
   // Inline script blocks from extensions/in-app browsers.
   if (blockedURI === 'inline' && directive === 'script-src-elem') return true;
@@ -823,17 +820,12 @@ import { installSwUpdateHandler } from '@/bootstrap/sw-update';
 // Auto-reload on stale chunk 404s after deployment (Vite fires this for modulepreload failures).
 const chunkReloadStorageKey = installChunkReloadGuard(__APP_VERSION__);
 
-// Initialize Vercel Analytics (10% sampling to reduce costs)
-inject({
-  beforeSend: (event) => (Math.random() > 0.1 ? null : event),
-});
-
 // Initialize dynamic meta tags for sharing
 initMetaTags();
 
 // In desktop mode, route /api/* calls to the local Tauri sidecar backend.
 installRuntimeFetchPatch();
-// In web production, route RPC calls through wm.vercel.app (Cloudflare edge).
+// In web production, route RPC calls through wm-worldmonitor.netlify.app (Cloudflare edge).
 installWebApiRedirect();
 // Force-reload tabs running a stale bundle (catches the class of bug where
 // users keep a tab open across a wire-shape change). Skips when build-hash

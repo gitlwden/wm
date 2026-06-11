@@ -209,7 +209,7 @@ export async function runProPreChecks(
   const validation = await deps.validateProMcpToken(context.mcpTokenId);
   if (!validation || validation.userId !== context.userId) {
     return new Response(
-      JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'MCP authorization revoked. Re-authorize at https://wm.vercel.app/mcp-grant.' } }),
+      JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'MCP authorization revoked. Re-authorize at https://wm-worldmonitor.netlify.app/mcp-grant.' } }),
       { status: 401, headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': wwwAuthHeader(resourceMetadataUrl, 'invalid_token'), ...corsHeaders } },
     );
   }

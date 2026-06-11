@@ -22,7 +22,7 @@ import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 import { validateBearerToken } from '../server/auth-session';
 import { getEntitlements } from '../server/_shared/entitlement-check';
 
-const RELAY_BASE = 'https://proxy.wm.vercel.app';
+const RELAY_BASE = 'https://proxy.wm-worldmonitor.netlify.app';
 const WIDGET_AGENT_KEY = process.env.WIDGET_AGENT_KEY ?? '';
 const PRO_WIDGET_KEY = process.env.PRO_WIDGET_KEY ?? '';
 const WORLDMONITOR_VALID_KEY_SET = new Set(

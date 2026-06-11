@@ -23,7 +23,7 @@ import { internal } from "../_generated/api";
 
 const RESEND_API_BASE = "https://api.resend.com";
 const USER_AGENT =
-  "WorldMonitor-CanaryWaveBackfill/1.0 (+https://wm.vercel.app)";
+  "WorldMonitor-CanaryWaveBackfill/1.0 (+https://wm-worldmonitor.netlify.app)";
 
 // Hard-coded — this is a one-off backfill for a specific historical
 // send. Future wave-export actions will pass these as parameters.

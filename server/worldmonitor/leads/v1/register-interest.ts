@@ -128,7 +128,7 @@ async function verifyDesktopAuth(request: Request, req: RegisterInterestRequest)
 }
 
 async function sendConfirmationEmail(email: string, referralCode: string): Promise<void> {
-  const referralLink = `https://wm.vercel.app/pro?ref=${referralCode}`;
+  const referralLink = `https://wm-worldmonitor.netlify.app/pro?ref=${referralCode}`;
   const shareText = encodeURIComponent("I just joined the World Monitor Pro waitlist \u2014 real-time global intelligence powered by AI. Join me:");
   const shareUrl = encodeURIComponent(referralLink);
   const twitterShare = `https://x.com/intent/tweet?text=${shareText}&url=${shareUrl}`;
@@ -149,7 +149,7 @@ async function sendConfirmationEmail(email: string, referralCode: string): Promi
         'Authorization': `Bearer ${resendKey}`,
       },
       body: JSON.stringify({
-        from: 'World Monitor <noreply@wm.vercel.app>',
+        from: 'World Monitor <noreply@wm-worldmonitor.netlify.app>',
         to: [email],
         subject: "You\u2019re on the World Monitor Pro waitlist",
         html: `
@@ -159,7 +159,7 @@ async function sendConfirmationEmail(email: string, referralCode: string): Promi
               <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto 32px;">
                 <tr>
                   <td style="width: 40px; height: 40px; vertical-align: middle;">
-                    <img src="https://wm.vercel.app/favico/android-chrome-192x192.png" width="40" height="40" alt="WorldMonitor" style="border-radius: 50%; display: block;" />
+                    <img src="https://wm-worldmonitor.netlify.app/favico/android-chrome-192x192.png" width="40" height="40" alt="WorldMonitor" style="border-radius: 50%; display: block;" />
                   </td>
                   <td style="padding-left: 12px;">
                     <div style="font-size: 16px; font-weight: 800; color: #fff; letter-spacing: -0.5px;">WORLD MONITOR</div>
@@ -250,7 +250,7 @@ async function sendConfirmationEmail(email: string, referralCode: string): Promi
                 </table>
               </div>
               <div style="text-align: center; margin-bottom: 36px;">
-                <a href="https://wm.vercel.app" style="display: inline-block; background: #4ade80; color: #0a0a0a; padding: 14px 36px; text-decoration: none; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; border-radius: 2px;">Explore the Free Dashboard</a>
+                <a href="https://wm-worldmonitor.netlify.app" style="display: inline-block; background: #4ade80; color: #0a0a0a; padding: 14px 36px; text-decoration: none; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; border-radius: 2px;">Explore the Free Dashboard</a>
                 <p style="font-size: 12px; color: #555; margin-top: 12px;">The free dashboard stays free forever. Pro adds intelligence on top.</p>
               </div>
             </div>
@@ -258,11 +258,11 @@ async function sendConfirmationEmail(email: string, referralCode: string): Promi
               <div style="margin-bottom: 16px;">
                 <a href="https://x.com/eliehabib" style="color: #666; text-decoration: none; font-size: 12px; margin: 0 12px;">X / Twitter</a>
                 <a href="https://github.com/jlulwd/wm" style="color: #666; text-decoration: none; font-size: 12px; margin: 0 12px;">GitHub</a>
-                <a href="https://wm.vercel.app/pro" style="color: #666; text-decoration: none; font-size: 12px; margin: 0 12px;">Pro Waitlist</a>
+                <a href="https://wm-worldmonitor.netlify.app/pro" style="color: #666; text-decoration: none; font-size: 12px; margin: 0 12px;">Pro Waitlist</a>
               </div>
               <p style="font-size: 11px; color: #444; margin: 0; line-height: 1.6;">
                 World Monitor \u2014 Real-time intelligence for a connected world.<br />
-                <a href="https://wm.vercel.app" style="color: #4ade80; text-decoration: none;">wm.vercel.app</a>
+                <a href="https://wm-worldmonitor.netlify.app" style="color: #4ade80; text-decoration: none;">wm-worldmonitor.netlify.app</a>
               </p>
             </div>
           </div>`,

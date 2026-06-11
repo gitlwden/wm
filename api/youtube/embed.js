@@ -40,7 +40,7 @@ function sanitizeAllowedOrigin(raw, fallback, allowList = ALLOWED_ORIGINS) {
 }
 
 function sanitizeOrigin(raw) {
-  return sanitizeAllowedOrigin(raw, 'https://wm.vercel.app', ALLOWED_ORIGINS);
+  return sanitizeAllowedOrigin(raw, 'https://wm-worldmonitor.netlify.app', ALLOWED_ORIGINS);
 }
 
 function sanitizeParentOrigin(raw, fallback) {

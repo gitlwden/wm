@@ -20,7 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const ROOT = resolve(dirname(__filename), '..');
 const SKILLS_DIR = resolve(ROOT, 'public/.well-known/agent-skills');
 const INDEX_PATH = join(SKILLS_DIR, 'index.json');
-const PUBLIC_BASE = 'https://wm.vercel.app';
+const PUBLIC_BASE = 'https://wm-worldmonitor.netlify.app';
 
 const SCHEMA = 'https://agentskills.io/schemas/v0.2.0/index.json';
 // Closing fence must be anchored to its own line so values that happen to

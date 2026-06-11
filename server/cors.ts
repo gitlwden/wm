@@ -6,8 +6,8 @@
  */
 
 const PRODUCTION_PATTERNS: RegExp[] = [
-  /^https:\/\/wm[a-z0-9-]*\.vercel\.app$/,
-  /^https:\/\/wm-[a-z0-9-]+-gitlwd-projects\.vercel\.app$/,
+  /^https:\/\/wm-worldmonitor\.netlify\.app$/,
+  /^https:\/\/[a-z0-9-]+--wm-worldmonitor\.netlify\.app$/,
   /^https?:\/\/tauri\.localhost(:\d+)?$/,
   /^https?:\/\/[a-z0-9-]+\.tauri\.localhost(:\d+)?$/i,
   /^tauri:\/\/localhost$/,
@@ -33,7 +33,7 @@ export function isAllowedOrigin(origin: string): boolean {
 
 export function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') || '';
-  const allowOrigin = isAllowedOrigin(origin) ? origin : 'https://wm.vercel.app';
+  const allowOrigin = isAllowedOrigin(origin) ? origin : 'https://wm-worldmonitor.netlify.app';
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Credentials': 'true',

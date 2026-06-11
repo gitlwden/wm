@@ -1,4 +1,4 @@
-// Commodity variant - wm.vercel.app -- Focused on mining, metals, energy commodities, and critical minerals
+// Commodity variant - wm-worldmonitor.netlify.app -- Focused on mining, metals, energy commodities, and critical minerals
 import type { PanelConfig, MapLayers } from '@/types';
 import type { VariantConfig } from './base';
 

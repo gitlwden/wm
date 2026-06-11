@@ -372,7 +372,7 @@ export class RuntimeConfigPanel extends Panel {
 
     if (this.mode === 'alert') {
       this.content.querySelector<HTMLButtonElement>('[data-early-access]')?.addEventListener('click', () => {
-        const url = 'https://wm.vercel.app/pro';
+        const url = 'https://wm-worldmonitor.netlify.app/pro';
         if (isDesktopRuntime()) {
           void invokeTauri<void>('open_url', { url }).catch(() => window.open(url, '_blank'));
         } else {

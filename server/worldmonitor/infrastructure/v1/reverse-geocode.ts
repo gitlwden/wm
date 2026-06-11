@@ -7,7 +7,7 @@ import type {
 import { getCachedJson, setCachedJson } from '../../../_shared/redis';
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/reverse';
-const CHROME_UA = 'WorldMonitor/2.0 (https://wm.vercel.app)';
+const CHROME_UA = 'WorldMonitor/2.0 (https://wm-worldmonitor.netlify.app)';
 
 interface ReverseCacheEntry {
   country?: string;

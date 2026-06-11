@@ -45,7 +45,7 @@ import {
 } from "./proLaunchEmailContent";
 
 const RESEND_API_BASE = "https://api.resend.com";
-const USER_AGENT = "WorldMonitor-PROLaunchSender/1.0 (+https://wm.vercel.app)";
+const USER_AGENT = "WorldMonitor-PROLaunchSender/1.0 (+https://wm-worldmonitor.netlify.app)";
 
 /**
  * Create a Resend Broadcast from the locked launch content. Does NOT

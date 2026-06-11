@@ -662,7 +662,7 @@ async function warmPingChokepoints() {
   if (!baseUrl) { console.log('  [Chokepoints] Warm-ping skipped (no WM_API_BASE_URL)'); return; }
   try {
     const resp = await fetch(`${baseUrl}/api/supply-chain/v1/get-chokepoint-status`, {
-      headers: { 'User-Agent': CHROME_UA, Origin: 'https://wm.vercel.app' },
+      headers: { 'User-Agent': CHROME_UA, Origin: 'https://wm-worldmonitor.netlify.app' },
       signal: AbortSignal.timeout(15_000),
     });
     if (!resp.ok) console.warn(`  [Chokepoints] Warm-ping failed: HTTP ${resp.status}`);
@@ -14308,7 +14308,7 @@ async function callForecastLLM(systemPrompt, userPrompt, options = {}) {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
           'User-Agent': CHROME_UA,
-          ...(provider.name === 'openrouter' ? { 'HTTP-Referer': 'https://wm.vercel.app', 'X-Title': 'World Monitor' } : {}),
+          ...(provider.name === 'openrouter' ? { 'HTTP-Referer': 'https://wm-worldmonitor.netlify.app', 'X-Title': 'World Monitor' } : {}),
         },
         body: JSON.stringify({
           model: provider.model,

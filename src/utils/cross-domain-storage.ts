@@ -1,8 +1,8 @@
-const COOKIE_DOMAIN = 'wm.vercel.app';
+const COOKIE_DOMAIN = 'wm-worldmonitor.netlify.app';
 const MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 
 function usesCookies(): boolean {
-  return location.hostname === 'wm.vercel.app';
+  return location.hostname === 'wm-worldmonitor.netlify.app';
 }
 
 export function getDismissed(key: string): boolean {

@@ -5,8 +5,8 @@ import { webhookHandler } from "./payments/webhookHandlers";
 import { resendWebhookHandler } from "./resendWebhookHandler";
 
 const TRUSTED = [
-  "https://wm.vercel.app",
-  "*.wm.vercel.app",
+  "https://wm-worldmonitor.netlify.app",
+  "*.wm-worldmonitor.netlify.app",
   "http://localhost:3000",
 ];
 

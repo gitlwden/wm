@@ -358,7 +358,7 @@ export class RouteExplorer {
         });
         void import('@/services/checkout')
           .then((m) => m.startCheckout('pro_monthly'))
-          .catch(() => window.open('https://wm.vercel.app/pro', '_blank'));
+          .catch(() => window.open('https://wm-worldmonitor.netlify.app/pro', '_blank'));
       }, { once: true });
     }
   }

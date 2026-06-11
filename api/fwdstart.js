@@ -84,7 +84,7 @@ export default async function handler(req, ctx) {
     <description>Forward-thinking startup and VC news from MENA and beyond</description>
     <language>en-us</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
-    <atom:link href="https://wm.vercel.app/api/fwdstart" rel="self" type="application/rss+xml"/>
+    <atom:link href="https://wm-worldmonitor.netlify.app/api/fwdstart" rel="self" type="application/rss+xml"/>
     ${rssItems}
   </channel>
 </rss>`;

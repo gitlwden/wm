@@ -135,10 +135,10 @@ for (const [, entries] of tierGroups) {
     }
   } else if (!primary.selfServe && primary.priceCents === 0) {
     tier.cta = 'Get Started';
-    tier.href = 'https://wm.vercel.app';
+    tier.href = 'https://wm-worldmonitor.netlify.app';
   } else if (!primary.selfServe && primary.priceCents === null) {
     tier.cta = 'Contact Sales';
-    tier.href = 'mailto:enterprise@wm.vercel.app';
+    tier.href = 'mailto:enterprise@wm-worldmonitor.netlify.app';
   }
 
   tier.highlighted = primary.highlighted;

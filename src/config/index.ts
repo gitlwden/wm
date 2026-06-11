@@ -1,8 +1,8 @@
 // Configuration exports
 // For variant-specific builds, set VITE_VARIANT environment variable
-// VITE_VARIANT=tech → wm.vercel.app (tech-focused)
-// VITE_VARIANT=full → wm.vercel.app (geopolitical)
-// VITE_VARIANT=finance → wm.vercel.app (markets/trading)
+// VITE_VARIANT=tech → wm-worldmonitor.netlify.app (tech-focused)
+// VITE_VARIANT=full → wm-worldmonitor.netlify.app (geopolitical)
+// VITE_VARIANT=finance → wm-worldmonitor.netlify.app (markets/trading)
 
 export { SITE_VARIANT } from './variant';
 

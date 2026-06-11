@@ -4,8 +4,8 @@ import handler from './og-story.js';
 
 function renderOgStory(query = '') {
   const req = {
-    url: `https://wm.vercel.app/api/og-story${query ? `?${query}` : ''}`,
-    headers: { host: 'wm.vercel.app' },
+    url: `https://wm-worldmonitor.netlify.app/api/og-story${query ? `?${query}` : ''}`,
+    headers: { host: 'wm-worldmonitor.netlify.app' },
   };
 
   let statusCode = 0;

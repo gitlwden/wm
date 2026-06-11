@@ -1,4 +1,4 @@
-// Full geopolitical variant - wm.vercel.app
+// Full geopolitical variant - wm-worldmonitor.netlify.app
 import type { PanelConfig, MapLayers } from '@/types';
 import type { VariantConfig } from './base';
 

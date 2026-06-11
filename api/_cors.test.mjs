@@ -7,7 +7,7 @@ function makeRequest(origin) {
   if (origin !== null) {
     headers.set('origin', origin);
   }
-  return new Request('https://wm.vercel.app/api/test', { headers });
+  return new Request('https://wm-worldmonitor.netlify.app/api/test', { headers });
 }
 
 test('allows desktop Tauri origins', () => {
@@ -32,7 +32,7 @@ test('rejects unrelated external origins', () => {
   const req = makeRequest('https://evil.example.com');
   assert.equal(isDisallowedOrigin(req), true);
   const cors = getCorsHeaders(req);
-  assert.equal(cors['Access-Control-Allow-Origin'], 'https://wm.vercel.app');
+  assert.equal(cors['Access-Control-Allow-Origin'], 'https://wm-worldmonitor.netlify.app');
   assert.equal(cors['Access-Control-Allow-Credentials'], 'true');
 });
 

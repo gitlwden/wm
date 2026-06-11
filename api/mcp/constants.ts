@@ -249,11 +249,11 @@ export const TOOL_DESCRIPTION_MAX_BYTES = 120;
 // docs/mcp-tools-reference.mdx, fetched on demand instead of amortising
 // ~550 bytes per session.
 export const SERVER_INSTRUCTIONS = [
-  'Every tool accepts an optional `jmespath` string. Server-side projection applied AFTER per-tool filter/summary; typical 80-95% token reduction. Grammar: https://jmespath.org/specification.html. Guide + 12 worked examples: https://wm.vercel.app/docs/mcp-jmespath.',
+  'Every tool accepts an optional `jmespath` string. Server-side projection applied AFTER per-tool filter/summary; typical 80-95% token reduction. Grammar: https://jmespath.org/specification.html. Guide + 12 worked examples: https://wm-worldmonitor.netlify.app/docs/mcp-jmespath.',
   '',
-  `Limits: expr ≤ ${JMESPATH_MAX_EXPR_BYTES}B, output ≤ ${JMESPATH_MAX_OUTPUT_BYTES}B. Bad expressions soft-fail via {_jmespath_error, original_keys} envelope (consumes one daily quota unit on retry — self-correct from original_keys). Full envelope reference: https://wm.vercel.app/docs/mcp-error-catalog.`,
+  `Limits: expr ≤ ${JMESPATH_MAX_EXPR_BYTES}B, output ≤ ${JMESPATH_MAX_OUTPUT_BYTES}B. Bad expressions soft-fail via {_jmespath_error, original_keys} envelope (consumes one daily quota unit on retry — self-correct from original_keys). Full envelope reference: https://wm-worldmonitor.netlify.app/docs/mcp-error-catalog.`,
   '',
-  `tools/list ships compressed tool descriptions (≤${TOOL_DESCRIPTION_MAX_BYTES}B). Call describe_tool({tool_name}) for the full uncompressed definition — quota-exempt (still counts toward the 60/min rate limit), so use freely while exploring. describe_tool({tool_name: 'nonexistent'}) returns {error: 'unknown_tool', available: [...]} so you can self-correct. Full reference: https://wm.vercel.app/docs/mcp-tools-reference.`,
+  `tools/list ships compressed tool descriptions (≤${TOOL_DESCRIPTION_MAX_BYTES}B). Call describe_tool({tool_name}) for the full uncompressed definition — quota-exempt (still counts toward the 60/min rate limit), so use freely while exploring. describe_tool({tool_name: 'nonexistent'}) returns {error: 'unknown_tool', available: [...]} so you can self-correct. Full reference: https://wm-worldmonitor.netlify.app/docs/mcp-tools-reference.`,
   '',
   'Issue prompts/list to discover pre-built workflow templates (country-briefing, energy-shock-watch, market-open-prep, conflict-pulse, route-risk-check, freshness-audit). Each prompt pre-bakes a JMESPath projection per step so the first execution lands on the right shape. prompts/list + prompts/get are quota-exempt (per-minute limit only).',
   '',

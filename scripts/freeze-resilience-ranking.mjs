@@ -3,9 +3,9 @@
 // of published figures. Writes to docs/snapshots/resilience-ranking-<YYYY-MM-DD>.json.
 //
 // Usage:
-//   API_BASE=https://api.wm.vercel.app node scripts/freeze-resilience-ranking.mjs
-//   API_BASE=https://api.wm.vercel.app WORLDMONITOR_API_KEY=... node scripts/freeze-resilience-ranking.mjs
-//   API_BASE=https://api.wm.vercel.app WORLDMONITOR_API_KEY=... \
+//   API_BASE=https://wm-worldmonitor.netlify.app node scripts/freeze-resilience-ranking.mjs
+//   API_BASE=https://wm-worldmonitor.netlify.app WORLDMONITOR_API_KEY=... node scripts/freeze-resilience-ranking.mjs
+//   API_BASE=https://wm-worldmonitor.netlify.app WORLDMONITOR_API_KEY=... \
 //     RESILIENCE_RANKING_OUTPUT_BASENAME=resilience-ranking-live-post-pr1-YYYY-MM-DD.json \
 //     node scripts/freeze-resilience-ranking.mjs
 //
@@ -411,7 +411,7 @@ function resolveRankingSnapshotOutputPath(capturedAt, outputBasename = OUTPUT_BA
 
 async function main() {
   if (!API_BASE) {
-    console.error('[freeze-resilience-ranking] API_BASE env var required (e.g. https://api.wm.vercel.app)');
+    console.error('[freeze-resilience-ranking] API_BASE env var required (e.g. https://wm-worldmonitor.netlify.app)');
     process.exit(2);
   }
   if (FORCE_RANKING_REFRESH && !process.env.WORLDMONITOR_API_KEY) {

@@ -109,7 +109,7 @@ async function fetchWithRetry(url, attempt = 1) {
   try {
     const resp = await fetch(url, {
       headers: {
-        'User-Agent': 'WorldMonitor-Seed/1.0 (https://wm.vercel.app)',
+        'User-Agent': 'WorldMonitor-Seed/1.0 (https://wm-worldmonitor.netlify.app)',
         'Accept': 'application/json',
       },
       signal: AbortSignal.timeout(30_000),

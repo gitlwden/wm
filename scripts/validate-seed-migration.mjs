@@ -7,14 +7,14 @@
  *   node scripts/validate-seed-migration.mjs [--base-url URL]
  *
  * Requires: Referer header from trusted origin OR X-WorldMonitor-Key header.
- * Uses api.wm.vercel.app by default.
+ * Uses wm-worldmonitor.netlify.app by default.
  */
 
 const BASE_URL = process.argv.includes('--base-url')
   ? process.argv[process.argv.indexOf('--base-url') + 1]
-  : 'https://api.wm.vercel.app';
+  : 'https://wm-worldmonitor.netlify.app';
 
-const ORIGIN = 'https://wm.vercel.app';
+const ORIGIN = 'https://wm-worldmonitor.netlify.app';
 
 // ========================================================================
 // Test definitions — one per migrated handler

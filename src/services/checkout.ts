@@ -63,7 +63,7 @@ const CHECKOUT_REFERRAL_PARAM = 'checkoutReferral';
 const CHECKOUT_DISCOUNT_PARAM = 'checkoutDiscount';
 const PENDING_CHECKOUT_KEY = 'wm-pending-checkout';
 const POST_CHECKOUT_FLAG_KEY = 'wm-post-checkout';
-const APP_CHECKOUT_BASE_URL = 'https://wm.vercel.app/';
+const APP_CHECKOUT_BASE_URL = 'https://wm-worldmonitor.netlify.app/';
 
 /**
  * Session flag set just before the post-overlay reload. Lets panel-layout
@@ -919,7 +919,7 @@ function renderCheckoutErrorSurface(
   fallbackToPricingPage: boolean,
 ): void {
   if (fallbackToPricingPage) {
-    window.location.assign('https://wm.vercel.app/pro');
+    window.location.assign('https://wm-worldmonitor.netlify.app/pro');
     return;
   }
   showCheckoutErrorToast(error.userMessage);

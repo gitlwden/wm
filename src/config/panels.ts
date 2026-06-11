@@ -932,7 +932,7 @@ const COMMODITY_MOBILE_MAP_LAYERS: MapLayers = {
 };
 
 // ============================================
-// ENERGY variant — energy wm.vercel.app
+// ENERGY variant — energy wm-worldmonitor.netlify.app
 // Pipelines, storage, chokepoints, fuel shortages, disruption timeline.
 // See docs/internal/global-energy-flow-parity-and-surpass.md (not committed).
 // ============================================

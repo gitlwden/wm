@@ -39,7 +39,7 @@ delete process.env.UPSTASH_REDIS_REST_TOKEN;
 const mcpMod = await import('../api/mcp.ts');
 
 async function fetchToolsList() {
-  const req = new Request('https://wm.vercel.app/mcp', {
+  const req = new Request('https://wm-worldmonitor.netlify.app/mcp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-WorldMonitor-Key': 'wm_measure_key' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
@@ -55,7 +55,7 @@ const v15Tools = await fetchToolsList();
 // describe_tool (new in v1.5.0), AND replace each compressed description
 // with the full text by calling describe_tool({tool_name: t.name}).
 async function callDescribeTool(toolName) {
-  const req = new Request('https://wm.vercel.app/mcp', {
+  const req = new Request('https://wm-worldmonitor.netlify.app/mcp', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-WorldMonitor-Key': 'wm_measure_key' },
     body: JSON.stringify({

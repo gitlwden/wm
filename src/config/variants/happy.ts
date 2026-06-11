@@ -1,4 +1,4 @@
-// Happy variant - wm.vercel.app
+// Happy variant - wm-worldmonitor.netlify.app
 import type { PanelConfig, MapLayers } from '@/types';
 import type { VariantConfig } from './base';
 

@@ -8,7 +8,7 @@
  *
  * Usage:
  *   curl -H "x-probe-secret: $RELAY_SHARED_SECRET" \
- *        https://api.wm.vercel.app/api/seed-contract-probe
+ *        https://wm-worldmonitor.netlify.app/api/seed-contract-probe
  *
  * On failure returns 503 + the failing `checks`/`boundary` entries so CI or
  * operators can pinpoint the regression. Replaces the curl/jq shell ritual.
@@ -232,7 +232,7 @@ export async function checkPublicBoundary(
   try { sessionToken = (await issueSessionToken()).token; } catch { /* no-op */ }
 
   const headers: Record<string, string> = {
-    Origin: 'https://wm.vercel.app',
+    Origin: 'https://wm-worldmonitor.netlify.app',
     'User-Agent': 'WorldMonitor-SeedContractProbe/1.0',
   };
   if (sessionToken) headers['X-WorldMonitor-Key'] = sessionToken;

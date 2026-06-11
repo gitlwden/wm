@@ -5,7 +5,7 @@
 // produced by scripts/freeze-resilience-ranking.mjs with live credentials.
 //
 // Usage:
-//   API_BASE=https://wm.vercel.app \
+//   API_BASE=https://wm-worldmonitor.netlify.app \
 //     node --import tsx/esm scripts/capture-resilience-energy-v2-acceptance.mjs
 //
 // Optional:
@@ -48,7 +48,7 @@ const GATE_THRESHOLDS = {
   CORE_EXTRACTION_COVERAGE_MIN: 0.80,
 };
 
-const API_BASE = (process.env.API_BASE || 'https://wm.vercel.app').replace(/\/$/, '');
+const API_BASE = (process.env.API_BASE || 'https://wm-worldmonitor.netlify.app').replace(/\/$/, '');
 const API_ORIGIN = new URL(API_BASE).origin;
 const USER_AGENT = process.env.USER_AGENT
   || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
@@ -232,7 +232,7 @@ function formatMissingPostFlipRankingSnapshotMessage() {
     '  docs/snapshots/resilience-ranking-live-post-pr1-YYYY-MM-DD.json',
     '',
     'Capture it with production credentials; the freeze script verifies score anchors through get-resilience-score:',
-    '  API_BASE=https://wm.vercel.app \\',
+    '  API_BASE=https://wm-worldmonitor.netlify.app \\',
     '    WORLDMONITOR_API_KEY=<pro-api-key> \\',
     '    RESILIENCE_RANKING_OUTPUT_BASENAME=resilience-ranking-live-post-pr1-YYYY-MM-DD.json \\',
     '    node scripts/freeze-resilience-ranking.mjs',
@@ -240,7 +240,7 @@ function formatMissingPostFlipRankingSnapshotMessage() {
     '  #   [freeze-resilience-ranking] wrote .../docs/snapshots/resilience-ranking-live-post-pr1-YYYY-MM-DD.json',
     '',
     'Then rerun this harness:',
-    '  API_BASE=https://wm.vercel.app \\',
+    '  API_BASE=https://wm-worldmonitor.netlify.app \\',
     '    WORLDMONITOR_API_KEY=<pro-api-key> \\',
     '    node --import tsx/esm scripts/capture-resilience-energy-v2-acceptance.mjs',
     '',

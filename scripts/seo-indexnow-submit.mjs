@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Submit all wm.vercel.app URLs to IndexNow after deploy.
+ * Submit all wm-worldmonitor.netlify.app URLs to IndexNow after deploy.
  * Run once after deploying the IndexNow key file:
  *   node scripts/seo-indexnow-submit.mjs
  *
@@ -12,33 +12,33 @@ const KEY = 'a7f3e9d1b2c44e8f9a0b1c2d3e4f5a6b';
 
 const BATCHES = [
   {
-    host: 'wm.vercel.app',
+    host: 'wm-worldmonitor.netlify.app',
     urls: [
-      'https://wm.vercel.app/',
-      'https://wm.vercel.app/pro',
-      'https://wm.vercel.app/blog/',
-      'https://wm.vercel.app/blog/posts/what-is-worldmonitor-real-time-global-intelligence/',
-      'https://wm.vercel.app/blog/posts/five-dashboards-one-platform-worldmonitor-variants/',
-      'https://wm.vercel.app/blog/posts/track-global-conflicts-in-real-time/',
-      'https://wm.vercel.app/blog/posts/cyber-threat-intelligence-for-security-teams/',
-      'https://wm.vercel.app/blog/posts/osint-for-everyone-open-source-intelligence-democratized/',
-      'https://wm.vercel.app/blog/posts/natural-disaster-monitoring-earthquakes-fires-volcanoes/',
-      'https://wm.vercel.app/blog/posts/real-time-market-intelligence-for-traders-and-analysts/',
-      'https://wm.vercel.app/blog/posts/monitor-global-supply-chains-and-commodity-disruptions/',
-      'https://wm.vercel.app/blog/posts/satellite-imagery-orbital-surveillance/',
-      'https://wm.vercel.app/blog/posts/live-webcams-from-geopolitical-hotspots/',
-      'https://wm.vercel.app/blog/posts/prediction-markets-ai-forecasting-geopolitics/',
-      'https://wm.vercel.app/blog/posts/command-palette-search-everything-instantly/',
-      'https://wm.vercel.app/blog/posts/worldmonitor-in-21-languages-global-intelligence-for-everyone/',
-      'https://wm.vercel.app/blog/posts/ai-powered-intelligence-without-the-cloud/',
-      'https://wm.vercel.app/blog/posts/build-on-worldmonitor-developer-api-open-source/',
-      'https://wm.vercel.app/blog/posts/worldmonitor-vs-traditional-intelligence-tools/',
-      'https://wm.vercel.app/blog/posts/tracking-global-trade-routes-chokepoints-freight-costs/',
+      'https://wm-worldmonitor.netlify.app/',
+      'https://wm-worldmonitor.netlify.app/pro',
+      'https://wm-worldmonitor.netlify.app/blog/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/what-is-worldmonitor-real-time-global-intelligence/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/five-dashboards-one-platform-worldmonitor-variants/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/track-global-conflicts-in-real-time/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/cyber-threat-intelligence-for-security-teams/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/osint-for-everyone-open-source-intelligence-democratized/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/natural-disaster-monitoring-earthquakes-fires-volcanoes/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/real-time-market-intelligence-for-traders-and-analysts/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/monitor-global-supply-chains-and-commodity-disruptions/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/satellite-imagery-orbital-surveillance/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/live-webcams-from-geopolitical-hotspots/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/prediction-markets-ai-forecasting-geopolitics/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/command-palette-search-everything-instantly/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/worldmonitor-in-21-languages-global-intelligence-for-everyone/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/ai-powered-intelligence-without-the-cloud/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/build-on-worldmonitor-developer-api-open-source/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/worldmonitor-vs-traditional-intelligence-tools/',
+      'https://wm-worldmonitor.netlify.app/blog/posts/tracking-global-trade-routes-chokepoints-freight-costs/',
     ],
   },
-  { host: 'tech.wm.vercel.app', urls: ['https://tech.wm.vercel.app/'] },
-  { host: 'finance.wm.vercel.app', urls: ['https://finance.wm.vercel.app/'] },
-  { host: 'happy.wm.vercel.app', urls: ['https://happy.wm.vercel.app/'] },
+  { host: 'tech.wm-worldmonitor.netlify.app', urls: ['https://tech.wm-worldmonitor.netlify.app/'] },
+  { host: 'finance.wm-worldmonitor.netlify.app', urls: ['https://finance.wm-worldmonitor.netlify.app/'] },
+  { host: 'happy.wm-worldmonitor.netlify.app', urls: ['https://happy.wm-worldmonitor.netlify.app/'] },
 ];
 
 const ENDPOINTS = [

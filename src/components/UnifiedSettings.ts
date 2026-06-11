@@ -127,7 +127,7 @@ export class UnifiedSettings {
           // generic Dodo portal that won't recognise them.
           if (result.outcome === 'no-customer') {
             showToast(
-              'Subscription is managed outside Dodo. Email support@wm.vercel.app for help.',
+              'Subscription is managed outside Dodo. Email support@wm-worldmonitor.netlify.app for help.',
             );
           }
         });
@@ -692,7 +692,7 @@ export class UnifiedSettings {
       void openBillingPortal(reservedWin).then((result) => {
         if (result.outcome === 'no-customer') {
           showToast(
-            'Subscription is managed outside Dodo. Email support@wm.vercel.app for help.',
+            'Subscription is managed outside Dodo. Email support@wm-worldmonitor.netlify.app for help.',
           );
         }
       });
@@ -700,11 +700,11 @@ export class UnifiedSettings {
     }
     this.close();
     if (this.config.isDesktopApp) {
-      window.open('https://wm.vercel.app/pro', '_blank');
+      window.open('https://wm-worldmonitor.netlify.app/pro', '_blank');
       return;
     }
     import('@/services/checkout').then(m => import('@/config/products').then(p => m.startCheckout(p.DEFAULT_UPGRADE_PRODUCT))).catch(() => {
-      window.open('https://wm.vercel.app/pro', '_blank');
+      window.open('https://wm-worldmonitor.netlify.app/pro', '_blank');
     });
   }
 
@@ -1017,7 +1017,7 @@ export class UnifiedSettings {
         } else {
           this.close();
           import('@/services/checkout').then(m => import('@/config/products').then(p => m.startCheckout(p.DODO_PRODUCTS.API_STARTER_MONTHLY))).catch(() => {
-            window.open('https://wm.vercel.app/pro', '_blank');
+            window.open('https://wm-worldmonitor.netlify.app/pro', '_blank');
           });
         }
       });

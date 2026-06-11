@@ -146,8 +146,8 @@ export function __resetWmSessionForTests(): void {
 //
 //   2. PR #3575 review — using raw `startsWith(apiOrigin)` for absolute URLs
 //      lets attacker-controlled origins that embed the canonical-origin
-//      string as a prefix (e.g. `https://wm.vercel.app.evil.example/`)
-//      OR as the userinfo portion (`https://wm.vercel.app@evil/`)
+//      string as a prefix (e.g. `https://wm-worldmonitor.netlify.app.evil.example/`)
+//      OR as the userinfo portion (`https://wm-worldmonitor.netlify.app@evil/`)
 //      slip through, sending the wms_ token to a foreign host. Bug class:
 //      matcher over-matches → token leaks cross-origin.
 //
@@ -178,7 +178,7 @@ export function installWmSessionFetchInterceptor(): void {
   // CRITICAL: must be getCanonicalApiOrigin(), NOT getApiBaseUrl(). The latter
   // returns '' for non-desktop runtimes (see runtime.ts:111), which makes the
   // interceptor's cross-origin match below silently fail for every browser
-  // request to https://wm.vercel.app/api/* — the interceptor only
+  // request to https://wm-worldmonitor.netlify.app/api/* — the interceptor only
   // catches relative '/api/' paths, the wms_ token never gets attached, and
   // the gateway returns {"error":"API key required"}. Production incident
   // 2026-05-03: every browser request 401'd because of this.

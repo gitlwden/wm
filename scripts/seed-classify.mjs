@@ -236,7 +236,7 @@ const CLASSIFY_LLM_PROVIDERS = [
     envKey: 'OPENROUTER_API_KEY',
     apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
     model: 'google/gemini-2.5-flash',
-    headers: (key) => ({ Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://wm.vercel.app', 'X-Title': 'World Monitor', 'User-Agent': CHROME_UA }),
+    headers: (key) => ({ Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://wm-worldmonitor.netlify.app', 'X-Title': 'World Monitor', 'User-Agent': CHROME_UA }),
     timeout: 30000,
   },
 ];
@@ -295,7 +295,7 @@ async function classifyFetchLlm(titles) {
 // ── Per-variant classify ──────────────────────────────────────────────────
 
 async function seedClassifyForVariant(variant, seenTitles) {
-  const digestUrl = `https://api.wm.vercel.app/api/news/v1/list-feed-digest?variant=${variant}&lang=en`;
+  const digestUrl = `https://wm-worldmonitor.netlify.app/api/news/v1/list-feed-digest?variant=${variant}&lang=en`;
   let digest;
   try {
     const resp = await fetch(digestUrl, {

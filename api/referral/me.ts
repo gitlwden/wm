@@ -37,7 +37,7 @@ import { validateBearerToken } from '../../server/auth-session';
 import { getReferralCodeForUser, buildShareUrl } from '../../server/_shared/referral-code';
 
 const PUBLIC_BASE =
-  process.env.WORLDMONITOR_PUBLIC_BASE_URL ?? 'https://wm.vercel.app';
+  process.env.WORLDMONITOR_PUBLIC_BASE_URL ?? 'https://wm-worldmonitor.netlify.app';
 
 /**
  * Bind the Clerk-derived share code to the userId in Convex so that

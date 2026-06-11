@@ -10,7 +10,7 @@ const ENV = (() => {
 })();
 
 const WS_API_URL = ENV.VITE_WS_API_URL || '';
-const DEFAULT_WEB_API_URL = 'https://wm.vercel.app';
+const DEFAULT_WEB_API_URL = 'https://wm-worldmonitor.netlify.app';
 
 const DEFAULT_REMOTE_HOSTS: Record<string, string> = {
   tech: WS_API_URL,
@@ -120,8 +120,8 @@ export function getApiBaseUrl(): string {
 }
 
 function isWorldMonitorWebHost(hostname: string): boolean {
-  return hostname === 'wm.vercel.app'
-    || hostname.endsWith('.vercel.app');
+  return hostname === 'wm-worldmonitor.netlify.app'
+    || hostname.endsWith('.netlify.app');
 }
 
 export function getConfiguredWebApiBaseUrl(): string {
@@ -164,7 +164,7 @@ export function getRemoteApiBaseUrl(): string {
   if (fromHosts) return fromHosts;
 
   // Desktop builds may not set VITE_WS_API_URL; default to production.
-  if (isDesktopRuntime()) return 'https://wm.vercel.app';
+  if (isDesktopRuntime()) return 'https://wm-worldmonitor.netlify.app';
   return '';
 }
 
@@ -208,13 +208,12 @@ function extractHostnames(...urls: (string | undefined)[]): string[] {
 }
 
 const APP_HOSTS = new Set([
-  'wm.vercel.app',
-  'wm-neon.vercel.app',
-  'wm-tech-gitlwd-projects.vercel.app',
-  'wm-finance.vercel.app',
-  'wm-commodity-gitlwd-projects.vercel.app',
-  'wm-happy-gitlwd-projects.vercel.app',
-  'wm-energy-gitlwd-projects.vercel.app',
+  'wm-worldmonitor.netlify.app',
+  'wm-tech.netlify.app',
+  'wm-finance.netlify.app',
+  'wm-commodity.netlify.app',
+  'wm-happy.netlify.app',
+  'wm-energy.netlify.app',
   'localhost',
   '127.0.0.1',
   ...extractHostnames(WS_API_URL, ENV.VITE_WS_RELAY_URL),
@@ -224,7 +223,7 @@ function isAppOriginUrl(urlStr: string): boolean {
   try {
     const u = new URL(urlStr);
     const host = u.hostname;
-    return APP_HOSTS.has(host) || host.endsWith('.vercel.app');
+    return APP_HOSTS.has(host) || host.endsWith('.netlify.app');
   } catch {
     return false;
   }
@@ -779,7 +778,7 @@ export function installWebApiRedirect(): void {
           return fetchWithRedirectFallback(`${API_BASE}${input}`, input, enriched ? withCredentials(enriched) : withCredentials(init));
         }
         // Absolute URL already targeting the API base (generated clients call fetch
-        // with full URLs like https://wm.vercel.app/api/...) — just inject auth.
+        // with full URLs like https://wm-worldmonitor.netlify.app/api/...) — just inject auth.
         if (input.startsWith(`${API_BASE}/api/`)) {
           const pathAndSearch = input.slice(API_BASE.length);
           const enriched = await enrichInitForPremium(pathAndSearch, init);
