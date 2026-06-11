@@ -24,6 +24,21 @@ async function getEntitlementsHandler(ctx, userId) {
         .withIndex("by_userId", (q) => q.eq("userId", userId))
         .first();
     if (!entitlement) {
+        // No Convex entitlement record — check if Clerk marks this user as Pro.
+        // This covers test accounts and manually-granted Pro roles that never
+        // went through the Dodo checkout → webhook → Convex pipeline.
+        const identity = await ctx.auth.getUserIdentity();
+        const clerkRole = identity?.role
+            ?? identity?.publicMetadata;
+        const isClerkPro = clerkRole === 'pro'
+            || (typeof clerkRole === 'object' && clerkRole !== null && clerkRole.role === 'pro');
+        if (isClerkPro) {
+            return {
+                planKey: "pro_monthly",
+                features: getFeaturesForPlan("pro_monthly"),
+                validUntil: Date.now() + 365 * 24 * 60 * 60 * 1000,
+            };
+        }
         return FREE_TIER_DEFAULTS;
     }
     // Expired entitlements fall back to free tier (Pitfall 7 from research)

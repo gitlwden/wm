@@ -25,8 +25,8 @@ export const createApiKey = mutation({
     handler: async (ctx, args) => {
         const userId = await requireUserId(ctx);
         // Entitlement gate: only users with apiAccess may create API keys.
-        // This is catalog-driven — all paid plans (Pro tier 1, API Starter
-        // tier 2+, Enterprise tier 3) have apiAccess=true in PRODUCT_CATALOG.
+        // The entitlement query (entitlements.ts) falls back to Clerk role
+        // when no Convex record exists, so Pro users always pass here.
         const entitlement = await ctx.db
             .query("entitlements")
             .withIndex("by_userId", (q) => q.eq("userId", userId))
