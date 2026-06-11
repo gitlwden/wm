@@ -29,7 +29,7 @@ export async function getCountryProducts(
 
   // Seeder writes via raw key (no env-prefix) — match it on read.
   const key = `comtrade:bilateral-hs4:${iso2}:v1`;
-  let payload = await getCachedJson(key, true).catch(() => null) as BilateralHs4Payload | null;
+  const payload = await getCachedJson(key, true).catch(() => null) as BilateralHs4Payload | null;
 
   // Lazy fallback: if the seed hasn't written this country's key (TTL expired,
   // country not in seed set, or transient Comtrade failure), attempt a live

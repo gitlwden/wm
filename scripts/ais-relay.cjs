@@ -10750,7 +10750,7 @@ void getBestLlmProvider().catch(err => {
   console.error('[llm-cache] Initial benchmark failed:', err.message);
 });
 
-function getWidgetLlmProvider(isPro) {
+function getWidgetLlmProvider(_isPro) {
   const overrideProvider = process.env.WIDGET_LLM_PROVIDER;
   const overrideModel = process.env.WIDGET_LLM_MODEL;
 
@@ -10986,7 +10986,7 @@ function getWidgetAgentProvidedKey(req) {
     : '';
 }
 
-function requireWidgetAgentAccess(req, res) {
+function requireWidgetAgentAccess(req, _res) {
   const status = getWidgetAgentStatus();
   // P2: allow PRO-only deployments (no basic widget key, but PRO key present)
   // if (!status.widgetKeyConfigured && !status.proKeyConfigured) {

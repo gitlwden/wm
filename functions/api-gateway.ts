@@ -148,13 +148,27 @@ const allRoutes = [
 
 const gateway = createDomainGateway(allRoutes);
 
-// Standalone route handlers (not part of the RPC gateway)
+// Standalone route handlers (not part of the RPC gateway).
+// .js files exist in the repo; .ts-only files are compiled by esbuild.
 const STANDALONE_ROUTES: Record<string, () => Promise<{ default: (req: Request) => Promise<Response> }>> = {
-  '/api/bootstrap': () => import('../api/bootstrap.js'),
-  '/api/health': () => import('../api/health.js'),
-  '/api/version': () => import('../api/version.js'),
-  '/api/gpsjam': () => import('../api/gpsjam.js'),
-  '/api/wm-session': () => import('../api/wm-session.js'),
+  '/api/bootstrap':               () => import('../api/bootstrap.js'),
+  '/api/health':                  () => import('../api/health.js'),
+  '/api/version':                 () => import('../api/version.js'),
+  '/api/gpsjam':                  () => import('../api/gpsjam.js'),
+  '/api/wm-session':              () => import('../api/wm-session.js'),
+  '/api/chat-analyst':            () => import('../api/chat-analyst.ts'),
+  '/api/latest-brief':            () => import('../api/latest-brief.ts'),
+  '/api/create-checkout':         () => import('../api/create-checkout.ts'),
+  '/api/customer-portal':         () => import('../api/customer-portal.ts'),
+  '/api/notification-channels':   () => import('../api/notification-channels.ts'),
+  '/api/notify':                  () => import('../api/notify.ts'),
+  '/api/user-prefs':              () => import('../api/user-prefs.ts'),
+  '/api/symbol-search':           () => import('../api/symbol-search.ts'),
+  '/api/widget-agent':            () => import('../api/widget-agent.ts'),
+  '/api/mcp-proxy':               () => import('../api/mcp-proxy.ts'),
+  '/api/invalidate-user-api-key-cache': () => import('../api/invalidate-user-api-key-cache.ts'),
+  '/api/oauth-protected-resource':() => import('../api/oauth-protected-resource.ts'),
+  '/api/seed-contract-probe':     () => import('../api/seed-contract-probe.ts'),
 };
 
 // Netlify Function handler

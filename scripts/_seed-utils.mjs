@@ -340,7 +340,7 @@ function kvBase(accountId, namespaceId) {
   return `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}`;
 }
 
-async function redisCommand(url, token, command) {
+async function redisCommand(_url, _token, command) {
   // Dual-backend routing: high-freq keys → Upstash, low-freq → Cloudflare KV
   const [verb, key, ...rest] = command;
   const upperVerb = String(verb).toUpperCase();
@@ -402,7 +402,7 @@ async function redisCommand(url, token, command) {
   }
 }
 
-export async function redisGet(url, token, key) {
+export async function redisGet(_url, _token, key) {
   if (shouldUseUpstash(key)) {
     try {
       const raw = await _upstashGet(key);
@@ -440,7 +440,7 @@ export async function redisGet(url, token, key) {
   }
 }
 
-async function redisSet(url, token, key, value, ttlSeconds) {
+async function redisSet(_url, _token, key, value, ttlSeconds) {
   if (shouldUseUpstash(key)) {
     await _upstashSet(key, value, ttlSeconds);
     return { result: 'OK' };
@@ -462,7 +462,7 @@ async function redisSet(url, token, key, value, ttlSeconds) {
   return { result: 'OK' };
 }
 
-async function redisDel(url, token, key) {
+async function redisDel(_url, _token, key) {
   if (shouldUseUpstash(key)) {
     return _upstashDel(key);
   }
@@ -608,7 +608,7 @@ export async function cfPipeline(commands) {
     const { accountId, namespaceId, token } = _cfCredentials();
     const base = kvBase(accountId, namespaceId);
     const headers = { Authorization: `Bearer ${token}` };
-    const cfResults = await Promise.all(cfCmds.map(async ({ idx, cmd }) => {
+    const cfResults = await Promise.all(cfCmds.map(async ({ cmd }) => {
       const [verb, key, value, exFlag, ttl] = cmd;
       try {
         if (verb === 'GET') {

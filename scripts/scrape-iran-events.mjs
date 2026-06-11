@@ -71,7 +71,7 @@ function decodeHtml(str) {
 function relativeTime(pubDate) {
   if (!pubDate) return '';
   const d = new Date(pubDate);
-  if (isNaN(d.getTime())) return '';
+  if (Number.isNaN(d.getTime())) return '';
   const diffMs = Date.now() - d.getTime();
   const hours = Math.floor(diffMs / 3600_000);
   if (hours < 1) return `${Math.floor(diffMs / 60_000)} minutes ago`;
@@ -120,8 +120,8 @@ async function main() {
   }
 
   events.sort((a, b) => {
-    const ta = a.time.includes('hour') ? parseInt(a.time) : a.time.includes('day') ? parseInt(a.time) * 24 : 999;
-    const tb = b.time.includes('hour') ? parseInt(b.time) : b.time.includes('day') ? parseInt(b.time) * 24 : 999;
+    const ta = a.time.includes('hour') ? parseInt(a.time, 10) : a.time.includes('day') ? parseInt(a.time, 10) * 24 : 999;
+    const tb = b.time.includes('hour') ? parseInt(b.time, 10) : b.time.includes('day') ? parseInt(b.time, 10) * 24 : 999;
     return ta - tb;
   });
 

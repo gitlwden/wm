@@ -93,7 +93,7 @@ describe('CI workflow coverage', () => {
 
   it('keeps required smoke jobs capped with explicit timeouts', () => {
     for (const job of TIMEOUT_CAPPED_TEST_JOBS) {
-      assert.match(testJobBlock(job), /\n    timeout-minutes: \d+\n/, `${job} must set timeout-minutes`);
+      assert.match(testJobBlock(job), /\n {4}timeout-minutes: \d+\n/, `${job} must set timeout-minutes`);
     }
   });
 

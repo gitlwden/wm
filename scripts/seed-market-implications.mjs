@@ -88,7 +88,7 @@ async function fetchMarketImplications() {
   if (!cards || cards.length === 0) throw new Error('All AI providers failed');
 
   return {
-    cards: cards.slice(0, 6).map((c, i) => ({
+    cards: cards.slice(0, 6).map((c, _i) => ({
       ticker: c.ticker ?? '',
       name: c.name ?? '',
       direction: c.direction ?? 'neutral',

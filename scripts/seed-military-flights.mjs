@@ -510,7 +510,6 @@ async function proxyFetchJson(url, { headers = {}, timeout = 15000, method = 'GE
       return JSON.parse(result.buffer.toString('utf8'));
     } catch (err) {
       lastErr = err;
-      continue;
     }
   }
   throw lastErr || new Error('All proxies failed');

@@ -37,7 +37,7 @@ function emptyResponse(): ListSanctionsPressureResponse {
 }
 
 export const listSanctionsPressure: SanctionsServiceHandler['listSanctionsPressure'] = async (
-  ctx: ServerContext,
+  _ctx: ServerContext,
   req: ListSanctionsPressureRequest,
 ): Promise<ListSanctionsPressureResponse> => {
   // Premium check bypassed — sanctions data is available to all users

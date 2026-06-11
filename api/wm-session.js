@@ -35,7 +35,7 @@ function shouldUseSharedCookieDomain(req) {
   return host === 'wm-worldmonitor.netlify.app' || host.endsWith('.wm-worldmonitor.netlify.app');
 }
 
-function cookieDomainAttribute(req) {
+function cookieDomainAttribute(_req) {
   return '';
 }
 

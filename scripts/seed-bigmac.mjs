@@ -232,7 +232,7 @@ async function fetchEconomistCsv() {
     const dollarEx = parseFloat(cols[exIdx]);
     const dollarPrice = parseFloat(cols[usdIdx]);
 
-    if (!a3 || isNaN(localPrice) || isNaN(dollarPrice)) continue;
+    if (!a3 || Number.isNaN(localPrice) || Number.isNaN(dollarPrice)) continue;
 
     const a2 = A3_TO_A2[a3] || null;
     const meta = a2 ? COUNTRY_META[a2] : null;
@@ -244,7 +244,7 @@ async function fetchEconomistCsv() {
       flag: meta?.flag || '🌍',
       localPrice: +localPrice.toFixed(4),
       usdPrice: +dollarPrice.toFixed(4),
-      fxRate: isNaN(dollarEx) ? 0 : +dollarEx.toFixed(6),
+      fxRate: Number.isNaN(dollarEx) ? 0 : +dollarEx.toFixed(6),
       sourceSite: 'economist-github',
       available: dollarPrice > 0,
     });
@@ -258,7 +258,7 @@ async function fetchEconomistCsv() {
  * FALLBACK: EXA search for Big Mac prices (original method).
  * Only used if Economist CSV is unavailable.
  */
-async function fetchExaPrices(prevSnapshot) {
+async function fetchExaPrices(_prevSnapshot) {
   const fxRates = await getSharedFxRates(FX_SYMBOLS, FX_FALLBACKS);
   const results = [];
 

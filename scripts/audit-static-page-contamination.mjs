@@ -53,7 +53,6 @@ import { getRedisCredentials } from './_seed-utils.mjs';
 // test for the side-effecting --apply path (would require a Redis double;
 // out of scope for this one-shot script).
 
-import { isInstitutionalStaticPage } from './shared/url-classifier.js';
 const VALID_MODES = ['url', 'age', 'residue', 'both'];
 
 export function parseArgs(argv) {
@@ -113,7 +112,7 @@ async function redisCommand(url, token, command) {
   return resp.json();
 }
 
-async function redisPipeline(url, token, commands) {
+async function redisPipeline(_url, _token, commands) {
   return cfPipeline(commands);
 }
 

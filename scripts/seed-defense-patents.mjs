@@ -37,7 +37,7 @@ async function fetchWithProxy(urlStr, headers, timeoutMs) {
         ok: true,
         json: () => Promise.resolve(JSON.parse(proxied.buffer.toString('utf8'))),
       };
-    } catch { continue; }
+    } catch { }
   }
   throw new Error('All fetch methods failed');
 }

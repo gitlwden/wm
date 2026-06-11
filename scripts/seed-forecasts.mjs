@@ -630,7 +630,7 @@ async function redisGet(_url, _token, key) {
   } catch { return null; }
 }
 
-async function redisDel(_url, _token, key) {
+async function redisDel(_url, _token, _key) {
   // DEL is not available in routed helpers — no-op
   return { result: 0 };
 }

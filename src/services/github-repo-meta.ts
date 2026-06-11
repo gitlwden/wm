@@ -114,7 +114,7 @@ export function formatRelativeDate(isoDate: string): string {
   if (!isoDate) return '';
   const now = Date.now();
   const then = new Date(isoDate).getTime();
-  if (isNaN(then)) return '';
+  if (Number.isNaN(then)) return '';
 
   const diffMs = now - then;
   const seconds = Math.floor(diffMs / 1000);

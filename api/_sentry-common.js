@@ -113,7 +113,7 @@ function buildEnvelope(err, ctx, runtimeCfg) {
   return `${header}\n${itemHeader}\n${itemPayload}\n`;
 }
 
-async function deliver(body, logPrefix) {
+async function deliver(body, _logPrefix) {
   if (!_envelopeUrl || !_key) return;
   try {
     // `keepalive: true` is critical for Vercel edge runtime: when a

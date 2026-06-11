@@ -100,7 +100,7 @@ async function fetchEconomistCsvFallback(): Promise<ListBigMacPricesResponse> {
     const dollarEx = parseFloat(cols[exIdx] ?? '');
     const dollarPrice = parseFloat(cols[usdIdx]);
 
-    if (!a3 || isNaN(localPrice) || isNaN(dollarPrice) || dollarPrice <= 0) continue;
+    if (!a3 || Number.isNaN(localPrice) || Number.isNaN(dollarPrice) || dollarPrice <= 0) continue;
 
     const a2 = A3_TO_A2[a3] || a3;
     countries.push({
@@ -110,7 +110,7 @@ async function fetchEconomistCsvFallback(): Promise<ListBigMacPricesResponse> {
       flag: '',
       localPrice: +localPrice.toFixed(4),
       usdPrice: +dollarPrice.toFixed(4),
-      fxRate: isNaN(dollarEx) ? 0 : +dollarEx.toFixed(6),
+      fxRate: Number.isNaN(dollarEx) ? 0 : +dollarEx.toFixed(6),
       sourceSite: 'economist-github',
       available: true,
       wowPct: 0,
