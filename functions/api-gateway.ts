@@ -173,6 +173,19 @@ const STANDALONE_ROUTES: Record<string, () => Promise<{ default: (req: Request) 
   '/api/invalidate-user-api-key-cache': () => import('../api/invalidate-user-api-key-cache.ts'),
   '/api/oauth-protected-resource':() => import('../api/oauth-protected-resource.ts'),
   '/api/seed-contract-probe':     () => import('../api/seed-contract-probe.ts'),
+  // Standalone .js routes (legacy edge functions)
+  '/api/telegram-feed':           () => import('../api/telegram-feed.js'),
+  '/api/download':                () => import('../api/download.js'),
+  '/api/fwdstart':                () => import('../api/fwdstart.js'),
+  '/api/geo':                     () => import('../api/geo.js'),
+  '/api/og-story':                () => import('../api/og-story.js'),
+  '/api/opensky':                 () => import('../api/opensky.js'),
+  '/api/oref-alerts':             () => import('../api/oref-alerts.js'),
+  '/api/reverse-geocode':         () => import('../api/reverse-geocode.js'),
+  '/api/rss-proxy':               () => import('../api/rss-proxy.js'),
+  '/api/story':                   () => import('../api/story.js'),
+  '/api/mcp':                     () => import('../api/mcp.ts'),
+  '/mcp':                         () => import('../api/mcp.ts'),
 };
 
 // Netlify Function handler
