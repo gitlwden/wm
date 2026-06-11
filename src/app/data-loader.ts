@@ -808,6 +808,11 @@ export class DataLoaderManager implements AppModule {
       this.stopSatellitePropagation();
       if (this.imageryRetryTimer) { clearTimeout(this.imageryRetryTimer); this.imageryRetryTimer = null; }
     }
+    if (layer === 'webcams') {
+      this.lastWebcamBbox = null;
+      this.lastWebcamFetchAt = 0;
+      this.ctx.map?.setWebcams([]);
+    }
   }
 
   private findFlashLocation(title: string): { lat: number; lon: number } | null {
@@ -2758,10 +2763,17 @@ export class DataLoaderManager implements AppModule {
       const result = await fetchWebcams(zoom, { w, s, e, n });
 
       const allMarkers = [...result.webcams, ...result.clusters];
+      if (allMarkers.length === 0) {
+        // API returned nothing — clear cached bbox so the next toggle or
+        // viewport move triggers a fresh fetch instead of being blocked by
+        // the 80 % overlap guard.
+        this.lastWebcamBbox = null;
+      }
       map.setWebcams(allMarkers);
       map.setLayerReady('webcams', allMarkers.length > 0);
     } catch (err) {
       console.warn('[data-loader] webcams failed:', err);
+      this.lastWebcamBbox = null;
       this.ctx.map?.setLayerReady('webcams', false);
     }
   }
