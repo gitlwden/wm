@@ -1,3 +1,29 @@
+// ── SW cache invalidation on deploy ──────────────────────────────────────────
+// When a new version deploys, the old Service Worker keeps serving cached JS
+// bundles until it updates. This check runs BEFORE any other code: compare the
+// build hash baked into this bundle against the last-seen hash in localStorage.
+// On mismatch → clear all caches, unregister SW, reload. After that one reload,
+// the hash matches and this block is a no-op.
+{
+  const BUILD_HASH = typeof __BUILD_HASH__ !== 'undefined' ? __BUILD_HASH__ : 'dev';
+  const HASH_KEY = 'wm-sw-build-hash';
+  if (BUILD_HASH !== 'dev') {
+    const stored = localStorage.getItem(HASH_KEY);
+    if (stored && stored !== BUILD_HASH) {
+      localStorage.setItem(HASH_KEY, BUILD_HASH);
+      // Fire-and-forget: clear caches + unregister SW, then hard-reload.
+      // The page is about to reload so we don't need to await.
+      caches?.keys?.().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).catch(() => {});
+      navigator.serviceWorker?.getRegistrations?.().then((regs) => {
+        for (const r of regs) r.unregister();
+      }).catch(() => {});
+      location.reload();
+    } else if (!stored) {
+      localStorage.setItem(HASH_KEY, BUILD_HASH);
+    }
+  }
+}
+
 import './styles/base-layer.css';
 import './styles/happy-theme.css';
 import * as Sentry from '@sentry/browser';

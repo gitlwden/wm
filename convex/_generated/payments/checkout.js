@@ -49,7 +49,7 @@ async function getCheckoutBlockingSubscription(ctx, userId, productId) {
 }
 async function _createCheckoutSession(ctx, args, user) {
     // Validate returnUrl to prevent open-redirect attacks.
-    const siteUrl = process.env.SITE_URL ?? "https://worldmonitor.app";
+    const siteUrl = process.env.SITE_URL ?? "https://wm-worldmonitor.netlify.app";
     let returnUrl = siteUrl;
     if (args.returnUrl) {
         let parsedReturnUrl;
@@ -60,18 +60,18 @@ async function _createCheckoutSession(ctx, args, user) {
             throw new ConvexError("Invalid returnUrl: must be a valid absolute URL");
         }
         const allowedOrigins = new Set([
-            "https://worldmonitor.app",
-            "https://www.worldmonitor.app",
-            "https://app.worldmonitor.app",
-            "https://tech.worldmonitor.app",
-            "https://finance.worldmonitor.app",
-            "https://commodity.worldmonitor.app",
-            "https://happy.worldmonitor.app",
-            "https://energy.worldmonitor.app",
+            "https://wm-worldmonitor.netlify.app",
+            "https://wm-worldmonitor.netlify.app",
+            "https://app.wm-worldmonitor.netlify.app",
+            "https://tech.wm-worldmonitor.netlify.app",
+            "https://finance.wm-worldmonitor.netlify.app",
+            "https://commodity.wm-worldmonitor.netlify.app",
+            "https://happy.wm-worldmonitor.netlify.app",
+            "https://energy.wm-worldmonitor.netlify.app",
             new URL(siteUrl).origin,
         ]);
         if (!allowedOrigins.has(parsedReturnUrl.origin)) {
-            throw new ConvexError("Invalid returnUrl: must use a trusted worldmonitor.app origin");
+            throw new ConvexError("Invalid returnUrl: must use a trusted wm-worldmonitor.netlify.app origin");
         }
         returnUrl = parsedReturnUrl.toString();
     }

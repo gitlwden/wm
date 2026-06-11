@@ -18,7 +18,7 @@ import { v } from "convex/values";
 import { internalAction, internalMutation, } from "../_generated/server";
 import { internal } from "../_generated/api";
 const RESEND_API_BASE = "https://api.resend.com";
-const USER_AGENT = "WorldMonitor-CanaryWaveBackfill/1.0 (+https://worldmonitor.app)";
+const USER_AGENT = "WorldMonitor-CanaryWaveBackfill/1.0 (+https://wm-worldmonitor.netlify.app)";
 // Hard-coded — this is a one-off backfill for a specific historical
 // send. Future wave-export actions will pass these as parameters.
 const CANARY_SEGMENT_ID = "4be8a9fd-8066-4322-ae27-4f9ed74cfab9";

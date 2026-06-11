@@ -8,8 +8,8 @@ import { v } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { PRODUCT_CATALOG } from "../config/productCatalog";
 const RESEND_URL = "https://api.resend.com/emails";
-const FROM = "World Monitor <noreply@worldmonitor.app>";
-const ADMIN_EMAIL = "elie@worldmonitor.app";
+const FROM = "World Monitor <noreply@wm-worldmonitor.netlify.app>";
+const ADMIN_EMAIL = "elie@wm-worldmonitor.netlify.app";
 const PLAN_DISPLAY = {
     free: "Free",
     pro_monthly: "Pro (Monthly)",
@@ -152,7 +152,7 @@ function userWelcomeHtml(planName, planKey) {
         ? `Welcome to ${planName} — your intel, delivered.`
         : `Welcome to ${planName}!`;
     const ctaLabel = isPro ? "Open My Brief" : "Open Dashboard";
-    const ctaHref = isPro ? "https://worldmonitor.app/brief" : "https://worldmonitor.app";
+    const ctaHref = isPro ? "https://wm-worldmonitor.netlify.app/brief" : "https://wm-worldmonitor.netlify.app";
     const supportLine = isPro
         ? `<p style="font-size: 11px; color: #666; text-align: center; margin: 0 0 20px;">Questions? Reply to this email or ping <a href="mailto:${ADMIN_EMAIL}" style="color: #4ade80;">${ADMIN_EMAIL}</a>.</p>`
         : "";
@@ -163,7 +163,7 @@ function userWelcomeHtml(planName, planKey) {
     <table cellpadding="0" cellspacing="0" border="0" style="margin: 0 auto 32px;">
       <tr>
         <td style="width: 40px; height: 40px; vertical-align: middle;">
-          <img src="https://www.worldmonitor.app/favico/android-chrome-192x192.png" width="40" height="40" alt="WorldMonitor" style="border-radius: 50%; display: block;" />
+          <img src="https://wm-worldmonitor.netlify.app/favico/android-chrome-192x192.png" width="40" height="40" alt="WorldMonitor" style="border-radius: 50%; display: block;" />
         </td>
         <td style="padding-left: 12px;">
           <div style="font-size: 16px; font-weight: 800; color: #fff; letter-spacing: -0.5px;">WORLD MONITOR</div>
@@ -193,7 +193,7 @@ function userWelcomeHtml(planName, planKey) {
     </div>
     <p style="font-size: 11px; color: #444; margin: 0; line-height: 1.6;">
       World Monitor \u2014 Real-time intelligence for a connected world.<br />
-      <a href="https://worldmonitor.app" style="color: #4ade80; text-decoration: none;">worldmonitor.app</a>
+      <a href="https://wm-worldmonitor.netlify.app" style="color: #4ade80; text-decoration: none;">wm-worldmonitor.netlify.app</a>
     </p>
   </div>
 </div>`;

@@ -37,7 +37,7 @@ import { v } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { PRO_LAUNCH_FROM, PRO_LAUNCH_HTML, PRO_LAUNCH_PHYSICAL_ADDRESS, PRO_LAUNCH_REPLY_TO, PRO_LAUNCH_SUBJECT, PRO_LAUNCH_TEXT, } from "./proLaunchEmailContent";
 const RESEND_API_BASE = "https://api.resend.com";
-const USER_AGENT = "WorldMonitor-PROLaunchSender/1.0 (+https://worldmonitor.app)";
+const USER_AGENT = "WorldMonitor-PROLaunchSender/1.0 (+https://wm-worldmonitor.netlify.app)";
 /**
  * Create a Resend Broadcast from the locked launch content. Does NOT
  * send — separate `sendProLaunchBroadcast` step. Returns the new

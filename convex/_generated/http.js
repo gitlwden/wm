@@ -4,8 +4,8 @@ import { internal } from "./_generated/api";
 import { webhookHandler } from "./payments/webhookHandlers";
 import { resendWebhookHandler } from "./resendWebhookHandler";
 const TRUSTED = [
-    "https://worldmonitor.app",
-    "*.worldmonitor.app",
+    "https://wm-worldmonitor.netlify.app",
+    "*.wm-worldmonitor.netlify.app",
     "http://localhost:3000",
 ];
 function matchOrigin(origin, pattern) {
