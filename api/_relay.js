@@ -5,7 +5,7 @@ import { checkRateLimit } from './_rate-limit.js';
 import { jsonResponse } from './_json-response.js';
 
 export function getRelayBaseUrl() {
-  const relayUrl = process.env.WS_RELAY_URL;
+  const relayUrl = process.env.WS_RELAY_URL || process.env.WIDGET_RELAY_URL;
   if (!relayUrl) return null;
   return relayUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace(/\/$/, '');
 }
