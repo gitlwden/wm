@@ -9,7 +9,7 @@
   "protocolVersion": "2025-06-18",
   "transport": {
     "type": "streamableHttp",
-    "endpoint": "https://worldmonitor.app/mcp"
+    "endpoint": "https://wm-worldmonitor.netlify.app/mcp"
   },
   "capabilities": {
     "tools": true,
@@ -32,8 +32,8 @@
   },
   "authentication": {
     "type": "oauth2",
-    "authorization_servers": ["https://api.worldmonitor.app"],
-    "resource": "https://worldmonitor.app",
+    "authorization_servers": ["https://wm-worldmonitor.netlify.app"],
+    "resource": "https://wm-worldmonitor.netlify.app",
     "scopes": ["mcp"],
     "alternative_methods": [
       {
