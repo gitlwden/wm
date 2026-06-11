@@ -212,9 +212,9 @@ const isHappyVariant = SITE_VARIANT === 'happy';
 // Zoom-dependent layer visibility and labels
 const LAYER_ZOOM_THRESHOLDS: Partial<Record<keyof MapLayers, { minZoom: number; showLabels?: number }>> = {
   bases: { minZoom: 1, showLabels: 5 },
-  nuclear: { minZoom: 3 },
+  nuclear: { minZoom: 1 },
   conflicts: { minZoom: 1, showLabels: 3 },
-  economic: { minZoom: 3 },
+  economic: { minZoom: 1 },
   natural: { minZoom: 1, showLabels: 2 },
   datacenters: { minZoom: 5 },
   irradiators: { minZoom: 1 },
@@ -2497,8 +2497,8 @@ export class DeckGLMap {
   private createBasesLayer(): IconLayer {
     const highlightedBases = this.highlightedAssets.base;
     const zoom = this.maplibreMap?.getZoom() || 3;
-    const alphaScale = Math.min(1, (zoom - 2.5) / 2.5);
-    const a = Math.round(160 * Math.max(0.3, alphaScale));
+    const alphaScale = Math.min(1, Math.max(0, (zoom - 1) / 2));
+    const a = Math.round(160 * Math.max(0.6, alphaScale));
     const data = this.getBasesData();
 
     return new IconLayer({
@@ -2525,8 +2525,8 @@ export class DeckGLMap {
   private createBasesClusterLayer(): Layer[] {
     if (this.serverBaseClusters.length === 0) return [];
     const zoom = this.maplibreMap?.getZoom() || 3;
-    const alphaScale = Math.min(1, (zoom - 2.5) / 2.5);
-    const a = Math.round(180 * Math.max(0.3, alphaScale));
+    const alphaScale = Math.min(1, Math.max(0, (zoom - 1) / 2));
+    const a = Math.round(180 * Math.max(0.6, alphaScale));
 
     const scatterLayer = new ScatterplotLayer<ServerBaseCluster>({
       id: 'bases-cluster-layer',
@@ -2588,10 +2588,10 @@ export class DeckGLMap {
       id: 'irradiators-layer',
       data: GAMMA_IRRADIATORS,
       getPosition: (d) => [d.lon, d.lat],
-      getRadius: 6000,
+      getRadius: 25000,
       getFillColor: [255, 100, 255, 180] as [number, number, number, number], // Magenta
-      radiusMinPixels: 4,
-      radiusMaxPixels: 10,
+      radiusMinPixels: 5,
+      radiusMaxPixels: 12,
       pickable: true,
     });
   }
@@ -3372,10 +3372,10 @@ export class DeckGLMap {
       id: 'economic-centers-layer',
       data: ECONOMIC_CENTERS,
       getPosition: (d) => [d.lon, d.lat],
-      getRadius: 8000,
+      getRadius: 25000,
       getFillColor: [255, 215, 0, 180] as [number, number, number, number],
-      radiusMinPixels: 4,
-      radiusMaxPixels: 10,
+      radiusMinPixels: 5,
+      radiusMaxPixels: 12,
       pickable: true,
     });
   }
