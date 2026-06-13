@@ -514,7 +514,7 @@ export class LiveNewsPanel extends Panel {
 
   private get embedOrigin(): string {
     if (isDesktopRuntime()) return `http://localhost:${getLocalApiPort()}`;
-    try { return new URL(getRemoteApiBaseUrl()).origin; } catch { return 'https://wm-worldmonitor.netlify.app'; }
+    try { return new URL(getRemoteApiBaseUrl()).origin; } catch { return window.location.origin; }
   }
 
   private setupBridgeMessageListener(): void {

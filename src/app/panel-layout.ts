@@ -465,7 +465,7 @@ export class PanelLayoutManager implements AppModule {
       case PanelGateReason.ANONYMOUS:
         return () => this.ctx.authModal?.open();
       case PanelGateReason.FREE_TIER:
-        return () => window.open('https://wm-worldmonitor.netlify.app/pro', '_blank');
+        return () => window.open('/pro', '_blank');
       default:
         return () => {};
     }
@@ -614,10 +614,10 @@ export class PanelLayoutManager implements AppModule {
         </button>
         <div class="mobile-menu-divider"></div>
         <div class="mobile-menu-footer-links">
-          <a href="https://wm-worldmonitor.netlify.app/pro" target="_blank" rel="noopener">Pro</a>
-          <a href="https://wm-worldmonitor.netlify.app/blog/" target="_blank" rel="noopener">Blog</a>
-          <a href="https://wm-worldmonitor.netlify.app/docs" target="_blank" rel="noopener">Docs</a>
-          <a href="https://wm-worldmonitor.netlify.app/" target="_blank" rel="noopener">Status</a>
+          <a href="/pro" target="_blank" rel="noopener">Pro</a>
+          <a href="/blog/" target="_blank" rel="noopener">Blog</a>
+          <a href="/docs" target="_blank" rel="noopener">Docs</a>
+          <a href="/" target="_blank" rel="noopener">Status</a>
         </div>
         <div class="mobile-menu-version">v${__APP_VERSION__}</div>
       </nav>
