@@ -10,7 +10,9 @@ const ENV = (() => {
 })();
 
 const WS_API_URL = ENV.VITE_WS_API_URL || '';
-const DEFAULT_WEB_API_URL = 'https://wm-worldmonitor.netlify.app';
+// Use current origin as default — avoids hardcoding a specific Netlify domain
+// that breaks when deploying to a different site (e.g. wm-worldmonitor-847).
+const DEFAULT_WEB_API_URL = typeof window !== 'undefined' ? window.location.origin : 'https://wm-worldmonitor.netlify.app';
 
 const DEFAULT_REMOTE_HOSTS: Record<string, string> = {
   tech: WS_API_URL,
