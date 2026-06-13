@@ -40,7 +40,7 @@ if (_isDirectRun) loadEnvFile(import.meta.url);
 const CANONICAL_KEY = 'forecast:predictions:v2';
 const PRIOR_KEY = 'forecast:predictions:prior:v2';
 const HISTORY_KEY = 'forecast:predictions:history:v1';
-const TTL_SECONDS = 21600; // 6h — 6x the 1h cron interval (was 1.75x; hourly miss → 15 min panel gap)
+const TTL_SECONDS = 172800; // 48h — daily cron, keep data alive between runs
 const HISTORY_MAX_RUNS = 200;
 const HISTORY_MAX_FORECASTS = 25;
 const HISTORY_TTL_SECONDS = 45 * 24 * 60 * 60;
@@ -15712,7 +15712,7 @@ const MARKET_IMPLICATIONS_KEY = 'intelligence:market-implications:v1';
 // while the canonical was missing, manifesting as `marketImplications:
 // EMPTY records=0`. Same trap shape as BIS PR #3610 + iranEvents below;
 // see memory `seed-meta-populated-canonical-missing-ttl-cron-match`.
-const MARKET_IMPLICATIONS_TTL = 180 * 60;
+const MARKET_IMPLICATIONS_TTL = 48 * 60 * 60; // 48h — daily cron
 
 const ALLOWED_INSTRUMENTS = {
   equities: ['SPY', 'QQQ', 'DIA', 'IWM', 'EEM', 'VWO', 'EFA', 'GLD', 'SLV', 'USO', 'UNG', 'TLT', 'HYG', 'LQD',
