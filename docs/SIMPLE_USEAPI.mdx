@@ -17,14 +17,17 @@ WM 支持 MCP server，AI agent（Claude Desktop、Cursor 等）可以通过 MCP
 {
   "mcpServers": {
     "worldmonitor": {
-      "url": "https://wm-worldmonitor-847.netlify.app/mcp",
+      "url": "https://wm-worldmonitor-847.netlify.app/api/mcp",
       "headers": {
         "X-WorldMonitor-Key": "wm_xxxx你的key"
       }
     }
   }
 }
-MCP 暴露 39 个 tools，覆盖 markets、conflict、aviation、maritime、energy、climate 等所有域。
+> **注意**：URL 路径必须是 `/api/mcp`，不是 `/mcp`。MCP 协议使用 Streamable HTTP transport（POST JSON-RPC），客户端会自动处理 initialize → tools/list → tools/call 流程。
+> 
+> MCP 暴露 39 个 tools，覆盖 markets、conflict、aviation、maritime、energy、climate 等所有域。
+> 可调用 `describe_tool({tool_name: "xxx"})` 获取任意 tool 的完整参数说明（不消耗每日配额）。
 
 选择建议
 方式	适用场景
