@@ -206,6 +206,6 @@ export default async (req: Request): Promise<Response> => {
 };
 
 export const config = {
-  path: '/api/*',
+  path: ['/api/*', '/mcp'],
 };
 // relay deploy trigger Thu Jun 11 21:12:23     2026
