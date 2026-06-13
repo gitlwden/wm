@@ -127,7 +127,7 @@ export class UnifiedSettings {
           // generic Dodo portal that won't recognise them.
           if (result.outcome === 'no-customer') {
             showToast(
-              'Subscription is managed outside Dodo. Email support@wm-worldmonitor.netlify.app for help.',
+              `Subscription is managed outside Dodo. Email support@${location.hostname} for help.`,
             );
           }
         });
@@ -692,7 +692,7 @@ export class UnifiedSettings {
       void openBillingPortal(reservedWin).then((result) => {
         if (result.outcome === 'no-customer') {
           showToast(
-            'Subscription is managed outside Dodo. Email support@wm-worldmonitor.netlify.app for help.',
+            `Subscription is managed outside Dodo. Email support@${location.hostname} for help.`,
           );
         }
       });

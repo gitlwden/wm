@@ -122,8 +122,7 @@ export function getApiBaseUrl(): string {
 }
 
 function isWorldMonitorWebHost(hostname: string): boolean {
-  return hostname === 'wm-worldmonitor.netlify.app'
-    || hostname.endsWith('.netlify.app');
+  return hostname.endsWith('.netlify.app') || hostname === 'localhost' || hostname === '127.0.0.1';
 }
 
 export function getConfiguredWebApiBaseUrl(): string {
@@ -210,7 +209,7 @@ function extractHostnames(...urls: (string | undefined)[]): string[] {
 }
 
 const APP_HOSTS = new Set([
-  'wm-worldmonitor.netlify.app',
+  // Primary host derived from current origin; variant subdomains for cross-origin matching
   'wm-tech.netlify.app',
   'wm-finance.netlify.app',
   'wm-commodity.netlify.app',
@@ -219,6 +218,8 @@ const APP_HOSTS = new Set([
   'localhost',
   '127.0.0.1',
   ...extractHostnames(WS_API_URL, ENV.VITE_WS_RELAY_URL),
+  // Include current hostname so any Netlify site works
+  ...(typeof window !== 'undefined' ? [window.location.hostname] : []),
 ]);
 
 function isAppOriginUrl(urlStr: string): boolean {

@@ -1,8 +1,8 @@
-const COOKIE_DOMAIN = 'wm-worldmonitor.netlify.app';
+const COOKIE_DOMAIN = location.hostname;
 const MAX_AGE_SECONDS = 365 * 24 * 60 * 60;
 
 function usesCookies(): boolean {
-  return location.hostname === 'wm-worldmonitor.netlify.app';
+  return location.hostname.endsWith('.netlify.app') || location.hostname === 'localhost';
 }
 
 export function getDismissed(key: string): boolean {

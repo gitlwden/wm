@@ -60,7 +60,7 @@ const THIRD_PARTY_FETCH_HOST_ALLOWLIST = new Set([
 Sentry.init({
   dsn: sentryDsn || undefined,
   release: `worldmonitor@${__APP_VERSION__}`,
-  environment: (location.hostname === 'wm-worldmonitor.netlify.app' || location.hostname.endsWith('.netlify.app')) ? 'production'
+  environment: location.hostname.endsWith('.netlify.app') ? 'production'
     : location.hostname.includes('netlify.app') ? 'preview'
     : 'development',
   enabled: Boolean(sentryDsn) && !location.hostname.startsWith('localhost') && !('__TAURI_INTERNALS__' in window),
@@ -670,8 +670,8 @@ function shouldSuppressCspViolation(
     try {
       const u = new URL(blockedURI);
       if (u.protocol === 'http:'
-          && u.hostname !== 'wm-worldmonitor.netlify.app'
-          && !u.hostname.endsWith('.netlify.app')) return true;
+          && !u.hostname.endsWith('.netlify.app')
+          && u.hostname !== location.hostname) return true;
     } catch { /* scheme-only values fall through */ }
   }
   // First-party Convex backend: corporate proxies / privacy extensions that mutate the
@@ -706,7 +706,7 @@ function shouldSuppressCspViolation(
     try {
       const url = new URL(blockedURI);
       if (url.protocol === 'https:'
-          && (url.hostname === 'wm-worldmonitor.netlify.app' || url.hostname.endsWith('.netlify.app'))) return true;
+          && (url.hostname === location.hostname || url.hostname.endsWith('.netlify.app'))) return true;
     } catch { /* scheme-only values fall through */ }
   }
   // YouTube IFrame API loader: explicitly allowed by our script-src
