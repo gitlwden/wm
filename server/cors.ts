@@ -5,9 +5,12 @@
  * to 'GET, POST, OPTIONS' (sebuf routes support GET and POST).
  */
 
+const PUBLIC_BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(/\/+$/, '');
+const PUBLIC_HOST = new URL(PUBLIC_BASE).hostname;
+
 const PRODUCTION_PATTERNS: RegExp[] = [
-  /^https:\/\/wm-worldmonitor\.netlify\.app$/,
-  /^https:\/\/[a-z0-9-]+--wm-worldmonitor\.netlify\.app$/,
+  new RegExp(`^https:\\/\\/${PUBLIC_HOST.replace(/\./g, '\\.')}$`),
+  new RegExp(`^https:\\/\\/[a-z0-9-]+--${PUBLIC_HOST.replace(/\./g, '\\.')}$`),
   /^https?:\/\/tauri\.localhost(:\d+)?$/,
   /^https?:\/\/[a-z0-9-]+\.tauri\.localhost(:\d+)?$/i,
   /^tauri:\/\/localhost$/,
@@ -33,7 +36,7 @@ export function isAllowedOrigin(origin: string): boolean {
 
 export function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('origin') || '';
-  const allowOrigin = isAllowedOrigin(origin) ? origin : 'https://wm-worldmonitor.netlify.app';
+  const allowOrigin = isAllowedOrigin(origin) ? origin : PUBLIC_BASE;
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Credentials': 'true',

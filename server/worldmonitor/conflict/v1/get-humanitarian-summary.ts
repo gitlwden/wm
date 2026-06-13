@@ -34,7 +34,8 @@ interface HapiCountryAgg {
 
 async function fetchHapiSummary(countryCode: string): Promise<HumanitarianCountrySummary | undefined> {
   try {
-    const appId = btoa('worldmonitor:monitor@wm-worldmonitor.netlify.app');
+    const _host = new URL(process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').hostname;
+    const appId = btoa(`worldmonitor:monitor@${_host}`);
     let url = `https://hapi.humdata.org/api/v2/coordination-context/conflict-events?output_format=json&limit=1000&offset=0&app_identifier=${appId}`;
 
     // Filter by country — if a specific country was requested but has no ISO3 mapping,

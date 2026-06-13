@@ -2,11 +2,12 @@ import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 import { jsonResponse } from './_json-response.js';
 // @ts-expect-error — JS module, no declaration file
 import { readJsonFromUpstash, setCachedData } from './_upstash-json.js';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
 
 export const config = { runtime: 'edge' };
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/reverse';
-const CHROME_UA = 'WorldMonitor/2.0 (https://wm-worldmonitor.netlify.app)';
+const CHROME_UA = 'WorldMonitor/2.0 (${_BASE})';
 
 export default async function handler(req, ctx) {
   // if (isDisallowedOrigin(req))

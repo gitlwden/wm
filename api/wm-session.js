@@ -32,7 +32,8 @@ function appendHeader(headers, name, value) {
 
 function shouldUseSharedCookieDomain(req) {
   const host = (req.headers.get('host') || new URL(req.url).hostname).toLowerCase();
-  return host === 'wm-worldmonitor.netlify.app' || host.endsWith('.wm-worldmonitor.netlify.app');
+  const publicHost = new URL(process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').hostname;
+  return host === publicHost || host.endsWith('.' + publicHost);
 }
 
 function cookieDomainAttribute(_req) {

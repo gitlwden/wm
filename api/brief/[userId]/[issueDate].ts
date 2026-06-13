@@ -30,6 +30,7 @@ import { renderBriefMagazine } from '../../../server/_shared/brief-render.js';
 import { readRawJsonFromUpstash, redisPipeline } from '../../_upstash-json.js';
 import { verifyBriefToken, BriefUrlError } from '../../../server/_shared/brief-url';
 import {
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
   BRIEF_PUBLIC_POINTER_PREFIX,
   buildPublicBriefUrl,
   encodePublicPointer,
@@ -75,7 +76,7 @@ function renderErrorPage(heading: string, body: string): string {
     + '</head><body><div>'
     + `<h1>${heading}</h1>`
     + `<p>${body}</p>`
-    + '<p><a href="https://wm-worldmonitor.netlify.app">Return to WorldMonitor</a></p>'
+    + '<p><a href="${_BASE}">Return to WorldMonitor</a></p>'
     + '</div></body></html>'
   );
 }

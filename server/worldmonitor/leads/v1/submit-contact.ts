@@ -58,7 +58,8 @@ async function sendNotificationEmail(
     console.error('[contact] RESEND_API_KEY not set — lead stored in Convex but notification NOT sent');
     return false;
   }
-  const notifyEmail = process.env.CONTACT_NOTIFY_EMAIL || 'elie@wm-worldmonitor.netlify.app';
+  const _host = new URL(process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').hostname;
+  const notifyEmail = process.env.CONTACT_NOTIFY_EMAIL || `elie@${_host}`;
   const emailDomain = (email.split('@')[1] || '').toLowerCase();
   try {
     const res = await fetch('https://api.resend.com/emails', {
@@ -68,7 +69,7 @@ async function sendNotificationEmail(
         'Authorization': `Bearer ${resendKey}`,
       },
       body: JSON.stringify({
-        from: 'World Monitor <noreply@wm-worldmonitor.netlify.app>',
+        from: `World Monitor <noreply@${_host}>`,
         to: [notifyEmail],
         subject: `[WM Enterprise] ${sanitizeForSubject(name)} from ${sanitizeForSubject(organization)}`,
         html: `
@@ -84,7 +85,7 @@ async function sendNotificationEmail(
               <tr><td style="padding: 8px; font-weight: bold; color: #666;">IP</td><td style="padding: 8px; font-family: monospace;">${escapeHtml(ip || 'unknown')}</td></tr>
               ${country ? `<tr><td style="padding: 8px; font-weight: bold; color: #666;">Country</td><td style="padding: 8px;">${escapeHtml(country)}</td></tr>` : ''}
             </table>
-            <p style="color: #999; font-size: 12px; margin-top: 24px;">Sent from wm-worldmonitor.netlify.app enterprise contact form</p>
+            <p style="color: #999; font-size: 12px; margin-top: 24px;">Sent from ${_host} enterprise contact form</p>
           </div>`,
       }),
     });

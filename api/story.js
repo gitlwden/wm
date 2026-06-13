@@ -1,3 +1,4 @@
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
 // Non-sebuf: returns XML/HTML, stays as standalone Vercel function
 /**
  * Story Page for Social Crawlers
@@ -16,7 +17,7 @@ const COUNTRY_NAMES = {
 const BOT_UA = /twitterbot|facebookexternalhit|linkedinbot|slackbot|telegrambot|whatsapp|discordbot|redditbot|googlebot/i;
 
 export default function handler(req, res) {
-  const url = new URL(req.url, 'https://wm-worldmonitor.netlify.app');
+  const url = new URL(req.url, '${_BASE}');
   const countryCode = (url.searchParams.get('c') || '').toUpperCase();
   const type = url.searchParams.get('t') || 'ciianalysis';
   const ts = url.searchParams.get('ts') || '';
@@ -26,7 +27,7 @@ export default function handler(req, res) {
   const ua = req.headers['user-agent'] || '';
   const isBot = BOT_UA.test(ua);
 
-  const baseUrl = 'https://wm-worldmonitor.netlify.app';
+  const baseUrl = '${_BASE}';
   const spaUrl = `${baseUrl}/?c=${countryCode}&t=${type}${ts ? `&ts=${ts}` : ''}`;
 
   // Real users → redirect to SPA

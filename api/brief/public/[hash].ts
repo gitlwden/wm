@@ -28,6 +28,7 @@ import { readRawJsonFromUpstash } from '../../_upstash-json.js';
 import { captureSilentError } from '../../_sentry-edge.js';
 import { renderBriefMagazine } from '../../../server/_shared/brief-render.js';
 import {
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
   BRIEF_PUBLIC_POINTER_PREFIX,
   decodePublicPointer,
   isValidShareHashShape,
@@ -78,7 +79,7 @@ function renderErrorPage(heading: string, body: string): string {
     + '</head><body><div>'
     + `<h1>${heading}</h1>`
     + `<p>${body}</p>`
-    + '<p><a href="https://wm-worldmonitor.netlify.app/pro">Start your own WorldMonitor Brief</a></p>'
+    + '<p><a href="${_BASE}/pro">Start your own WorldMonitor Brief</a></p>'
     + '</div></body></html>'
   );
 }

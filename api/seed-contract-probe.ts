@@ -8,7 +8,7 @@
  *
  * Usage:
  *   curl -H "x-probe-secret: $RELAY_SHARED_SECRET" \
- *        https://wm-worldmonitor.netlify.app/api/seed-contract-probe
+ *        ${_BASE}/api/seed-contract-probe
  *
  * On failure returns 503 + the failing `checks`/`boundary` entries so CI or
  * operators can pinpoint the regression. Replaces the curl/jq shell ritual.
@@ -27,6 +27,7 @@ import { jsonResponse } from './_json-response.js';
 // @ts-expect-error — JS module, no declaration file
 import { issueSessionToken } from './_session.js';
 import { timingSafeEqual } from '../server/_shared/internal-auth';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
 
 type ProbeShape = 'envelope' | 'bare';
 
@@ -232,7 +233,7 @@ export async function checkPublicBoundary(
   try { sessionToken = (await issueSessionToken()).token; } catch { /* no-op */ }
 
   const headers: Record<string, string> = {
-    Origin: 'https://wm-worldmonitor.netlify.app',
+    Origin: '${_BASE}',
     'User-Agent': 'WorldMonitor-SeedContractProbe/1.0',
   };
   if (sessionToken) headers['X-WorldMonitor-Key'] = sessionToken;

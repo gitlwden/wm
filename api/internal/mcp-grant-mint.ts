@@ -20,7 +20,7 @@
  *      `{userId, exp}` payload (5-min TTL).
  *   8. Return JSON `{redirect: '<fixed url>?nonce=<n>&grant=<token>'}`.
  *
- * The redirect URL host is FIXED to `https://wm-worldmonitor.netlify.app` —
+ * The redirect URL host is FIXED to `${_BASE}` —
  * never user-controllable — to defeat the consent-phishing class
  * (see plan Risks: "Cross-subdomain CSRF / consent phishing").
  *
@@ -58,9 +58,10 @@ import { getEntitlements } from '../../server/_shared/entitlement-check';
 // @ts-expect-error — JS module, no declaration file
 import { isAllowedRedirectUri } from '../oauth/register.js';
 import { GrantConfigError, signGrant } from '../_mcp-grant-hmac';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
 
 // Fixed return URL — NOT user-controllable (anti-phishing).
-const AUTHORIZE_PRO_URL = 'https://wm-worldmonitor.netlify.app/oauth/authorize-pro';
+const AUTHORIZE_PRO_URL = '${_BASE}/oauth/authorize-pro';
 
 /** 5-minute exp for the signed grant + matching Redis one-shot. */
 const GRANT_TTL_MS = 5 * 60 * 1000;

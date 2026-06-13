@@ -22,6 +22,8 @@
 //   - Plan: docs/plans/2026-04-17-003-feat-worldmonitor-brief-magazine-plan.md
 
 import { BRIEF_ENVELOPE_VERSION, SUPPORTED_ENVELOPE_VERSIONS } from '../../shared/brief-envelope.js';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(/\/+$/, '');
+const _HOST = new URL(_BASE).hostname;
 
 /**
  * @typedef {import('../../shared/brief-envelope.js').BriefEnvelope} BriefEnvelope
@@ -723,8 +725,8 @@ function renderStoryPage({ story, rank, palette, pageIndex, totalPages, issueDat
  */
 function renderBackCover({ tz, pageIndex, totalPages, publicMode, refCode }) {
   const ctaHref = publicMode
-    ? `https://wm-worldmonitor.netlify.app/pro${refCode ? `?ref=${encodeURIComponent(refCode)}` : ''}`
-    : 'https://wm-worldmonitor.netlify.app';
+    ? `${_BASE}/pro${refCode ? `?ref=${encodeURIComponent(refCode)}` : ''}`
+    : '${_BASE}';
   const kicker = publicMode
     ? 'You\u2019re reading a shared brief'
     : 'Thank you for reading';
@@ -733,9 +735,9 @@ function renderBackCover({ tz, pageIndex, totalPages, publicMode, refCode }) {
     : 'End of<br/>Transmission.';
   const metaLeft = publicMode
     ? `<a href="${escapeHtml(ctaHref)}" class="mono back-cta" target="_blank" rel="noopener">Subscribe \u2192</a>`
-    : '<span class="mono">wm-worldmonitor.netlify.app</span>';
+    : '<span class="mono">${_HOST}</span>';
   const metaRight = publicMode
-    ? '<span class="mono">wm-worldmonitor.netlify.app</span>'
+    ? '<span class="mono">${_HOST}</span>'
     : `<span class="mono">Next brief \u00b7 08:00 ${escapeHtml(tz)}</span>`;
   return (
     '<section class="page cover back">' +
@@ -1223,13 +1225,13 @@ const SHARE_SCRIPT = `<script>
 </script>`;
 
 // Umami analytics loader, mirroring the production snippet in
-// index.html. Hosted magazine pages are served from wm-worldmonitor.netlify.app
+// index.html. Hosted magazine pages are served from ${_HOST}
 // (the auth'd route) and the public-share hash mirror — both within
 // `data-domains`. The `async` script never blocks rendering; if it's
 // blocked by an extension, BRIEF_THREAD_OPEN_SCRIPT silently no-ops.
 // Same data-website-id as the dashboard so events land in the same
 // project — segmentation is via event properties, not website ids.
-const UMAMI_LOADER = '<script async src="https://abacus.wm-worldmonitor.netlify.app/script.js" data-website-id="e8800335-c853-46a8-8497-c993ed2f58bc" data-domains="wm-worldmonitor.netlify.app,tech.wm-worldmonitor.netlify.app,finance.wm-worldmonitor.netlify.app,commodity.wm-worldmonitor.netlify.app,happy.wm-worldmonitor.netlify.app"></script>';
+const UMAMI_LOADER = '<script async src="https://abacus.${_HOST}/script.js" data-website-id="e8800335-c853-46a8-8497-c993ed2f58bc" data-domains="${_HOST},tech.${_HOST},finance.${_HOST},commodity.${_HOST},happy.${_HOST}"></script>';
 
 /**
  * U11 telemetry: emit a `brief-thread-open` event whenever a story
@@ -1615,7 +1617,7 @@ export function renderBriefMagazine(envelope, options = {}) {
   // In public view: the per-hash mirror is noindexed via the HTTP
   // header AND a meta tag, and we prepend a subscribe strip pointing
   // at /pro (with optional referral attribution).
-  const publicStripHref = `https://wm-worldmonitor.netlify.app/pro${refCode ? `?ref=${encodeURIComponent(refCode)}` : ''}`;
+  const publicStripHref = `${_BASE}/pro${refCode ? `?ref=${encodeURIComponent(refCode)}` : ''}`;
   const publicStripHtml = publicMode
     ? '<div class="wm-public-strip">'
       + '<span>WorldMonitor Brief \u00b7 shared issue</span>'

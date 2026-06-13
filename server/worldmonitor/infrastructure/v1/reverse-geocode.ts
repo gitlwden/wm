@@ -5,9 +5,10 @@ import type {
   ReverseGeocodeResponse,
 } from '../../../../src/generated/server/worldmonitor/infrastructure/v1/service_server';
 import { getCachedJson, setCachedJson } from '../../../_shared/redis';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(/\/+$/, '');
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/reverse';
-const CHROME_UA = 'WorldMonitor/2.0 (https://wm-worldmonitor.netlify.app)';
+const CHROME_UA = 'WorldMonitor/2.0 (${_BASE})';
 
 interface ReverseCacheEntry {
   country?: string;

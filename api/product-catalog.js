@@ -19,6 +19,7 @@ import { getCorsHeaders } from './_cors.js';
 import { FALLBACK_PRICES } from './_product-fallback-prices.js';
 // @ts-expect-error — JS module
 import { unwrapEnvelope } from './_seed-envelope.js';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
 
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL ?? '';
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? '';
@@ -47,7 +48,7 @@ const TIER_CONFIG = {
     description: 'Get started with the essentials',
     features: ['Core dashboard panels', 'Global news feed', 'Earthquake & weather alerts', 'Basic map view'],
     cta: 'Get Started',
-    href: 'https://wm-worldmonitor.netlify.app',
+    href: '${_BASE}',
     highlighted: false,
   },
   pro: {
@@ -67,7 +68,7 @@ const TIER_CONFIG = {
     description: 'Custom solutions for organizations',
     features: ['Everything in Pro + API', 'Unlimited API requests', 'Dedicated support', 'Custom integrations', 'SLA guarantee', 'On-premise option'],
     cta: 'Contact Sales',
-    href: 'mailto:enterprise@wm-worldmonitor.netlify.app',
+    href: 'mailto:enterprise@${_HOST}',
     highlighted: false,
   },
 };

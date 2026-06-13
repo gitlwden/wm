@@ -16,6 +16,7 @@ import {
 import { validateProMcpTokenOrNull } from '../../server/_shared/pro-mcp-token';
 import { rpcError } from './rpc';
 import type {
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
   AuthResolution,
   AuthResolutionRejected,
   McpAuthContext,
@@ -209,7 +210,7 @@ export async function runProPreChecks(
   const validation = await deps.validateProMcpToken(context.mcpTokenId);
   if (!validation || validation.userId !== context.userId) {
     return new Response(
-      JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'MCP authorization revoked. Re-authorize at https://wm-worldmonitor.netlify.app/mcp-grant.' } }),
+      JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'MCP authorization revoked. Re-authorize at ${_BASE}/mcp-grant.' } }),
       { status: 401, headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': wwwAuthHeader(resourceMetadataUrl, 'invalid_token'), ...corsHeaders } },
     );
   }

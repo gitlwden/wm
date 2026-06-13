@@ -17,6 +17,7 @@ import { getCorsHeaders } from './_cors.js';
 import { captureEdgeException, captureSilentError } from './_sentry-edge.js';
 import { validateBearerToken } from '../server/auth-session';
 import { getEntitlements } from '../server/_shared/entitlement-check';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
 
 // Prefer explicit CONVEX_SITE_URL; fall back to deriving from CONVEX_URL (same pattern as notification-relay.cjs).
 const CONVEX_SITE_URL =
@@ -221,7 +222,7 @@ export default async function handler(req: Request, ctx: { waitUntil: (p: Promis
     //   return json({
     //     error: 'pro_required',
     //     message: 'Real-time alerts are available on the Pro plan.',
-    //     upgradeUrl: 'https://wm-worldmonitor.netlify.app/pro',
+    //     upgradeUrl: '${_BASE}/pro',
     //   }, 403, corsHeaders);
     // }
 

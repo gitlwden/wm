@@ -15,6 +15,7 @@ import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
 import { jsonResponse } from './_json-response.js';
 import { validateBearerToken } from '../server/auth-session';
 import { getEntitlements } from '../server/_shared/entitlement-check';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
 
 const VALID_SEVERITIES = new Set(['critical', 'high', 'medium', 'low', 'info']);
 const INTERNAL_EVENT_TYPES = new Set(['flush_quiet_held', 'channel_welcome']);
@@ -47,7 +48,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   //const ent = await getEntitlements(session.userId);
   // if (!ent || ent.features.tier < 1) {
-  //   return jsonResponse({ error: 'pro_required', message: 'Event publishing is available on the Pro plan.', upgradeUrl: 'https://wm-worldmonitor.netlify.app/pro' }, 403, cors);
+  //   return jsonResponse({ error: 'pro_required', message: 'Event publishing is available on the Pro plan.', upgradeUrl: '${_BASE}/pro' }, 403, cors);
   // }
 
   // let body: { eventType?: unknown; payload?: unknown; severity?: unknown; variant?: unknown };

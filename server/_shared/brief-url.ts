@@ -1,3 +1,4 @@
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(/\/+$/, '');
 /**
  * HMAC-signed URL helpers for the WorldMonitor Brief magazine route.
  *
@@ -159,7 +160,7 @@ function base64urlDecode(token: string): Uint8Array | null {
  *   const url = await signBriefUrl({
  *     userId: 'user_abc',
  *     issueDate: '2026-04-17-0800',
- *     baseUrl: 'https://wm-worldmonitor.netlify.app',
+ *     baseUrl: '${_BASE}',
  *     secret: process.env.BRIEF_URL_SIGNING_SECRET!,
  *   });
  */

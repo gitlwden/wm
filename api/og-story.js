@@ -1,3 +1,5 @@
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(/\/+$/, '');
+const _HOST = new URL(_BASE).hostname;
 // Non-sebuf: returns XML/HTML, stays as standalone Vercel function
 /**
  * Dynamic OG Image Generator for Story Sharing
@@ -31,7 +33,7 @@ function normalizeLevel(rawLevel) {
 }
 
 export default function handler(req, res) {
-  const url = new URL(req.url, 'https://wm-worldmonitor.netlify.app');
+  const url = new URL(req.url, '${_BASE}');
   const countryCode = (url.searchParams.get('c') || '').toUpperCase();
   const type = url.searchParams.get('t') || 'ciianalysis';
   const score = url.searchParams.get('s');
@@ -217,7 +219,7 @@ export default function handler(req, res) {
 
   <!-- URL + date -->
   <text x="60" y="610" font-family="system-ui, sans-serif" font-size="14" fill="#555"
-    >wm-worldmonitor.netlify.app · ${dateStr} · Free &amp; open source</text>
+    >${_HOST} · ${dateStr} · Free &amp; open source</text>
 </svg>`;
 
   res.setHeader('Content-Type', 'image/svg+xml');

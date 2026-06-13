@@ -15,6 +15,7 @@ export const config = { runtime: 'edge' };
 import { getCorsHeaders } from '../../_cors.js';
 import { validateBearerToken } from '../../../server/auth-session';
 import { getEntitlements } from '../../../server/_shared/entitlement-check';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
 
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID ?? '';
 const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI ?? '';
@@ -50,7 +51,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   const ent = await getEntitlements(session.userId);
   // if (!ent || ent.features.tier < 1) {
-  //   return new Response(JSON.stringify({ error: 'pro_required', message: 'Discord notifications are available on the Pro plan.', upgradeUrl: 'https://wm-worldmonitor.netlify.app/pro' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+  //   return new Response(JSON.stringify({ error: 'pro_required', message: 'Discord notifications are available on the Pro plan.', upgradeUrl: '${_BASE}/pro' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
   // }
 
   // Generate one-time state token (20 random bytes → base64url)

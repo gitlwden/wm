@@ -1,3 +1,4 @@
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
 export const config = { runtime: 'edge' };
 
 function parseFlag(value, fallback = '1') {
@@ -40,7 +41,7 @@ function sanitizeAllowedOrigin(raw, fallback, allowList = ALLOWED_ORIGINS) {
 }
 
 function sanitizeOrigin(raw) {
-  return sanitizeAllowedOrigin(raw, 'https://wm-worldmonitor.netlify.app', ALLOWED_ORIGINS);
+  return sanitizeAllowedOrigin(raw, '${_BASE}', ALLOWED_ORIGINS);
 }
 
 function sanitizeParentOrigin(raw, fallback) {
