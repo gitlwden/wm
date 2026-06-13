@@ -27,7 +27,7 @@ import { jsonResponse } from './_json-response.js';
 // @ts-expect-error — JS module, no declaration file
 import { issueSessionToken } from './_session.js';
 import { timingSafeEqual } from '../server/_shared/internal-auth';
-const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(/\/+$/, '');
 
 type ProbeShape = 'envelope' | 'bare';
 

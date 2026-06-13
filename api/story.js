@@ -1,4 +1,4 @@
-const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(/\/+$/, '');
 // Non-sebuf: returns XML/HTML, stays as standalone Vercel function
 /**
  * Story Page for Social Crawlers

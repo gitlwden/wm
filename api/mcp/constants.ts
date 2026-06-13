@@ -1,4 +1,4 @@
-const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(/\/+$/, '');
 // MCP protocol versions this server can speak on the initialize handshake.
 // Bumping the supported set is a wire-visible default-behavior change, so the
 // bumped floor ships behind an env-var gate (`MCP_PROTOCOL_FLOOR_2025_06_18`)

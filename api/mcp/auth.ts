@@ -15,8 +15,8 @@ import {
 } from '../../server/_shared/mcp-internal-hmac';
 import { validateProMcpTokenOrNull } from '../../server/_shared/pro-mcp-token';
 import { rpcError } from './rpc';
+const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(/\/+$/, '');
 import type {
-const _BASE = (process.env.WORLDMONITOR_PUBLIC_BASE_URL || 'https://wm-worldmonitor.netlify.app').replace(//+$/, '');
   AuthResolution,
   AuthResolutionRejected,
   McpAuthContext,
