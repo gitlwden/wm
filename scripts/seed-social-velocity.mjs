@@ -10,7 +10,7 @@ loadEnvFile(import.meta.url);
 
 const CANONICAL_KEY = 'intelligence:social:reddit:v1';
 const SEED_META_KEY = 'seed-meta:intelligence:social-reddit';
-const CACHE_TTL = 10800; // 3 hours
+const CACHE_TTL = 48 * 60 * 60; // 48h — daily cron
 
 // Predefined topics to track when Google Trends is unavailable
 const TOPICS = [

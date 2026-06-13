@@ -6,7 +6,7 @@ loadEnvFile(import.meta.url);
 
 const USGS_FEED_URL = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson';
 const CANONICAL_KEY = 'seismology:earthquakes:v1';
-const CACHE_TTL = 21600; // 6h — 6x the 1h cron interval (was 2x = survived only 1 missed run)
+const CACHE_TTL = 48 * 60 * 60; // 48h — daily cron // 6h — 6x the 1h cron interval (was 2x = survived only 1 missed run)
 
 // Seismic scoring intentionally uses only high-signal nuclear-test centroids.
 // Broader registry entries such as missile ranges, exercises, or one-off low-signal

@@ -14,7 +14,7 @@ const CANONICAL_KEY = 'sanctions:pressure:v1';
 const STATE_KEY = 'sanctions:pressure:state:v1';
 const ENTITY_INDEX_KEY = 'sanctions:entities:v1';
 const COUNTRY_COUNTS_KEY = 'sanctions:country-counts:v1';
-const CACHE_TTL = 15 * 60 * 60; // 15h — 3h buffer over 12h cron cadence (was 12h = 0 buffer)
+const CACHE_TTL = 48 * 60 * 60; // 48h — daily cron, keep data alive between runs
 // Compact entity type codes for the lookup index (saves space vs full enum strings)
 const ET_CODE = {
   SANCTIONS_ENTITY_TYPE_VESSEL: 'vessel',

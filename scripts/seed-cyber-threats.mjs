@@ -10,7 +10,7 @@ const ABUSEIPDB_MIN_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2h — keeps daily call
 
 const CANONICAL_KEY = 'cyber:threats:v2';
 const BOOTSTRAP_KEY = 'cyber:threats-bootstrap:v2';
-const CACHE_TTL = 10800; // 3h — survives 1 missed 2h cron cycle
+const CACHE_TTL = 48 * 60 * 60; // 48h — daily cron // 3h — survives 1 missed 2h cron cycle
 
 // Issue #4008: the bulk sources (AbuseIPDB blacklist, C2Intel plaintext) carry
 // no upstream first-seen, so `firstSeenAt` was 0 for the majority of records,

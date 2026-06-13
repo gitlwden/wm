@@ -10,7 +10,7 @@ import { buildEnvelope } from './_seed-envelope-source.mjs';
 loadEnvFile(import.meta.url);
 
 const REDIS_KEY = 'intelligence:wsb-tickers:v1';
-const CACHE_TTL = 10800; // 3h
+const CACHE_TTL = 48 * 60 * 60; // 48h — daily cron // 3h
 const TRENDING_URL = 'https://query1.finance.yahoo.com/v1/finance/trending/US?count=50';
 
 async function fetchTrendingTickers() {

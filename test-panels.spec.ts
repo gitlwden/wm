@@ -1,51 +1,39 @@
 import { test, expect } from '@playwright/test';
 
-test('All major panels load without errors', async ({ page }) => {
-  const consoleErrors: string[] = [];
-  page.on('console', msg => {
-    if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0, 150));
-  });
-
+test('Panel health check', async ({ page }) => {
   await page.goto('https://wm-worldmonitor-847.netlify.app', { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForTimeout(20000); // wait for panels to load
+  await page.waitForTimeout(20000);
 
-  // Get all panel states
+  // Get panel containers by data-panel-id
   const panelStates = await page.evaluate(() => {
-    const panels = document.querySelectorAll('[class*="panel"]');
     const results: Record<string, string> = {};
-    for (const p of panels) {
-      const id = (p as HTMLElement).dataset?.panelId || p.className.match(/panel-(\w[\w-]*)/)?.[1] || '';
-      if (!id) continue;
-      const text = (p.textContent || '').trim().slice(0, 100);
-      const hasError = p.querySelector('.panel-error, .error') !== null;
-      const hasLoading = p.querySelector('.panel-loading, .loading') !== null;
-      const isEmpty = text.includes('No data') || text.includes('unavailable') || text.includes('No items');
-      const state = hasError ? 'ERROR' : hasLoading ? 'LOADING' : isEmpty ? 'EMPTY' : 'OK';
-      results[id] = state;
-    }
+    // Panel containers have data-panel-id or are .panel elements with IDs
+    document.querySelectorAll('[data-panel]').forEach(el => {
+      const id = el.getAttribute('data-panel')!;
+      const text = (el.textContent || '').trim();
+      const hasError = el.querySelector('.panel-error-state, .panel-loading.panel-error-radar') !== null;
+      const hasLoading = el.querySelector('.panel-loading:not(.panel-loading-radar)') !== null;
+      const isEmpty = /no data|unavailable|No items|all sources disabled/i.test(text) && text.length < 200;
+      const isLocked = el.querySelector('.panel-locked-state') !== null;
+      results[id] = isLocked ? 'LOCKED' : hasError ? 'ERROR' : hasLoading ? 'LOADING' : isEmpty ? 'EMPTY' : 'OK';
+    });
     return results;
   });
 
-  console.log('Panel states:');
-  for (const [id, state] of Object.entries(panelStates).sort()) {
-    const icon = state === 'OK' ? '✅' : state === 'EMPTY' ? '⚠️' : state === 'LOADING' ? '🔄' : '❌';
+  const sorted = Object.entries(panelStates).sort(([a], [b]) => a.localeCompare(b));
+  console.log(`\n${sorted.length} panels found:\n`);
+  for (const [id, state] of sorted) {
+    const icon = { OK: '✅', EMPTY: '⚠️', LOADING: '🔄', ERROR: '❌', LOCKED: '🔒' }[state] || '?';
     console.log(`  ${icon} ${id}: ${state}`);
   }
 
-  const errors = Object.entries(panelStates).filter(([, s]) => s === 'ERROR');
-  const empty = Object.entries(panelStates).filter(([, s]) => s === 'EMPTY');
-  const loading = Object.entries(panelStates).filter(([, s]) => s === 'LOADING');
+  const summary = { OK: 0, EMPTY: 0, LOADING: 0, ERROR: 0, LOCKED: 0 };
+  for (const [, s] of sorted) (summary as Record<string, number>)[s]++;
 
-  console.log(`\nTotal: ${Object.keys(panelStates).length} panels`);
-  console.log(`  OK: ${Object.keys(panelStates).length - errors.length - empty.length - loading.length}`);
-  console.log(`  EMPTY: ${empty.length} — ${empty.map(([id]) => id).join(', ')}`);
-  console.log(`  LOADING: ${loading.length} — ${loading.map(([id]) => id).join(', ')}`);
-  console.log(`  ERROR: ${errors.length} — ${errors.map(([id]) => id).join(', ')}`);
-  console.log(`\nConsole errors: ${consoleErrors.length}`);
-  consoleErrors.slice(0, 5).forEach(e => console.log(`  ${e}`));
+  console.log(`\n✅ OK: ${summary.OK}  ⚠️ EMPTY: ${summary.EMPTY}  🔄 LOADING: ${summary.LOADING}  ❌ ERROR: ${summary.ERROR}  🔒 LOCKED: ${summary.LOCKED}`);
 
-  await page.screenshot({ path: 'test-panels-overview.png', fullPage: false });
+  await page.screenshot({ path: 'test-panels-overview.png' });
 
-  // No panels should be in ERROR state
-  expect(errors.length).toBe(0);
+  // Allow EMPTY (data source issues) but no ERROR states
+  expect(summary.ERROR).toBe(0);
 });
