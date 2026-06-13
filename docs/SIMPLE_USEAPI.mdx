@@ -1,0 +1,32 @@
+API Key 和 MCP 使用方式
+创建 API Key 后，外部 agent 有两种方式调用 WM：
+
+1. HTTP REST API（直接调用）
+
+# 所有 RPC 端点都支持 X-WorldMonitor-Key header
+curl -X POST https://wm-worldmonitor-847.netlify.app/api/intelligence/v1/deduct-situation \
+  -H "Content-Type: application/json" \
+  -H "X-WorldMonitor-Key: wm_xxxx你的key" \
+  -d '{"query":"What will happen in the Middle East?"}'
+可用端点：/api/{domain}/v1/{method}，包括 market、intelligence、economic、conflict、aviation 等 30+ 个域。
+
+2. MCP（Model Context Protocol）
+WM 支持 MCP server，AI agent（Claude Desktop、Cursor 等）可以通过 MCP 协议直接使用：
+
+
+{
+  "mcpServers": {
+    "worldmonitor": {
+      "url": "https://wm-worldmonitor-847.netlify.app/mcp",
+      "headers": {
+        "X-WorldMonitor-Key": "wm_xxxx你的key"
+      }
+    }
+  }
+}
+MCP 暴露 39 个 tools，覆盖 markets、conflict、aviation、maritime、energy、climate 等所有域。
+
+选择建议
+方式	适用场景
+HTTP REST	自定义 agent、脚本、CI/CD、需要精确控制请求
+MCP	Claude Desktop、Cursor 等支持 MCP 的 AI 客户端，开箱即用
