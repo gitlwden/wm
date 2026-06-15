@@ -3101,3 +3101,126 @@ a.brief-story-headline:hover {
 .latest-brief-inline-readmore:hover {
   text-decoration: underline;
 }
+
+/* ----------------------------------------------------------
+   Watchlist Table View (Stock Analysis / Backtesting)
+   ---------------------------------------------------------- */
+.watchlist-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.watchlist-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.watchlist-search:focus {
+  border-color: var(--accent);
+}
+
+.watchlist-control-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.watchlist-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.watchlist-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.watchlist-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.watchlist-pill-active,
+.watchlist-pill.watchlist-pill-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.watchlist-sort {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-family: inherit;
+  padding: 4px 8px;
+  outline: none;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.watchlist-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.watchlist-table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.watchlist-table th:hover {
+  color: var(--text);
+}
+
+.watchlist-td-right {
+  text-align: right;
+}
+
+.watchlist-row {
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.watchlist-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.watchlist-row-expanded {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.watchlist-detail-row td {
+  padding: 0;
+}
