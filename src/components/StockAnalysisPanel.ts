@@ -141,11 +141,14 @@ export class StockAnalysisPanel extends Panel {
   // sort/filter/search/expand survive across refreshes.
   private rerender(): void {
     if (!this.tableView) return;
-    // Keep the intro in sync with current item count + skipped-symbol
-    // note even as the table view persists across refreshes.
     this.tableView.updateIntro(this.buildIntro(this.lastItems.length));
     this.setSafeContent(unsafeRawHtml(this.tableView.render(), 'legacy Panel.setContent() migration'));
-    this.tableView.bind(this.content, () => this.rerender());
+    // Bind after DOM update — setSafeContent is debounced (150ms), so
+    // bind() must run after the debounce fires and replaces the DOM.
+    // rAF fires after the next paint, which is after setContentImmediate.
+    requestAnimationFrame(() => {
+      this.tableView?.bind(this.content, () => this.rerender());
+    });
   }
 
   private buildIntro(itemCount: number): string {

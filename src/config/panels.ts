@@ -1275,14 +1275,17 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   intelligence: {
     labelKey: 'header.panelCatIntelligence',
     panelKeys: ['cii', 'strategic-risk', 'intel', 'gdelt-intel', 'cascade', 'telegram-intel', 'forecast', 'cross-source-signals', 'regional-intelligence', 'deduction', 'chat-analyst', 'thermal-escalation', 'social-velocity', 'geo-hubs'],
+    variants: ['full'],
   },
   correlation: {
     labelKey: 'header.panelCatCorrelation',
     panelKeys: ['military-correlation', 'escalation-correlation', 'economic-correlation', 'disaster-correlation'],
+    variants: ['full'],
   },
   regionalNews: {
     labelKey: 'header.panelCatRegionalNews',
     panelKeys: ['politics', 'us', 'europe', 'middleeast', 'africa', 'latam', 'asia'],
+    variants: ['full'],
   },
   marketsFinance: {
     labelKey: 'header.panelCatMarketsFinance',
@@ -1328,22 +1331,27 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   fixedIncomeFx: {
     labelKey: 'header.panelCatFixedIncomeFx',
     panelKeys: ['forex', 'bonds'],
+    variants: ['finance', 'commodity'],
   },
   finCommodities: {
     labelKey: 'header.panelCatCommodities',
     panelKeys: ['commodities', 'energy-complex', 'commodities-news'],
+    variants: ['finance', 'commodity', 'energy'],
   },
   cryptoDigital: {
     labelKey: 'header.panelCatCryptoDigital',
     panelKeys: ['crypto', 'crypto-heatmap', 'defi-tokens', 'ai-tokens', 'other-tokens', 'crypto-news', 'etf-flows', 'stablecoins', 'fintech'],
+    variants: ['finance', 'tech'],
   },
   centralBanksEcon: {
     labelKey: 'header.panelCatCentralBanks',
     panelKeys: ['centralbanks', 'economic', 'energy-complex', 'trade-policy', 'sanctions-pressure', 'supply-chain', 'economic-news'],
+    variants: ['finance', 'commodity'],
   },
   dealsInstitutional: {
     labelKey: 'header.panelCatDeals',
     panelKeys: ['ipo', 'derivatives', 'institutional', 'fin-regulation'],
+    variants: ['finance'],
   },
   gulfMena: {
     labelKey: 'header.panelCatGulfMena',
@@ -1355,10 +1363,12 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   commodityPrices: {
     labelKey: 'header.panelCatCommodityPrices',
     panelKeys: ['commodities', 'energy-complex', 'gold-silver', 'energy', 'base-metals', 'critical-minerals', 'markets', 'heatmap', 'macro-signals'],
+    variants: ['commodity'],
   },
   miningIndustry: {
     labelKey: 'header.panelCatMining',
     panelKeys: ['commodity-news', 'mining-news', 'mining-companies', 'supply-chain', 'commodity-regulation'],
+    variants: ['commodity'],
   },
   commodityEcon: {
     labelKey: 'header.panelCatCommodityEcon',

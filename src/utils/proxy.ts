@@ -20,12 +20,12 @@ const RSS_PROXY_BASE = isDev
 const WIDGET_RELAY_BASE = 'https://wm-worldmonitor.netlify.app';
 export function widgetAgentUrl(): string {
   if (isDev) return '/widget-agent';  // Vite proxy handles this
-  return `${WIDGET_RELAY_BASE}/widget-agent`;
+  return `${WIDGET_RELAY_BASE}/api/widget-agent`;
 }
 
 export function widgetAgentHealthUrl(): string {
   if (isDev) return '/widget-agent/health';  // Vite proxy handles this
-  return `${WIDGET_RELAY_BASE}/widget-agent/health`;
+  return `${WIDGET_RELAY_BASE}/api/widget-agent/health`;
 }
 
 export function rssProxyUrl(feedUrl: string): string {
