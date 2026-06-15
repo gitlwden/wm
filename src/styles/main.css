@@ -6786,6 +6786,7 @@ a.prediction-link:hover {
 
 .modal-overlay.active {
   display: flex;
+  overflow-y: auto;
 }
 
 .modal {

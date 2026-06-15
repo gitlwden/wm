@@ -617,9 +617,11 @@ export class UnifiedSettings {
     if (isEntitled()) {
       const sub = getSubscription();
       const planName = sub?.displayName ?? 'Pro';
-      const statusColor = sub?.status === 'active' ? '#22c55e' : sub?.status === 'on_hold' ? '#eab308' : '#ef4444';
-      const statusBorderColor = sub?.status === 'active' ? '#22c55e33' : sub?.status === 'on_hold' ? '#eab30833' : '#ef444433';
-      const statusBgColor = sub?.status === 'active' ? '#22c55e0a' : sub?.status === 'on_hold' ? '#eab3080a' : '#ef44440a';
+      // Default to green for Pro users without Dodo subscription data
+      const effectiveStatus = sub?.status ?? (isEntitled() ? 'active' : 'unknown');
+      const statusColor = effectiveStatus === 'active' ? '#22c55e' : effectiveStatus === 'on_hold' ? '#eab308' : '#ef4444';
+      const statusBorderColor = effectiveStatus === 'active' ? '#22c55e33' : effectiveStatus === 'on_hold' ? '#eab30833' : '#ef444433';
+      const statusBgColor = effectiveStatus === 'active' ? '#22c55e0a' : effectiveStatus === 'on_hold' ? '#eab3080a' : '#ef44440a';
 
       let statusLine = '';
       if (sub?.currentPeriodEnd) {
@@ -642,7 +644,7 @@ export class UnifiedSettings {
             <span style="color:${statusColor};font-weight:600;font-size:13px;">${escapeHtml(planName)}</span>
           </div>
           ${statusLine ? `<div class="upgrade-pro-status-line">${escapeHtml(statusLine)}</div>` : ''}
-          <button class="manage-billing-btn">Manage Billing</button>
+          ${sub ? '<button class="manage-billing-btn">Manage Billing</button>' : '<a class="manage-billing-btn" href="/pro" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">View Plans</a>'}
         </div>
       `;
     }
