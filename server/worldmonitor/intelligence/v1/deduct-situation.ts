@@ -111,7 +111,9 @@ export async function deductSituation(
 
     const { mode, systemPrompt, userPrompt } = buildDeductionPrompt({ query, geoContext, predictionContext });
 
-    const cached = await cachedFetchJson<{ analysis: string; model: string; provider: string }>(
+    let cached: { analysis: string; model: string; provider: string } | null = null;
+    try {
+    cached = await cachedFetchJson<{ analysis: string; model: string; provider: string }>(
         cacheKey,
         DEDUCT_CACHE_TTL,
         async () => {
@@ -141,6 +143,9 @@ export async function deductSituation(
         // the 30s default before callLlmReasoning can complete (#3539).
         { timeoutMs: DEDUCT_TIMEOUT_MS + 5_000 },
     );
+    } catch {
+        return { analysis: '', model: '', provider: 'timeout' };
+    }
 
     if (!cached?.analysis) {
         return { analysis: '', model: '', provider: 'error' };
