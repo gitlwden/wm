@@ -1291,7 +1291,7 @@ export async function analyzeStock(
     // history/analyst then headlines/dividend) + 20s LLM overlay + small
     // overhead. 60s safely sits above this so the cache safety net (#3539)
     // doesn't pre-empt the caller's own per-stage timeouts.
-    timeoutMs: 60_000,
+    timeoutMs: 20_000,
   });
 
   if (cached) return cached;

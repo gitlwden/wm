@@ -4,6 +4,25 @@ import MINING_SITES_RAW from '../../../shared/mining-sites.js';
 // @ts-expect-error — JS module, no declaration file
 import { readJsonFromUpstash } from '../../_upstash-json.js';
 import { buildAuthHeaders } from '../auth';
+
+/** Parse an SSE response from a streaming endpoint and extract the result. */
+async function collectSseResult(res: Response): Promise<Record<string, unknown>> {
+  const text = await res.text();
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('data: ')) continue;
+    try {
+      const event = JSON.parse(line.slice(6));
+      if (event.result) return event.result as Record<string, unknown>;
+      if (event.status === 'cached') return event.result as Record<string, unknown>;
+      if (event.status === 'done') return event.result as Record<string, unknown>;
+      if (event.status === 'error') throw new Error(event.message || 'LLM error');
+    } catch (e) {
+      if (e instanceof SyntaxError) continue; // skip non-JSON lines
+      throw e;
+    }
+  }
+  throw new Error('No result in SSE stream');
+}
 import { SUPPORTED_CONSUMER_PRICES_COUNTRIES } from '../constants';
 import { evaluateFreshness } from '../freshness';
 import type { FreshnessCheck, ToolDef } from '../types';
@@ -581,7 +600,7 @@ export const RPC_TOOLS: ToolDef[] = [
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     _execute: async (params, base, context) => {
-      const url = `${base}/api/intelligence/v1/deduct-situation`;
+      const url = `${base}/api/deduct-situation-stream`;
       const body = JSON.stringify({ query: String(params.query ?? ''), geoContext: String(params.context ?? ''), framework: String(params.framework ?? '') });
       const auth = await buildAuthHeaders(context, 'POST', url, body);
       const res = await fetch(url, {
@@ -591,6 +610,8 @@ export const RPC_TOOLS: ToolDef[] = [
         signal: AbortSignal.timeout(25_000),
       });
       if (!res.ok) throw new Error(`deduct-situation HTTP ${res.status}`);
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('text/event-stream')) return collectSseResult(res);
       return res.json();
     },
     _apiPaths: [

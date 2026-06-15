@@ -77,7 +77,7 @@ function buildPredictionContext(query: string, bootstrap: PredictionBootstrap): 
   return `## Prediction Market Odds (crowd-calibrated)\n${lines.join('\n')}`;
 }
 
-const DEDUCT_TIMEOUT_MS = 120_000;
+const DEDUCT_TIMEOUT_MS = 20_000;
 const DEDUCT_CACHE_TTL = 3600;
 
 export async function deductSituation(
