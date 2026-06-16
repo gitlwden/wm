@@ -44,6 +44,7 @@ interface DiscoveredModels {
   models: string[];
   discoveredAt: number;
   ttlMs: number;
+  latencyMs?: number;
 }
 
 interface ModelCacheEntry {
@@ -240,11 +241,13 @@ export async function getAvailableModels(provider: LlmProviderName): Promise<str
     const fileCached = getFileCachedModels(provider);
     if (fileCached) {
       console.log(`[llm-models:${provider}] Using file-cached ${fileCached.length} models`);
-      // Update memory cache from file
+      // Update memory cache from file, including latency data
+      const fileEntry = fileCache[provider];
       discoveryCache.set(provider, {
         models: fileCached,
         discoveredAt: Date.now(),
         ttlMs: DISCOVERY_CACHE_TTL_MS,
+        latencyMs: fileEntry?.latencyMs,
       });
       return fileCached;
     }
@@ -293,6 +296,40 @@ export function getModelCacheStatus(): Record<string, {
   }
 
   return status;
+}
+
+/**
+ * Record actual LLM call latency for a provider.
+ * Updates both in-memory and file caches so future sortByLatency
+ * calls can order providers fastest-first.
+ */
+export function recordCallLatency(provider: LlmProviderName, latencyMs: number): void {
+  const cached = discoveryCache.get(provider);
+  if (cached) {
+    cached.latencyMs = latencyMs;
+  }
+  const fileEntry = fileCache[provider];
+  if (fileEntry) {
+    fileEntry.latencyMs = latencyMs;
+    saveFileCache();
+  }
+}
+
+/**
+ * Get the recorded latency for a provider (memory → file, 4h TTL).
+ * Returns null if no data or cache expired.
+ */
+export function getCallLatency(provider: LlmProviderName): number | null {
+  const cached = discoveryCache.get(provider);
+  if (cached && cached.latencyMs != null && Date.now() - cached.discoveredAt < cached.ttlMs) {
+    return cached.latencyMs;
+  }
+  const fileEntry = getFileCachedModels(provider);
+  if (fileEntry) {
+    const entry = fileCache[provider];
+    if (entry?.latencyMs != null) return entry.latencyMs;
+  }
+  return null;
 }
 
 /**

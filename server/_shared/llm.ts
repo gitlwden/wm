@@ -1,7 +1,7 @@
 import { CHROME_UA } from './constants';
-import { isProviderAvailable, recordProviderLatency, sortByLatency } from './llm-health';
+import { isProviderAvailable, sortByLatency } from './llm-health';
 import { sanitizeForPrompt } from './llm-sanitize.js';
-import { getAvailableModels } from './llm-models';
+import { getAvailableModels, recordCallLatency } from './llm-models';
 
 export interface ProviderCredentials {
   apiUrl: string;
@@ -415,7 +415,7 @@ export async function callLlm(opts: LlmCallOptions): Promise<LlmCallResult | nul
           continue;
         }
 
-        recordProviderLatency(new URL(creds.apiUrl).origin, Date.now() - t0);
+        recordCallLatency(providerName, Date.now() - t0);
         return { content, model: creds.model, provider: providerName, tokens };
       } catch (err) {
         console.warn(`[llm:${providerName}:${model}] ${(err as Error).message}`);

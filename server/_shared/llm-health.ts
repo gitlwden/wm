@@ -3,6 +3,9 @@
 // Probes provider URLs with a fast request, caches results.
 // All LLM call sites check this before attempting expensive fetch calls.
 
+import type { LlmProviderName } from './llm';
+import { getCallLatency } from './llm-models';
+
 const PROBE_TIMEOUT_MS = 2_000;
 const CACHE_TTL_MS = 60_000; // re-probe every 60s
 const AUTH_FAIL_TTL_MS = 5 * 60_000; // auth errors: re-probe after 5min
@@ -15,21 +18,6 @@ interface HealthEntry {
 
 const cache = new Map<string, HealthEntry>();
 const inFlight = new Map<string, Promise<boolean>>();
-
-// Latency tracking — records the last successful response time per provider.
-// Used by llm.ts to sort the provider chain fastest-first.
-const latencyCache = new Map<string, { ms: number; at: number }>();
-const LATENCY_TTL_MS = 10 * 60_000; // latency data considered fresh for 10 min
-
-export function recordProviderLatency(origin: string, ms: number): void {
-  latencyCache.set(origin, { ms, at: Date.now() });
-}
-
-export function getProviderLatency(origin: string): number | null {
-  const entry = latencyCache.get(origin);
-  if (!entry || Date.now() - entry.at > LATENCY_TTL_MS) return null;
-  return entry.ms;
-}
 
 /**
  * Probe a provider by hitting its /models endpoint with auth.
@@ -138,27 +126,18 @@ export async function reprobeAll(): Promise<void> {
 /**
  * Sort provider names by recent latency (fastest first).
  * Providers without latency data are placed after ranked ones (assumed fresh).
- * Used by callLlm to reorder the fallback chain dynamically.
+ * Uses llm-models.ts latency cache (memory + file, 4h TTL).
  */
 export function sortByLatency<T extends string>(providers: T[]): T[] {
   return [...providers].sort((a, b) => {
-    const metaA = PROVIDER_APIS_MAP[a];
-    const metaB = PROVIDER_APIS_MAP[b];
-    const latA = metaA ? getProviderLatency(new URL(metaA.url).origin) : null;
-    const latB = metaB ? getProviderLatency(new URL(metaB.url).origin) : null;
+    const latA = getCallLatency(a as LlmProviderName);
+    const latB = getCallLatency(b as LlmProviderName);
     if (latA === null && latB === null) return 0;
     if (latA === null) return 1;
     if (latB === null) return -1;
     return latA - latB;
   });
 }
-
-const PROVIDER_APIS_MAP: Record<string, { url: string }> = {
-  groq:      { url: 'https://api.groq.com/openai/v1/chat/completions' },
-  nvidia:    { url: 'https://integrate.api.nvidia.com/v1/chat/completions' },
-  cerebras:  { url: 'https://api.cerebras.ai/v1/chat/completions' },
-  sambanova: { url: 'https://api.sambanova.ai/v1/chat/completions' },
-};
 
 /**
  * Warm the health cache on startup by probing configured providers.
