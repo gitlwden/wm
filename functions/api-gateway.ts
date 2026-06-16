@@ -208,5 +208,9 @@ export default async (req: Request): Promise<Response> => {
 
 export const config = {
   path: ['/api/*', '/mcp'],
+  // LLM-backed endpoints (deduct-situation, analyze-stock) need >10s.
+  // Netlify Pro allows up to 26s; align the function ceiling so the
+  // per-endpoint DEDUCT_TIMEOUT_MS (20s) doesn't get killed prematurely.
+  timeoutDuration: 26,
 };
 // relay deploy trigger Thu Jun 11 21:12:23     2026
