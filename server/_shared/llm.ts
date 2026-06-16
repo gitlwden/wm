@@ -1,5 +1,5 @@
 import { CHROME_UA } from './constants';
-import { isProviderAvailable } from './llm-health';
+import { isProviderAvailable, recordProviderLatency, sortByLatency } from './llm-health';
 import { sanitizeForPrompt } from './llm-sanitize.js';
 import { getAvailableModels } from './llm-models';
 
@@ -339,7 +339,7 @@ export async function callLlm(opts: LlmCallOptions): Promise<LlmCallResult | nul
     }
   }
 
-  const providers = resolveProviderChain({ forcedProvider, providerOrder });
+  const providers = sortByLatency(resolveProviderChain({ forcedProvider, providerOrder }));
   const deadline = Date.now() + timeoutMs;
   const providerTimeout = perProviderTimeoutMs ?? timeoutMs;
 
@@ -365,6 +365,7 @@ export async function callLlm(opts: LlmCallOptions): Promise<LlmCallResult | nul
       if (!creds) break;
 
       try {
+        const t0 = Date.now();
         const resp = await fetch(creds.apiUrl, {
           method: 'POST',
           headers: { ...creds.headers, 'User-Agent': CHROME_UA },
@@ -414,6 +415,7 @@ export async function callLlm(opts: LlmCallOptions): Promise<LlmCallResult | nul
           continue;
         }
 
+        recordProviderLatency(new URL(creds.apiUrl).origin, Date.now() - t0);
         return { content, model: creds.model, provider: providerName, tokens };
       } catch (err) {
         console.warn(`[llm:${providerName}:${model}] ${(err as Error).message}`);
