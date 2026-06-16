@@ -125,6 +125,7 @@ export async function deductSituation(
                 temperature: 0.3,
                 maxTokens: 1500,
                 timeoutMs: DEDUCT_TIMEOUT_MS,
+                perProviderTimeoutMs: 7_000,
                 systemAppend: framework || undefined,
                 providerOrder: ['groq', 'nvidia', 'cerebras', 'sambanova'],
                 modelOverrides: { groq: 'llama-3.3-70b-versatile' },

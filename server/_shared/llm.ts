@@ -84,6 +84,10 @@ export interface LlmCallOptions {
   stripThinkingTags?: boolean;
   validate?: (content: string) => boolean;
   systemAppend?: string;
+  /** Per-provider timeout ceiling. When set, each provider gets at most
+   *  this many milliseconds before the chain moves to the next one.
+   *  Falls back to timeoutMs (the total budget) when omitted. */
+  perProviderTimeoutMs?: number;
 }
 
 export interface LlmCallResult {
@@ -320,6 +324,7 @@ export async function callLlm(opts: LlmCallOptions): Promise<LlmCallResult | nul
     stripThinkingTags: shouldStrip = true,
     validate,
     systemAppend,
+    perProviderTimeoutMs,
   } = opts;
 
   let messages = rawMessages;
@@ -335,8 +340,12 @@ export async function callLlm(opts: LlmCallOptions): Promise<LlmCallResult | nul
   }
 
   const providers = resolveProviderChain({ forcedProvider, providerOrder });
+  const deadline = Date.now() + timeoutMs;
+  const providerTimeout = perProviderTimeoutMs ?? timeoutMs;
 
   for (const providerName of providers) {
+    // Total budget exhausted — don't start a new provider
+    if (Date.now() >= deadline) break;
     // Health gate: skip provider if auth/connectivity failed
     const meta = PROVIDER_APIS[providerName];
     if (meta && !(await isProviderAvailable(meta.url))) {
@@ -365,7 +374,7 @@ export async function callLlm(opts: LlmCallOptions): Promise<LlmCallResult | nul
             temperature,
             max_tokens: maxTokens,
           }),
-          signal: AbortSignal.timeout(timeoutMs),
+          signal: AbortSignal.timeout(Math.min(providerTimeout, deadline - Date.now())),
         });
 
         if (!resp.ok) {
