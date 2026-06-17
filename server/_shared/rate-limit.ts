@@ -20,6 +20,40 @@ function getRatelimit(): Ratelimit | null {
   return ratelimit;
 }
 
+// ─── In-memory rate-limit short-circuit ─────────────────────────────
+// During a page load the browser fires 20-40 concurrent API requests
+// from the same IP. Each one was hitting Upstash Redis (2 commands:
+// deny-list EVAL + sliding-window EVALSHA). This cache records the
+// last "allowed" verdict per IP and short-circuits subsequent checks
+// for LOCAL_WINDOW_MS, reducing per-page Redis commands from ~80 to ~4.
+//
+// The Upstash sliding window is still the source of truth — the local
+// cache only suppresses repeated "allowed" verdicts. A "blocked"
+// verdict is never cached locally so the attacker always sees the
+// real 429. The local window is intentionally short (10s) to limit
+// the drift between local and distributed counters.
+const LOCAL_WINDOW_MS = 10_000;
+const localAllowed = new Map<string, number>();
+
+function isLocallyAllowed(ip: string): boolean {
+  const expiresAt = localAllowed.get(ip);
+  if (expiresAt === undefined) return false;
+  if (Date.now() < expiresAt) return true;
+  localAllowed.delete(ip);
+  return false;
+}
+
+function markLocallyAllowed(ip: string): void {
+  localAllowed.set(ip, Date.now() + LOCAL_WINDOW_MS);
+  // Evict stale entries to prevent unbounded growth
+  if (localAllowed.size > 1_000) {
+    const now = Date.now();
+    for (const [k, v] of localAllowed) {
+      if (v < now) localAllowed.delete(k);
+    }
+  }
+}
+
 // Sentinel returned when no trusted client-IP header is present. Routed
 // through the Upstash limiter as a single shared bucket so the entire
 // "no trusted identity" population is naturally rate-limited together —
@@ -137,6 +171,10 @@ export async function checkRateLimit(request: Request, corsHeaders: Record<strin
 
   const ip = getClientIp(request);
 
+  // Local short-circuit: if this IP was allowed within the last 10s,
+  // skip the Redis round-trip entirely (saves 2 commands per request).
+  if (isLocallyAllowed(ip)) return null;
+
   try {
     const { success, limit, reset } = await rl.limit(ip);
 
@@ -144,6 +182,7 @@ export async function checkRateLimit(request: Request, corsHeaders: Record<strin
       return tooManyRequestsResponse(limit, reset, corsHeaders);
     }
 
+    markLocallyAllowed(ip);
     return null;
   } catch (err) {
     logRateLimitDegraded('checkRateLimit', err);
