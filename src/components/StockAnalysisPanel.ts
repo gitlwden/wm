@@ -145,10 +145,9 @@ export class StockAnalysisPanel extends Panel {
     this.setSafeContent(unsafeRawHtml(this.tableView.render(), 'legacy Panel.setContent() migration'));
     // Bind after DOM update — setSafeContent is debounced (150ms), so
     // bind() must run after the debounce fires and replaces the DOM.
-    // rAF fires after the next paint, which is after setContentImmediate.
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       this.tableView?.bind(this.content, () => this.rerender());
-    });
+    }, 200);
   }
 
   private buildIntro(itemCount: number): string {

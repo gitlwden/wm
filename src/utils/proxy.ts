@@ -16,8 +16,8 @@ const RSS_PROXY_BASE = isDev
 // Widget agent proxy:
 //   dev       → Vite proxy /widget-agent → local relay (localhost:3004)
 //   desktop   → relay directly (sidecar buffers arrayBuffer() which destroys SSE streaming)
-//   prod web  → relay directly (bypass Vercel edge for testing)
-const WIDGET_RELAY_BASE = 'https://wm-worldmonitor.netlify.app';
+//   prod web  → same-origin /api/widget-agent (Netlify function proxies to relay)
+const WIDGET_RELAY_BASE = typeof window !== 'undefined' ? window.location.origin : 'https://wm-worldmonitor.netlify.app';
 export function widgetAgentUrl(): string {
   if (isDev) return '/widget-agent';  // Vite proxy handles this
   return `${WIDGET_RELAY_BASE}/api/widget-agent`;

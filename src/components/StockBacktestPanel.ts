@@ -102,9 +102,9 @@ export class StockBacktestPanel extends Panel {
   private rerender(): void {
     if (!this.tableView) return;
     this.setSafeContent(unsafeRawHtml(this.tableView.render(), 'legacy Panel.setContent() migration'));
-    requestAnimationFrame(() => {
+    setTimeout(() => {
       this.tableView?.bind(this.content, () => this.rerender());
-    });
+    }, 200);
   }
 
   private renderDetail(item: StockBacktestResult): string {
