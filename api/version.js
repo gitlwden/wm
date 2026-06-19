@@ -3,20 +3,32 @@ import { jsonResponse } from './_json-response.js';
 
 export const config = { runtime: 'edge' };
 
+// Fallback version from package.json (bundled at build time)
+const PKG_VERSION = '2.8.0';
+
 export default async function handler() {
   try {
     const release = await fetchLatestRelease('WorldMonitor-Version-Check');
-    if (!release) {
-      return jsonResponse({ error: 'upstream' }, 502);
+    if (release) {
+      const tag = release.tag_name ?? '';
+      const version = tag.replace(/^v/, '');
+      return jsonResponse({
+        version,
+        tag,
+        url: release.html_url,
+        prerelease: release.prerelease ?? false,
+      }, 200, {
+        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60, stale-if-error=3600',
+        'Access-Control-Allow-Origin': '*',
+      });
     }
-    const tag = release.tag_name ?? '';
-    const version = tag.replace(/^v/, '');
 
+    // No GitHub release — fall back to package.json version
     return jsonResponse({
-      version,
-      tag,
-      url: release.html_url,
-      prerelease: release.prerelease ?? false,
+      version: PKG_VERSION,
+      tag: `v${PKG_VERSION}`,
+      url: '',
+      prerelease: false,
     }, 200, {
       'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60, stale-if-error=3600',
       'Access-Control-Allow-Origin': '*',
