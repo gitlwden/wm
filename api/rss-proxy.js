@@ -9,7 +9,7 @@ import { captureSilentError } from './_sentry-edge.js';
 export const config = { runtime: 'edge' };
 
 // Domains that consistently block Vercel edge IPs — skip direct fetch,
-// go straight to Railway relay to avoid wasted invocation + timeout.
+// go straight to Render relay to avoid wasted invocation + timeout.
 const RELAY_ONLY_DOMAINS = new Set([
   'rss.cnn.com',
   'www.defensenews.com',
@@ -159,7 +159,7 @@ export default async function handler(req, ctx) {
       // Skip direct fetch entirely — these domains block Vercel IPs
       response = await fetchViaRailway(feedUrl, timeout);
       usedRelay = !!response;
-      if (!response) throw new Error(`Railway relay unavailable for relay-only domain: ${hostname}`);
+      if (!response) throw new Error(`Render relay unavailable for relay-only domain: ${hostname}`);
     } else {
       try {
         response = await fetchDirect();

@@ -16,7 +16,7 @@
 //     are silently filtered so a halluci­nated ID never leaks through.
 //   - Provider chain mirrors seed-insights.mjs / seed-forecasts.mjs:
 //     Groq → OpenRouter (Gemini Flash). Ollama skipped: the narrative call
-//     runs on Railway which has no local model.
+//     runs on Render which has no local model.
 //   - `callLlm` is dependency-injected so unit tests can exercise the full
 //     prompt + parser without network.
 

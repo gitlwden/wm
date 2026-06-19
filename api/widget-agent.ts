@@ -3,7 +3,7 @@
  *
  * Auth paths:
  *   1. Clerk JWT (Authorization: Bearer <token>) — validates plan === 'pro',
- *      then injects real server keys and proxies to the Railway relay.
+ *      then injects real server keys and proxies to the Render relay.
  *   2. Browser tester key (X-WorldMonitor-Key) — validated against
  *      WORLDMONITOR_VALID_KEYS so one browser-held key can unlock premium
  *      testing paths across the app.

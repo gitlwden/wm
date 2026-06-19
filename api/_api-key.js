@@ -87,7 +87,7 @@ export async function validateApiKey(req, options = {}) {
   // Enterprise key (WORLDMONITOR_VALID_KEYS) — checked BEFORE the wm_ user-key
   // fallthrough so an operator-issued key that happens to start with wm_ is
   // still recognized. Pre-#3541 the static allowlist accepted any prefix; some
-  // legacy operator keys (e.g. the Railway relay's WORLDMONITOR_RELAY_KEY) use
+  // legacy operator keys (e.g. the Render relay's WORLDMONITOR_RELAY_KEY) use
   // the wm_ prefix from before user-issued keys were namespaced. Without this
   // ordering, those keys get punted to validateUserApiKey() and 401 because
   // the Convex user-key table has no record of an operator-minted value.

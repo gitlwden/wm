@@ -5,7 +5,7 @@
 
 import { num } from './_helpers.mjs';
 import { sanitizeEvidenceString } from './_sanitize.mjs';
-// Use scripts/shared mirror (not repo-root shared/): Railway service has
+// Use scripts/shared mirror (not repo-root shared/): Render service has
 // rootDirectory=scripts so ../../shared/ escapes the deploy root. See #2954.
 import { REGIONS, getRegionCorridors, isSignalInRegion } from '../shared/geography.js';
 

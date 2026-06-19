@@ -4,7 +4,7 @@
 // "Scenario Set Normalization".
 
 import { num } from './_helpers.mjs';
-// Use scripts/shared mirror (not repo-root shared/): Railway service has
+// Use scripts/shared mirror (not repo-root shared/): Render service has
 // rootDirectory=scripts so ../../shared/ escapes the deploy root.
 import { REGIONS } from '../shared/geography.js';
 

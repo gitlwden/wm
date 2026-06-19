@@ -98,7 +98,7 @@ See the **[self-hosting guide](https://wm.vercel.app/docs/getting-started)** for
 | **Desktop** | Tauri 2 (Rust) with Node.js sidecar |
 | **AI/ML** | Ollama / Groq / OpenRouter, Transformers.js (browser-side) |
 | **API Contracts** | Protocol Buffers (276 protos, 34 services), sebuf HTTP annotations |
-| **Deployment** | Vercel Edge Functions (60+), Railway relay, Tauri, PWA |
+| **Deployment** | Vercel Edge Functions (60+), Render relay, Tauri, PWA |
 | **Caching** | Redis (Upstash), 3-tier cache, CDN, service worker |
 
 Full stack details in the **[architecture docs](https://wm.vercel.app/docs/architecture)**.

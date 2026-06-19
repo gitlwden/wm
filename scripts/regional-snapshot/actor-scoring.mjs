@@ -3,7 +3,7 @@
 // Phase 0: lightweight extraction. Phase 1+ adds dedicated actor tracking.
 
 import { clip, num } from './_helpers.mjs';
-// Use scripts/shared mirror (not repo-root shared/): Railway service has
+// Use scripts/shared mirror (not repo-root shared/): Render service has
 // rootDirectory=scripts so ../../shared/ escapes the deploy root.
 import { REGIONS } from '../shared/geography.js';
 

@@ -4,7 +4,7 @@
  * Canonical data: shared/source-tiers.json — loaded here via resolveJsonModule
  * (for Vercel edge + the main relay container) and by scripts/ais-relay.cjs
  * via requireShared('source-tiers.json'). `requireShared()` resolves from
- * `../shared` OR `./shared` depending on packaging root, so Railway services
+ * `../shared` OR `./shared` depending on packaging root, so Render services
  * using rootDirectory=scripts (which cannot see repo-root shared/) pick up
  * scripts/shared/source-tiers.json — a byte-identical mirror enforced by
  * tests/edge-functions.test.mjs (`scripts/shared/ stays in sync with shared/`).

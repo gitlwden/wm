@@ -1,7 +1,7 @@
 # =============================================================================
 # Digest notifications cron (consolidated: digest + brief compose + channel send)
 # =============================================================================
-# Runs scripts/seed-digest-notifications.mjs as a Railway cron (every 30 min).
+# Runs scripts/seed-digest-notifications.mjs as a Render cron (every 30 min).
 # The script now also owns the brief envelope write path — per-user
 # brief:{userId}:{issueDate} keys are produced here, and every channel
 # dispatch (email/telegram/slack/discord) gets a signed magazine URL CTA.
@@ -13,7 +13,7 @@
 # modules COPY'd in. The retired seed-brief-composer Dockerfile had
 # the same pattern.
 #
-# Required env (Railway service vars):
+# Required env (Render service vars):
 #   UPSTASH_REDIS_REST_URL
 #   UPSTASH_REDIS_REST_TOKEN
 #   CONVEX_URL                    (or CONVEX_SITE_URL)
@@ -52,7 +52,7 @@ COPY scripts/lib/ ./scripts/lib/
 # Sprint 1 / U4 operator one-shot — `clearDeliveredEntry` primitive
 # pairs with the delivered-log writer in scripts/lib/digest-delivered-
 # log.mjs (per skill_new_blocking_state_without_matching_clear_primitive).
-# Shipped here so an operator can `railway run node scripts/clear-
+# Shipped here so an operator can `render run node scripts/clear-
 # delivered-entry.mjs --user X --slot Y --cluster Z --reason "..."`
 # directly on the digest-notifications service container without
 # spinning up a separate one-off image. Read-only path: requires the

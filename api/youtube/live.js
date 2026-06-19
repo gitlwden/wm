@@ -1,5 +1,5 @@
 // YouTube Live Stream Detection API
-// Proxies to Railway relay which uses residential proxy for YouTube scraping
+// Proxies to Render relay which uses residential proxy for YouTube scraping
 
 import { getCorsHeaders, isDisallowedOrigin } from '../_cors.js';
 import { getRelayBaseUrl, getRelayHeaders } from '../_relay.js';
@@ -28,7 +28,7 @@ export default async function handler(request) {
   //   });
   // }
 
-  // Proxy to Railway relay
+  // Proxy to Render relay
   const relayBase = getRelayBaseUrl();
   if (relayBase) {
     try {

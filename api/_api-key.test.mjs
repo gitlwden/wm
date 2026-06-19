@@ -176,7 +176,7 @@ test('wm_-prefixed user key returns required:true / valid:false so gateway can f
 
 test('REGRESSION: wm_-prefixed key in WORLDMONITOR_VALID_KEYS is honored as enterprise', async () => {
   // Pre-#3541 the static enterprise allowlist accepted any key shape, so
-  // some operator-issued keys (e.g. Railway WORLDMONITOR_RELAY_KEY) carry the
+  // some operator-issued keys (e.g. Render WORLDMONITOR_RELAY_KEY) carry the
   // wm_ prefix from before user-issued keys were namespaced. Without the
   // static-allowlist-first ordering, those keys 401 because they get punted
   // to validateUserApiKey() which doesn't know about operator-minted values.

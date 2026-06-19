@@ -26,7 +26,7 @@ World Monitor is a real-time global intelligence dashboard built as a TypeScript
            ┌──────────────┼──────────────┐
            │              │              │
     ┌──────▼──────┐ ┌─────▼─────┐ ┌─────▼──────┐
-    │   Vercel    │ │  Railway  │ │   Tauri    │
+    │   Vercel    │ │  Render   │ │   Tauri    │
     │ Edge Funcs  │ │ AIS Relay │ │  Sidecar   │
     │ + Middleware│ │ + Seeds   │ │ (Node.js)  │
     └──────┬──────┘ └─────┬─────┘ └─────┬──────┘
@@ -58,7 +58,7 @@ World Monitor is a real-time global intelligence dashboard built as a TypeScript
 | Service | Platform | Role |
 |---------|----------|------|
 | SPA + Edge Functions | Vercel | Static files, API endpoints, middleware (bot filtering, social OG) |
-| AIS Relay | Railway | WebSocket proxy (AIS stream), seed loops (market, aviation, GPSJAM, risk scores, UCDP, positive events), RSS proxy, OREF polling |
+| AIS Relay | Render | WebSocket proxy (AIS stream), seed loops (market, aviation, GPSJAM, risk scores, UCDP, positive events), RSS proxy, OREF polling |
 | Redis | Upstash | Cache layer with stampede protection, seed-meta freshness tracking, rate limiting |
 | Convex | Convex Cloud | Contact form submissions, waitlist registrations |
 | Documentation | Mintlify | Public docs, proxied through Vercel at `/docs` |
@@ -133,7 +133,7 @@ Edge functions are bundled per file: each deployed function may not pull in unre
 | `_cors.js` | Origin allowlist (wm.vercel.app, Vercel previews, tauri://localhost, localhost) |
 | `_rate-limit.js` | Upstash sliding window rate limiting, IP extraction |
 | `_api-key.js` | Origin-aware API key validation (desktop requires key, trusted browser exempt) |
-| `_relay.js` | Factory for proxying requests to Railway relay service |
+| `_relay.js` | Factory for proxying requests to Render relay service |
 
 ### Gateway Factory
 
@@ -201,7 +201,7 @@ CI enforces generated code freshness via `.github/workflows/proto-check.yml`: ru
 
 ### AIS Relay Seed Loops
 
-The Railway relay service (`scripts/ais-relay.cjs`) runs continuous seed loops:
+The Render relay service (`scripts/ais-relay.cjs`) runs continuous seed loops:
 
 - Market data (stocks, commodities, crypto, stablecoins, sectors, ETF flows, gulf quotes)
 - Aviation (international delays)
@@ -210,7 +210,7 @@ The Railway relay service (`scripts/ais-relay.cjs`) runs continuous seed loops:
 - Risk scores (CII)
 - UCDP events
 
-These are the primary seeders. Standalone `seed-*.mjs` scripts on Railway cron are secondary/backup.
+These are the primary seeders. Standalone `seed-*.mjs` scripts on Render cron are secondary/backup.
 
 ### Refresh Scheduling
 
@@ -288,7 +288,7 @@ Secrets are stored in the platform keyring (never plaintext), injected into the 
 ### Four-Layer Hierarchy
 
 ```
-Bootstrap seed (Railway writes to Redis on schedule)
+Bootstrap seed (Render writes to Redis on schedule)
     ↓ miss
 In-memory cache (per Vercel instance, short TTL)
     ↓ miss
@@ -385,7 +385,7 @@ Runs before every `git push`:
 ├── convex/                 Convex backend (contact form, waitlist)
 ├── data/                   Static data files (conservation, renewable, happiness)
 ├── deploy/                 Deployment configs
-├── docker/                 Dockerfile + nginx config for Railway
+├── docker/                 Dockerfile + nginx config for Render
 ├── docs/                   Mintlify documentation site
 ├── e2e/                    Playwright E2E specs
 ├── proto/                  Protobuf service definitions (sebuf framework)

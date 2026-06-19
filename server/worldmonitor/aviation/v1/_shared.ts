@@ -397,7 +397,7 @@ export async function fetchNotamClosures(
 
   try {
     if (relayBase) {
-      // Route through Railway relay — avoids Vercel edge timeout / CloudFront blocking
+      // Route through Render relay — avoids Vercel edge timeout / CloudFront blocking
       const relayUrl = `${relayBase}/notam?locations=${encodeURIComponent(locations)}`;
       const resp = await fetch(relayUrl, {
         headers: getRelayHeaders(),

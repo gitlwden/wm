@@ -1,6 +1,6 @@
 /**
  * Aggregate job: computes basket indices from latest price observations.
- * Runs as an independent Railway cron service (02:15 UTC daily) after scrape.
+ * Runs as an independent Render cron service (02:15 UTC daily) after scrape.
  * Produces Fixed Basket Index and Value Basket Index per methodology.
  */
 import { query, closePool } from '../db/client.js';

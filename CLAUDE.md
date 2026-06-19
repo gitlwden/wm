@@ -46,7 +46,7 @@
 | 许可证 | AGPL-3.0-only |
 | 框架 | Preact + Vite |
 | 地图 | deck.gl / globe.gl + maplibre-gl |
-| 后端 | Vercel Edge Functions + Railway (AIS Relay) |
+| 后端 | Vercel Edge Functions + Render (AIS Relay) |
 | 数据库 | Convex + Upstash Redis |
 | 桌面 | Tauri 2.x |
 | 语言 | TypeScript |
@@ -100,7 +100,7 @@ worldmonitor/
 
 ### 后端
 - **Vercel Edge Functions** — API 路由
-- **Railway** — AIS Relay (WebSocket 代理)
+- **Render** — AIS Relay (WebSocket 代理)
 - **Upstash Redis** — 缓存 + 限流
 - **Convex** — 实时数据库
 - **Clerk** — 身份认证

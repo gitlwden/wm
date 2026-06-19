@@ -33,7 +33,7 @@
 //   node --import tsx/esm scripts/brief-quality-report.mjs --json                       # machine-readable
 //
 // Pipe production drop logs for accurate cap-truncation:
-//   railway logs --service scripts-cron-digest-notifications | grep 'brief filter drops' | \
+//   render logs --service scripts-cron-digest-notifications | grep 'brief filter drops' | \
 //     node --import tsx/esm scripts/brief-quality-report.mjs --drop-lines-stdin
 
 import { readFileSync } from 'node:fs';
@@ -145,7 +145,7 @@ function summariseDropLines(lines) {
 
 // Mirror production: groupTopicsPostDedup operates on top-N reps after
 // the score floor, not the raw 800-rep deduped pool. Read from env so
-// a Railway DIGEST_SCORE_MIN / DIGEST_MAX_ITEMS flip stays in sync;
+// a Render DIGEST_SCORE_MIN / DIGEST_MAX_ITEMS flip stays in sync;
 // fall back to documented defaults if env is empty/invalid.
 const SCORE_FLOOR_DEFAULT = 63;
 const TOP_N_DEFAULT = 30;

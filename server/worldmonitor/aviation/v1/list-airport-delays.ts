@@ -53,7 +53,7 @@ export async function listAirportDelays(
     }
   } catch {}
 
-  // 2. International — read-only from Redis (Railway relay seeds the cache)
+  // 2. International — read-only from Redis (Render relay seeds the cache)
   // intlSourceCovered = the seed cache hit AND returned a valid alerts array.
   // Same rule as FAA: cache miss → uncovered → no synthetic "normal" rows.
   let intlAlerts: AirportDelayAlert[] = [];

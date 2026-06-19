@@ -4,7 +4,7 @@ Agent entry point for WorldMonitor. Read this first, then follow links for depth
 
 ## What This Project Is
 
-Real-time global intelligence dashboard. TypeScript SPA (Vite + Preact) with 86 panel components, 60+ Vercel Edge API endpoints, a Tauri desktop app with Node.js sidecar, and a Railway relay service. Aggregates 30+ external data sources (geopolitics, military, finance, climate, cyber, maritime, aviation).
+Real-time global intelligence dashboard. TypeScript SPA (Vite + Preact) with 86 panel components, 60+ Vercel Edge API endpoints, a Tauri desktop app with Node.js sidecar, and a Render relay service. Aggregates 30+ external data sources (geopolitics, military, finance, climate, cyber, maritime, aviation).
 
 ## Repository Map
 
@@ -41,7 +41,7 @@ Real-time global intelligence dashboard. TypeScript SPA (Vite + Preact) with 86 
 ├── tests/                  # Unit/integration tests (node:test runner)
 ├── e2e/                    # Playwright E2E specs
 ├── docs/                   # Mintlify documentation site
-├── docker/                 # Docker build for Railway services
+├── docker/                 # Docker build for Render services
 ├── deploy/                 # Deployment configs
 └── blog-site/              # Static blog (built into public/blog/)
 ```
@@ -175,7 +175,7 @@ Runs automatically before `git push`:
 ## Deployment
 
 - **Web**: Vercel (auto-deploy on push to main)
-- **Relay/Seeds**: Railway (Docker, cron services)
+- **Relay/Seeds**: Render (Docker, cron services)
 - **Desktop**: Tauri builds via GitHub Actions
 - **Docs**: Mintlify (proxied through Vercel at `/docs`)
 
