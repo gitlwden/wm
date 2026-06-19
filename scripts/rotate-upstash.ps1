@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     One-click Upstash Redis credential rotation.
-    Updates .env.local, GitHub Secrets, and Netlify env vars in one go.
+    Updates .env.local, GitHub Secrets, Netlify, and Render in one go.
 
 .PARAMETER Url
     New UPSTASH_REDIS_REST_URL value.
@@ -10,10 +10,13 @@
     New UPSTASH_REDIS_REST_TOKEN value.
 
 .PARAMETER SkipNetlify
-    Skip Netlify env var update (useful if Netlify CLI is not linked).
+    Skip Netlify env var update.
 
 .PARAMETER SkipGithub
     Skip GitHub Secrets update.
+
+.PARAMETER SkipRender
+    Skip Render env var update.
 
 .EXAMPLE
     .\scripts\rotate-upstash.ps1 -Url "https://xxx.upstash.io" -Token "AYxxx"
@@ -27,7 +30,8 @@ param(
     [string]$Token,
 
     [switch]$SkipNetlify,
-    [switch]$SkipGithub
+    [switch]$SkipGithub,
+    [switch]$SkipRender
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,7 +43,7 @@ Write-Host ""
 
 # ─── 1. Update .env.local ───────────────────────────────────────────
 
-Write-Host "[1/3] Updating .env.local ..." -ForegroundColor Yellow
+Write-Host "[1/4] Updating .env.local ..." -ForegroundColor Yellow
 
 if (-not (Test-Path $EnvFile)) {
     Write-Host "  WARN: .env.local not found, creating new one" -ForegroundColor DarkYellow
@@ -68,7 +72,7 @@ Write-Host "  OK" -ForegroundColor Green
 # ─── 2. Update GitHub Secrets ───────────────────────────────────────
 
 if (-not $SkipGithub) {
-    Write-Host "[2/3] Updating GitHub Secrets ..." -ForegroundColor Yellow
+    Write-Host "[2/4] Updating GitHub Secrets ..." -ForegroundColor Yellow
 
     $ghCheck = Get-Command gh -ErrorAction SilentlyContinue
     if (-not $ghCheck) {
@@ -83,13 +87,13 @@ if (-not $SkipGithub) {
         }
     }
 } else {
-    Write-Host "[2/3] Skipped GitHub Secrets (--SkipGithub)" -ForegroundColor DarkGray
+    Write-Host "[2/4] Skipped GitHub Secrets (--SkipGithub)" -ForegroundColor DarkGray
 }
 
 # ─── 3. Update Netlify env vars ─────────────────────────────────────
 
 if (-not $SkipNetlify) {
-    Write-Host "[3/3] Updating Netlify env vars ..." -ForegroundColor Yellow
+    Write-Host "[3/4] Updating Netlify env vars ..." -ForegroundColor Yellow
 
     $nlCheck = Get-Command npx -ErrorAction SilentlyContinue
     if (-not $nlCheck) {
@@ -127,7 +131,55 @@ if (-not $SkipNetlify) {
         }
     }
 } else {
-    Write-Host "[3/3] Skipped Netlify (--SkipNetlify)" -ForegroundColor DarkGray
+    Write-Host "[3/4] Skipped Netlify (--SkipNetlify)" -ForegroundColor DarkGray
+}
+
+# ─── 4. Update Render env vars (AIS Relay) ──────────────────────────
+
+if (-not $SkipRender) {
+    Write-Host "[4/4] Updating Render (AIS Relay) env vars ..." -ForegroundColor Yellow
+
+    $renderKey = ""
+    if ($content -match '(?m)^RENDER_API_KEY=(.+)') {
+        $renderKey = $Matches[1].Trim('"')
+    }
+
+    if (-not $renderKey) {
+        Write-Host "  SKIP: no RENDER_API_KEY found in .env.local" -ForegroundColor DarkYellow
+    } else {
+        try {
+            # Find wm-relay service
+            $services = Invoke-RestMethod -Uri "https://api.render.com/v1/services?limit=10" `
+                -Headers @{ Authorization = "Bearer $renderKey"; Accept = "application/json" } `
+                -Method Get
+            $relay = $services | Where-Object { $_.service.name -eq "wm-relay" } | Select-Object -First 1
+
+            if (-not $relay) {
+                Write-Host "  SKIP: wm-relay service not found" -ForegroundColor DarkYellow
+            } else {
+                $serviceId = $relay.service.id
+                Invoke-RestMethod -Uri "https://api.render.com/v1/services/$serviceId/env-vars/UPSTASH_REDIS_REST_URL" `
+                    -Method Put `
+                    -Headers @{ Authorization = "Bearer $renderKey"; "Content-Type" = "application/json" } `
+                    -Body (@{ value = $Url } | ConvertTo-Json) | Out-Null
+                Invoke-RestMethod -Uri "https://api.render.com/v1/services/$serviceId/env-vars/UPSTASH_REDIS_REST_TOKEN" `
+                    -Method Put `
+                    -Headers @{ Authorization = "Bearer $renderKey"; "Content-Type" = "application/json" } `
+                    -Body (@{ value = $Token } | ConvertTo-Json) | Out-Null
+
+                # Trigger redeploy
+                Invoke-RestMethod -Uri "https://api.render.com/v1/services/$serviceId/deploys" `
+                    -Method Post `
+                    -Headers @{ Authorization = "Bearer $renderKey"; "Content-Type" = "application/json" } `
+                    -Body '{}' | Out-Null
+                Write-Host "  OK (redeploy triggered)" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "  FAIL: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+} else {
+    Write-Host "[4/4] Skipped Render (--SkipRender)" -ForegroundColor DarkGray
 }
 
 # ─── Done ───────────────────────────────────────────────────────────
@@ -137,4 +189,4 @@ Write-Host "=== Done ===" -ForegroundColor Cyan
 Write-Host "New URL:   $Url" -ForegroundColor DarkGray
 Write-Host "New Token: $($Token.Substring(0, [Math]::Min(8, $Token.Length)))..." -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "NOTE: Netlify changes require a redeploy to take effect." -ForegroundColor DarkYellow
+Write-Host "NOTE: Netlify and Render changes require a redeploy to take effect." -ForegroundColor DarkYellow
