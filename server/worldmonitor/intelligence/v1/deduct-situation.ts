@@ -77,7 +77,8 @@ function buildPredictionContext(query: string, bootstrap: PredictionBootstrap): 
   return `## Prediction Market Odds (crowd-calibrated)\n${lines.join('\n')}`;
 }
 
-const DEDUCT_TIMEOUT_MS = 20_000;
+// Netlify Free: 10s max function timeout. Budget: 8s LLM + 2s overhead.
+const DEDUCT_TIMEOUT_MS = 8_000;
 const DEDUCT_CACHE_TTL = 3600;
 
 export async function deductSituation(

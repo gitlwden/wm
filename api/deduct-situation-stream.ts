@@ -6,12 +6,12 @@
  *
  * Returns text/event-stream SSE:
  *   data: {"status":"cached","result":{...}}     — cache hit, instant
+ *   data: {"status":"processing"}                — LLM working (keeps connection alive)
  *   data: {"status":"done","result":{...}}        — LLM result ready
  *   data: {"status":"error","message":"..."}      — on failure
  *
- * The underlying deductSituation uses fast-inference providers (Groq,
- * Cerebras, SambaNova) with a 20 s timeout.  SSE lets the client see
- * cache hits instantly and know the LLM is working on misses.
+ * Uses ReadableStream so the first byte is sent immediately — Netlify
+ * sees an active response and won't kill the function at the 10s wall.
  */
 
 export const config = { runtime: 'edge' };
@@ -25,9 +25,25 @@ import { sha256Hex } from '../server/worldmonitor/intelligence/v1/_shared';
 
 const MAX_QUERY_LEN = 500;
 
-function sseResponse(events: Record<string, unknown>[], cors: Record<string, string>) {
-  const body = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
-  return new Response(body, {
+function streamSSE(cors: Record<string, string>, producer: (emit: (obj: Record<string, unknown>) => void) => Promise<void>) {
+  const enc = new TextEncoder();
+  const emit = (obj: Record<string, unknown>) => enc.encode(`data: ${JSON.stringify(obj)}\n\n`);
+  let controller: ReadableStreamDefaultController<Uint8Array>;
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(ctrl) {
+      controller = ctrl;
+      try {
+        await producer((obj) => ctrl.enqueue(emit(obj)));
+      } catch (err) {
+        ctrl.enqueue(emit({ status: 'error', message: err instanceof Error ? err.message : String(err) }));
+      } finally {
+        ctrl.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
     status: 200,
     headers: {
       'Content-Type': 'text/event-stream',
@@ -57,11 +73,17 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     body = await req.json();
   } catch {
-    return sseResponse([{ status: 'error', message: 'Invalid JSON body' }], cors);
+    return new Response(JSON.stringify({ status: 'error', message: 'Invalid JSON body' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...cors },
+    });
   }
 
   const query = typeof body.query === 'string' ? body.query.trim().slice(0, MAX_QUERY_LEN) : '';
-  if (!query) return sseResponse([{ status: 'error', message: 'query is required' }], cors);
+  if (!query) return new Response(JSON.stringify({ status: 'error', message: 'query is required' }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json', ...cors },
+  });
 
   const geoContext = typeof body.geoContext === 'string' ? body.geoContext.trim() : '';
   const framework = typeof body.framework === 'string' ? body.framework.trim() : '';
@@ -73,20 +95,25 @@ export default async function handler(req: Request): Promise<Response> {
   const cached = cachedRaw as DeductSituationResponse | null;
 
   if (cached?.analysis) {
-    return sseResponse([{ status: 'cached', result: cached }], cors);
+    // Cache hit — return immediately without streaming
+    return new Response(`data: ${JSON.stringify({ status: 'cached', result: cached })}\n\n`, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-store', ...cors },
+    });
   }
 
-  // Cache miss — call LLM via deductSituation (uses fast providers, 20s timeout)
-  try {
+  // Cache miss — stream: send "processing" immediately to keep Netlify alive,
+  // then call LLM and send result when ready.
+  return streamSSE(cors, async (emit) => {
+    emit({ status: 'processing' });
+
     const ctx = { request: req } as Parameters<typeof deductSituation>[0];
     const result = await deductSituation(ctx, { query, geoContext, framework });
 
     if (result?.analysis) {
-      return sseResponse([{ status: 'done', result }], cors);
+      emit({ status: 'done', result });
+    } else {
+      emit({ status: 'error', message: 'LLM providers unavailable' });
     }
-    return sseResponse([{ status: 'error', message: 'LLM providers unavailable' }], cors);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return sseResponse([{ status: 'error', message: msg }], cors);
-  }
+  });
 }

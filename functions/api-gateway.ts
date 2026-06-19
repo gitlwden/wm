@@ -208,9 +208,9 @@ export default async (req: Request): Promise<Response> => {
 
 export const config = {
   path: ['/api/*', '/mcp'],
-  // LLM-backed endpoints (deduct-situation, analyze-stock) need >10s.
-  // Netlify Pro allows up to 26s; align the function ceiling so the
-  // per-endpoint DEDUCT_TIMEOUT_MS (20s) doesn't get killed prematurely.
-  timeoutDuration: 26,
+  // Netlify Free: 10s max for synchronous functions.
+  // LLM endpoints use SSE streaming (api/deduct-situation-stream.ts)
+  // to stay within this limit. Do NOT set timeoutDuration — it's
+  // ignored on free tier and the comment-only form is self-documenting.
 };
 // relay deploy trigger Thu Jun 11 21:12:23     2026
