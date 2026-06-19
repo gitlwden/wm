@@ -51,6 +51,52 @@ POST endpoints accept JSON body with `Content-Type: application/json`.
 
 ---
 
+## Required Parameters Reference
+
+Endpoints that return 400 without the correct parameters:
+
+| Endpoint | Required Param | Type | Example |
+|---|---|---|---|
+| `/api/resilience/v1/get-resilience-score` | `countryCode` | string | `?countryCode=US` |
+| `/api/supply-chain/v1/get-country-products` | `iso2` | string | `?iso2=US` |
+| `/api/supply-chain/v1/get-multi-sector-cost-shock` | `iso2` | string | `?iso2=US` |
+| `/api/intelligence/v1/get-company-enrichment` | `company` | string | `?company=Apple` |
+| `/api/intelligence/v1/list-company-signals` | `company` | string | `?company=Apple` |
+| `/api/v2/shipping/route-intelligence` | `route` | string | `?route=US-CN` |
+| `/api/aviation/v1/get-flight-status` | `flight` | string | `?flight=AA100` |
+| `/api/aviation/v1/search-google-flights` | `origin`, `destination` | string | `?origin=JFK&destination=LAX` |
+| `/api/aviation/v1/search-google-dates` | `origin`, `destination` | string | `?origin=JFK&destination=LAX` |
+| `/api/aviation/v1/search-flight-prices` | `origin`, `destination` | string | `?origin=JFK&destination=LAX` |
+| `/api/radiation/v1/list-radiation-observations` | `lat`, `lon` | number | `?lat=48.8&lon=2.3` |
+| `/api/infrastructure/v1/reverse-geocode` | `lat`, `lon` | number | `?lat=48.8&lon=2.3` |
+| `/api/infrastructure/v1/get-ip-geo` | `ip` | string | `?ip=8.8.8.8` |
+| `/api/forecast/v1/trigger-simulation` | — | POST | Body: `{"scenarioId":"..."}` |
+
+## Endpoints with Special Conditions
+
+| Endpoint | Condition | Expected Response |
+|---|---|---|
+| `/api/v2/shipping/webhooks` | Pro key required | 401 without Pro |
+| `/api/military/v1/get-aircraft-details` | `configured:false` | Feature not configured |
+| `/api/military/v1/get-wingbits-status` | `configured:false` | Feature not configured |
+| `/api/intelligence/v1/list-telegram-feed` | `enabled:false` | Feature not enabled |
+| `/api/scenario/v1/run-scenario` | POST + `scenarioId` | 400 without param |
+| `/api/scenario/v1/get-scenario-status` | `jobId` required | 400 without param |
+
+## Large Response Endpoints
+
+These endpoints may return 100KB–10MB of data. Set a longer client timeout (30s+):
+
+| Endpoint | Typical Size | Note |
+|---|---|---|
+| `/api/infrastructure/v1/get-bootstrap-data` | ~8MB | Full infrastructure bootstrap |
+| `/api/conflict/v1/list-iran-events` | ~400KB | Historical conflict data |
+| `/api/supply-chain/v1/list-pipelines` | ~400KB | Pipeline infrastructure |
+| `/api/military/v1/list-military-bases` | ~200KB | Global military bases |
+| `/api/news/v1/list-feed-digest` | ~370KB | Use SSE `/api/news-feed-stream` instead |
+
+---
+
 ## Market
 
 | # | Endpoint | Method | Auth | Description |
@@ -104,7 +150,18 @@ POST endpoints accept JSON body with `Content-Type: application/json`.
 | 42 | `/api/intelligence/v1/compute-energy-shock` | GET | Key | Energy shock simulation |
 | 43 | `/api/intelligence/v1/get-country-port-activity` | GET | Key | Country port activity. Params: `country` |
 | 44 | 🔒 `/api/intelligence/v1/deduct-situation` | POST | Public/Pro | AI geopolitical deduction. Body: `{"query":"What is the current risk level?"}` |
-| 44a | `/api/deduct-situation-stream` | POST | Key | SSE streaming version of deduct-situation (recommended) |
+## SSE Streaming Endpoints
+
+These endpoints bypass the gateway's RPC routing and are accessed at the root `/api/` path.
+
+| Endpoint | Method | Auth | Description |
+|---|---|---|---|
+| `/api/deduct-situation-stream` | POST | Key | SSE streaming AI geopolitical deduction |
+| `/api/news-feed-stream` | POST | Key | SSE streaming news feed digest |
+
+**IMPORTANT:** These are NOT under `/api/intelligence/v1/` or `/api/news/v1/`. The correct paths are:
+- `POST /api/deduct-situation-stream` (NOT `/api/intelligence/v1/deduct-situation-stream`)
+- `POST /api/news-feed-stream` (NOT `/api/news/v1/news-feed-stream`)
 | 45 | 🔒 `/api/intelligence/v1/list-market-implications` | GET | Pro | Market implications of geopolitical events |
 | 46 | 🔒 `/api/intelligence/v1/get-regional-snapshot` | GET | Pro | Regional intelligence snapshot. Params: `region` |
 | 47 | 🔒 `/api/intelligence/v1/get-regime-history` | GET | Pro | Regime stability history. Params: `country` |
@@ -251,7 +308,6 @@ POST endpoints accept JSON body with `Content-Type: application/json`.
 | 153 | `/api/research/v1/list-tech-events` | GET | Key | Technology events |
 | 154 | `/api/research/v1/list-hackernews-items` | GET | Key | Hacker News top items |
 | 155 | `/api/news/v1/list-feed-digest` | GET | Key | News feed digest. Params: `variant`, `lang` |
-| 155a | `/api/news-feed-stream` | POST | Key | SSE streaming version of feed digest (recommended). Body: `{"variant":"full","lang":"en"}` |
 | 156 | `/api/news/v1/summarize-article-cache` | GET | Key | Cached article summary. Params: `url` |
 
 ## Seismology & Unrest

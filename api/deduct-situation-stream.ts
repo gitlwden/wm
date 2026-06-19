@@ -17,7 +17,7 @@
 export const config = { runtime: 'edge' };
 
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
-import { validateApiKey } from './_api-key.js';
+import { validateApiKeyWithUserKeys } from './_sse-auth.js';
 import { deductSituation } from '../server/worldmonitor/intelligence/v1/deduct-situation';
 import type { DeductSituationResponse } from '../src/generated/server/worldmonitor/intelligence/v1/service_server';
 import { getCachedJson } from '../server/_shared/redis';
@@ -60,8 +60,8 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: cors });
 
-  // Auth — same as gateway
-  const keyResult = await validateApiKey(req);
+  // Auth — supports both enterprise keys and wm_ user keys
+  const keyResult = await validateApiKeyWithUserKeys(req);
   if (!keyResult.valid) {
     return new Response(JSON.stringify({ error: keyResult.error || 'Unauthorized' }), {
       status: 401,

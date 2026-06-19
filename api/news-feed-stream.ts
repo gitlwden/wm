@@ -23,9 +23,9 @@
 export const config = { runtime: 'edge' };
 
 import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
-import { validateApiKey } from './_api-key.js';
-import { listFeedDigest } from '../../../server/worldmonitor/news/v1/list-feed-digest';
-import { getCachedJson } from '../../../server/_shared/redis';
+import { validateApiKeyWithUserKeys } from './_sse-auth.js';
+import { listFeedDigest } from '../server/worldmonitor/news/v1/list-feed-digest';
+import { getCachedJson } from '../server/_shared/redis';
 
 const VALID_VARIANTS = new Set(['full', 'tech', 'finance', 'commodity', 'happy', 'energy']);
 
@@ -35,7 +35,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: cors });
 
-  const keyResult = await validateApiKey(req);
+  const keyResult = await validateApiKeyWithUserKeys(req);
   if (!keyResult.valid) {
     return new Response(JSON.stringify({ error: keyResult.error || 'Unauthorized' }), {
       status: 401,
