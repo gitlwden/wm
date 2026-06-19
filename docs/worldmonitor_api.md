@@ -2,6 +2,33 @@
 
 Base URL: `https://wm-worldmonitor-847.netlify.app`
 
+## Netlify Free Tier Limitation
+
+Netlify Free has a **10-second wall-clock limit** per function invocation. Endpoints that need more time use **SSE streaming** (`text/event-stream`) — the server sends a `{"status":"processing"}` event immediately to keep the connection alive, then streams the result when ready.
+
+| Scenario | Behavior |
+|---|---|
+| Cache hit | Returns instantly (< 1s) |
+| Cache miss (fast endpoint) | Returns within 10s |
+| Cache miss (slow endpoint) | Use SSE streaming endpoint instead |
+
+**Slow endpoints and their SSE alternatives:**
+
+| Standard Endpoint | SSE Streaming Endpoint |
+|---|---|
+| `POST /api/intelligence/v1/deduct-situation` | `POST /api/deduct-situation-stream` |
+| `GET /api/news/v1/list-feed-digest` | `POST /api/news-feed-stream` |
+
+SSE endpoints return `text/event-stream` with these events:
+```
+data: {"status":"processing"}          — work started (sent immediately)
+data: {"status":"cached","result":{}}  — cache hit (no further events)
+data: {"status":"done","result":{}}    — result ready
+data: {"status":"error","message":""}  — failure
+```
+
+**Caller timeout recommendation:** set 35s for SSE endpoints, 15s for standard endpoints.
+
 ## Authentication
 
 All endpoints except the public ones require an API key passed via header:
@@ -77,6 +104,7 @@ POST endpoints accept JSON body with `Content-Type: application/json`.
 | 42 | `/api/intelligence/v1/compute-energy-shock` | GET | Key | Energy shock simulation |
 | 43 | `/api/intelligence/v1/get-country-port-activity` | GET | Key | Country port activity. Params: `country` |
 | 44 | 🔒 `/api/intelligence/v1/deduct-situation` | POST | Public/Pro | AI geopolitical deduction. Body: `{"query":"What is the current risk level?"}` |
+| 44a | `/api/deduct-situation-stream` | POST | Key | SSE streaming version of deduct-situation (recommended) |
 | 45 | 🔒 `/api/intelligence/v1/list-market-implications` | GET | Pro | Market implications of geopolitical events |
 | 46 | 🔒 `/api/intelligence/v1/get-regional-snapshot` | GET | Pro | Regional intelligence snapshot. Params: `region` |
 | 47 | 🔒 `/api/intelligence/v1/get-regime-history` | GET | Pro | Regime stability history. Params: `country` |
@@ -223,6 +251,7 @@ POST endpoints accept JSON body with `Content-Type: application/json`.
 | 153 | `/api/research/v1/list-tech-events` | GET | Key | Technology events |
 | 154 | `/api/research/v1/list-hackernews-items` | GET | Key | Hacker News top items |
 | 155 | `/api/news/v1/list-feed-digest` | GET | Key | News feed digest. Params: `variant`, `lang` |
+| 155a | `/api/news-feed-stream` | POST | Key | SSE streaming version of feed digest (recommended). Body: `{"variant":"full","lang":"en"}` |
 | 156 | `/api/news/v1/summarize-article-cache` | GET | Key | Cached article summary. Params: `url` |
 
 ## Seismology & Unrest
@@ -310,12 +339,19 @@ POST endpoints accept JSON body with `Content-Type: application/json`.
 curl -H "X-WorldMonitor-Key: wm_xxx" \
   "https://wm-worldmonitor-847.netlify.app/api/market/v1/list-market-quotes"
 
-# AI geopolitical deduction
+# AI geopolitical deduction (SSE streaming — recommended)
 curl -X POST \
   -H "Content-Type: application/json" \
   -H "X-WorldMonitor-Key: wm_xxx" \
   -d '{"query":"What is the current global risk level?"}' \
-  "https://wm-worldmonitor-847.netlify.app/api/intelligence/v1/deduct-situation"
+  "https://wm-worldmonitor-847.netlify.app/api/deduct-situation-stream"
+
+# News feed digest (SSE streaming — recommended)
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "X-WorldMonitor-Key: wm_xxx" \
+  -d '{"variant":"full","lang":"en"}' \
+  "https://wm-worldmonitor-847.netlify.app/api/news-feed-stream"
 
 # Country resilience score
 curl -H "X-WorldMonitor-Key: wm_xxx" \

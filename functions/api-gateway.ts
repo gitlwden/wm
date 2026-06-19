@@ -186,6 +186,7 @@ const STANDALONE_ROUTES: Record<string, () => Promise<{ default: (req: Request) 
   '/api/supply-chain/hormuz-tracker': () => import('../api/supply-chain/hormuz-tracker.js'),
   '/api/story':                   () => import('../api/story.js'),
   '/api/deduct-situation-stream': () => import('../api/deduct-situation-stream.ts'),
+  '/api/news-feed-stream':        () => import('../api/news-feed-stream.ts'),
   '/api/mcp':                     () => import('../api/mcp.ts'),
   '/mcp':                         () => import('../api/mcp.ts'),
 };
