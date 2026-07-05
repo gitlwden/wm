@@ -1731,7 +1731,7 @@ async function startSatelliteSeedLoop() {
 // ─────────────────────────────────────────────────────────────
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY || '';
 const MARKET_SEED_INTERVAL_MS = 300_000; // 5 min
-const MARKET_SEED_TTL = 7200; // 2h — survive extended Yahoo/upstream outages
+const MARKET_SEED_TTL = 86400; // 24h — relay refreshes every 2h; TTL is a safety net so a relay outage doesn't wipe market data
 
 // Must match src/config/markets.ts MARKET_SYMBOLS — update both when changing
 const MARKET_SYMBOLS = [
