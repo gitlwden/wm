@@ -3,7 +3,7 @@ name: Seed Military & Infrastructure
 on:
   schedule:
     # Every 6h — military flights, maritime, defense patents, internet outages, cyber
-    - cron: '35 2 * * *'
+    - cron: '35 2 * * 1,4'
   workflow_dispatch:
 
 jobs:

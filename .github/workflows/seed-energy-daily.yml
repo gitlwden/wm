@@ -2,8 +2,8 @@ name: Seed Energy Sources (Daily Bundle)
 
 on:
   schedule:
-    # Daily 07:30 UTC — matches seed-bundle-energy-sources
-    - cron: '30 7 * * *'
+    # Every 2 days — matches seed-bundle-energy-sources
+    - cron: '30 7 */2 * *'
   workflow_dispatch:
 
 jobs:

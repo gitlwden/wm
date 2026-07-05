@@ -3,7 +3,7 @@ name: Seed VPD & Disease Outbreaks
 on:
   schedule:
     # Daily
-    - cron: '30 9 * * *'
+    - cron: '30 9 * * 1,4'
   workflow_dispatch:
 
 jobs:

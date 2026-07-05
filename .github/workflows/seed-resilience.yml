@@ -3,7 +3,7 @@ name: Seed Resilience Scores
 on:
   schedule:
     # Daily 08:00 UTC — resilience scores
-    - cron: '0 8 * * *'
+    - cron: '0 8 * * 1,4'
   workflow_dispatch:
 
 jobs:
