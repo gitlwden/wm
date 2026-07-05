@@ -2,7 +2,7 @@ name: Seed GPS Jamming
 
 on:
   schedule:
-    - cron: '45 */6 * * *'
+    - cron: '45 0,12 * * *'
   workflow_dispatch:
 
 jobs:

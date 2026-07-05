@@ -1,11 +1,11 @@
 name: Seed Relay (Frequent)
 
-# Replaces cron for high-frequency seeds (4h cadence).
+# Replaces cron for medium-frequency seeds (6h cadence).
 # Bundled into one workflow to reduce Upstash connection overhead.
 
 on:
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
