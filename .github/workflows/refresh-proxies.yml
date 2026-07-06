@@ -34,3 +34,11 @@ jobs:
           console.log('proxy_url=' + d.proxy_url);
           console.log('proxy_pool count=' + d.pool.length);
           "
+
+      - name: Update repo variable
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh variable set PROXY_URL --body "${{ steps.proxies.outputs.proxy_url }}"
+          gh variable set PROXY_POOL --body '${{ steps.proxies.outputs.proxy_pool }}'
+          echo "Updated PROXY_URL=${{ steps.proxies.outputs.proxy_url }}"

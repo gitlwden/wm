@@ -24,7 +24,6 @@ jobs:
 
       - name: Seed fire detections (NASA FIRMS)
         run: node scripts/seed-fire-detections.mjs
-        continue-on-error: true
         env:
           NASA_FIRMS_API_KEY: ${{ secrets.NASA_FIRMS_API_KEY }}
           UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
