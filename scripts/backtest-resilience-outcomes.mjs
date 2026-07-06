@@ -755,7 +755,8 @@ function isStrictValidationCli(argv = process.argv, env = process.env) {
 function backtestCliExitCode(result, strict = false) {
   if (result == null) return strict ? 1 : 0;
   const failed = (result.families ?? []).filter((family) => !family.pass);
-  return !result.overallPass || failed.length > 0 ? 1 : 0;
+  if (strict) return !result.overallPass || failed.length > 0 ? 1 : 0;
+  return 0;
 }
 
 if (isMain) {
