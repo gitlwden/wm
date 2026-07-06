@@ -295,7 +295,7 @@ async function classifyFetchLlm(titles) {
 // ── Per-variant classify ──────────────────────────────────────────────────
 
 async function seedClassifyForVariant(variant, seenTitles) {
-  const digestUrl = `https://wm-worldmonitor.netlify.app/api/news/v1/list-feed-digest?variant=${variant}&lang=en`;
+  const digestUrl = `https://wm-245.netlify.app/api/news/v1/list-feed-digest?variant=${variant}&lang=en`;
   let digest;
   try {
     const resp = await fetch(digestUrl, {

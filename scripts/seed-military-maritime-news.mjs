@@ -24,7 +24,7 @@ import { loadEnvFile, CHROME_UA } from './_seed-utils.mjs';
 
 loadEnvFile(import.meta.url);
 
-const API_BASE = 'https://wm-worldmonitor.netlify.app';
+const API_BASE = 'https://wm-245.netlify.app';
 const TIMEOUT = 30_000;
 
 // Defense-in-depth auth — see seed-infra.mjs for the same pattern + rationale.

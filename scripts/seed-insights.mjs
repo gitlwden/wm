@@ -256,7 +256,7 @@ function buildImportanceObservability(clusters, topStories) {
 }
 
 async function warmDigestCache() {
-  const apiBase = process.env.API_BASE_URL || 'https://wm-worldmonitor.netlify.app';
+  const apiBase = process.env.API_BASE_URL || 'https://wm-245.netlify.app';
   const headers = {
     'User-Agent': CHROME_UA,
     Origin: 'https://wm-worldmonitor.netlify.app',

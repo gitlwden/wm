@@ -158,7 +158,7 @@ function getDigestScoreMin() {
 
 const BRIEF_URL_SIGNING_SECRET = process.env.BRIEF_URL_SIGNING_SECRET ?? '';
 const WORLDMONITOR_PUBLIC_BASE_URL =
-  process.env.WORLDMONITOR_PUBLIC_BASE_URL ?? 'https://wm-worldmonitor.netlify.app';
+  process.env.WORLDMONITOR_PUBLIC_BASE_URL ?? 'https://wm-245.netlify.app';
 const BRIEF_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 // Brief story window: derived per-rule from the rule's lastSentAt via
 // digestWindowStartMs, identical to the send-loop window. The previous
