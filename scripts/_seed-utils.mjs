@@ -200,8 +200,7 @@ function _cfCredentials() {
   const namespaceId = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
   const token = process.env.CLOUDFLARE_API_TOKEN;
   if (!accountId || !namespaceId || !token) {
-    console.error('Missing CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_KV_NAMESPACE_ID, or CLOUDFLARE_API_TOKEN');
-    process.exit(1);
+    throw new Error('Missing CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_KV_NAMESPACE_ID, or CLOUDFLARE_API_TOKEN');
   }
   return { accountId, namespaceId, token };
 }

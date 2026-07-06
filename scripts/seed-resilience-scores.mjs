@@ -611,7 +611,7 @@ async function main() {
       reason: 'missing_seed_refresh_key',
       error: message,
     });
-    throw err;
+    return;
   }
 
   const result = await seedResilienceScores();
