@@ -5,7 +5,7 @@ on:
 
 permissions:
   contents: read
-  actions-variables: write
+  actions: write
 
 jobs:
   refresh:
