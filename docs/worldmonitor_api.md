@@ -1,6 +1,6 @@
 # WorldMonitor API Reference
 
-Base URL: `https://wm-worldmonitor-847.netlify.app`
+Base URL: `https://wm-245.netlify.app`
 
 ## Netlify Free Tier Limitation
 
@@ -393,30 +393,30 @@ These endpoints bypass the gateway's RPC routing and are accessed at the root `/
 ```bash
 # Get market quotes
 curl -H "X-WorldMonitor-Key: wm_xxx" \
-  "https://wm-worldmonitor-847.netlify.app/api/market/v1/list-market-quotes"
+  "https://wm-245.netlify.app/api/market/v1/list-market-quotes"
 
 # AI geopolitical deduction (SSE streaming — recommended)
 curl -X POST \
   -H "Content-Type: application/json" \
   -H "X-WorldMonitor-Key: wm_xxx" \
   -d '{"query":"What is the current global risk level?"}' \
-  "https://wm-worldmonitor-847.netlify.app/api/deduct-situation-stream"
+  "https://wm-245.netlify.app/api/deduct-situation-stream"
 
 # News feed digest (SSE streaming — recommended)
 curl -X POST \
   -H "Content-Type: application/json" \
   -H "X-WorldMonitor-Key: wm_xxx" \
   -d '{"variant":"full","lang":"en"}' \
-  "https://wm-worldmonitor-847.netlify.app/api/news-feed-stream"
+  "https://wm-245.netlify.app/api/news-feed-stream"
 
 # Country resilience score
 curl -H "X-WorldMonitor-Key: wm_xxx" \
-  "https://wm-worldmonitor-847.netlify.app/api/resilience/v1/get-resilience-score?countryCode=US"
+  "https://wm-245.netlify.app/api/resilience/v1/get-resilience-score?countryCode=US"
 
 # Stock analysis (Pro)
 curl -X POST \
   -H "Content-Type: application/json" \
   -H "X-WorldMonitor-Key: wm_xxx" \
   -d '{"symbol":"AAPL","name":"Apple","includeNews":true}' \
-  "https://wm-worldmonitor-847.netlify.app/api/market/v1/analyze-stock"
+  "https://wm-245.netlify.app/api/market/v1/analyze-stock"
 ```
