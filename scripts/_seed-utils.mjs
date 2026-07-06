@@ -556,12 +556,20 @@ export async function kvGetUnwrapped(key) {
  * direct API access. Replaces direct UPSTASH_REDIS_REST_URL usage.
  */
 export function getKvBase() {
-  const { accountId, namespaceId } = _cfCredentials();
-  return kvBase(accountId, namespaceId);
+  try {
+    const { accountId, namespaceId } = _cfCredentials();
+    return kvBase(accountId, namespaceId);
+  } catch {
+    return null;
+  }
 }
 
 export function getKvToken() {
-  return _cfCredentials().token;
+  try {
+    return _cfCredentials().token;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -604,43 +612,47 @@ export async function cfPipeline(commands) {
 
   // Execute Cloudflare KV batch
   if (cfCmds.length > 0) {
-    const { accountId, namespaceId, token } = _cfCredentials();
-    const base = kvBase(accountId, namespaceId);
-    const headers = { Authorization: `Bearer ${token}` };
-    const cfResults = await Promise.all(cfCmds.map(async ({ cmd }) => {
-      const [verb, key, value, exFlag, ttl] = cmd;
-      try {
-        if (verb === 'GET') {
-          const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
-            headers,
-            signal: AbortSignal.timeout(5_000),
-          });
-          return resp.ok ? { result: await resp.text() || null } : { result: null };
-        }
-        if (verb === 'SET') {
-          const params = (exFlag === 'EX' && ttl) ? `?expiration_ttl=${ttl}` : '';
-          const resp = await fetch(`${base}/values/${encodeURIComponent(key)}${params}`, {
-            method: 'PUT',
-            headers: { ...headers, 'Content-Type': 'application/json' },
-            body: typeof value === 'string' ? value : JSON.stringify(value),
-            signal: AbortSignal.timeout(10_000),
-          });
-          if (!resp.ok) throw new Error(`KV SET ${key}: HTTP ${resp.status}`);
-          return { result: 'OK' };
-        }
-        if (verb === 'DEL') {
-          const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
-            method: 'DELETE',
-            headers,
-            signal: AbortSignal.timeout(5_000),
-          });
-          return { result: resp.ok ? 1 : 0 };
-        }
-        return { result: null };
-      } catch { return { result: null }; }
-    }));
-    for (let j = 0; j < cfCmds.length; j++) {
-      results[cfCmds[j].idx] = cfResults[j];
+    try {
+      const { accountId, namespaceId, token } = _cfCredentials();
+      const base = kvBase(accountId, namespaceId);
+      const headers = { Authorization: `Bearer ${token}` };
+      const cfResults = await Promise.all(cfCmds.map(async ({ cmd }) => {
+        const [verb, key, value, exFlag, ttl] = cmd;
+        try {
+          if (verb === 'GET') {
+            const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+              headers,
+              signal: AbortSignal.timeout(5_000),
+            });
+            return resp.ok ? { result: await resp.text() || null } : { result: null };
+          }
+          if (verb === 'SET') {
+            const params = (exFlag === 'EX' && ttl) ? `?expiration_ttl=${ttl}` : '';
+            const resp = await fetch(`${base}/values/${encodeURIComponent(key)}${params}`, {
+              method: 'PUT',
+              headers: { ...headers, 'Content-Type': 'application/json' },
+              body: typeof value === 'string' ? value : JSON.stringify(value),
+              signal: AbortSignal.timeout(10_000),
+            });
+            if (!resp.ok) throw new Error(`KV SET ${key}: HTTP ${resp.status}`);
+            return { result: 'OK' };
+          }
+          if (verb === 'DEL') {
+            const resp = await fetch(`${base}/values/${encodeURIComponent(key)}`, {
+              method: 'DELETE',
+              headers,
+              signal: AbortSignal.timeout(5_000),
+            });
+            return { result: resp.ok ? 1 : 0 };
+          }
+          return { result: null };
+        } catch { return { result: null }; }
+      }));
+      for (let j = 0; j < cfCmds.length; j++) {
+        results[cfCmds[j].idx] = cfResults[j];
+      }
+    } catch {
+      for (const c of cfCmds) results[c.idx] = { result: null };
     }
   }
 
