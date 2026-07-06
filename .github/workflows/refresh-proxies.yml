@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions-variables: write
 
 jobs:
   refresh:
@@ -37,7 +38,7 @@ jobs:
 
       - name: Update repo variable
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh variable set PROXY_URL --body "${{ steps.proxies.outputs.proxy_url }}"
           gh variable set PROXY_POOL --body '${{ steps.proxies.outputs.proxy_pool }}'
